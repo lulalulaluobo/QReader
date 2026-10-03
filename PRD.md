@@ -43,10 +43,12 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 1. 初始化入口、Git 与中文 Trellis 规范。
 2. 完成阅读引擎、可靠存储和四页面交互。
 3. 构建并通过实际 Obsidian 六格式阅读、阅读记录与回忆闭环验收。
-4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.2 与 BRAT 安装文件。
+4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.3 与 BRAT 安装文件。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.2.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.3.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 1.1.3 根据 Android 截图修正封面矮框：每页两列两行四本、原封面等比例、底部翻页、筛选搜索重置及回退页码。选文功能全部为单行图标，色圈长按选色、短按保存；正文高亮去掉外框及 PDF 底边，保持 28% 半透明色块与原定位。
+- 1.1.3 在 macOS Obsidian 1.13.7 独立 Vault 验证 14 组书架、14 组单行菜单、375×667 四卡、复制/解读/批注/删除两次确认、键盘、EPUB/PDF 持久化及 FB2/MOBI/AZW3 无边框高亮；16 本样书原文件哈希不变。具体证据见 Trellis reader-113 任务。
 - 1.1.2 增加可保存的每章三问提示词（留空用默认一问一靶模板）、当前标签页与原生回退、五色划线（长按选色、短按确认）、未读/已读及学科分类。重新出题保留未提交草稿引用的旧版本。
 - 1.1.2 在 macOS Obsidian 1.13.7 独立 Vault 通过提示词、无效响应、单页导航/回退、草稿、三题提交/反馈重试、闭卷复习、EPUB/PDF 颜色持久化、旧黄色、分类与 56 组宽度/主题/视图检查；375×667 移动 CSS 模拟首屏四卡完整可见。Android/iOS 真机和真实供应商模型质量仍未验证。
 - 1.1.0 将阅读扩展为 EPUB、PDF、FB2、MOBI、AZW3、CBZ。未加密 MOBI/AZW3、独立 FB2 与 ZIP FB2 在内存组装为 EPUB 视图，阅读库仍保存原始文件字节和实际格式；CBZ 自然页序只提供图片阅读与页码位置。

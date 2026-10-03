@@ -433,7 +433,7 @@ export class EpubEngine implements ReaderEngine {
       if (this.marks.has(id)) this.hooks.onAnnotationClick(id, anchor);
     }, HL_CLASS, {
       fill: color.fill, "fill-opacity": "0.28",
-      stroke: color.edge, "stroke-opacity": "0.8", "stroke-width": "0.8",
+      stroke: "none", "stroke-width": "0",
       "mix-blend-mode": "normal",
     });
     this.attached.add(id);

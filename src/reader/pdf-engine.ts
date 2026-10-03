@@ -409,7 +409,6 @@ export class PdfEngine implements ReaderEngine {
           highlight.className = "qr-pdf-hl";
           highlight.dataset.ann = annotation.id;
           highlight.style.background = `${color.fill}47`;
-          highlight.style.boxShadow = `inset 0 -1px 0 ${color.edge}`;
           highlight.style.mixBlendMode = "normal";
           highlight.style.left = `${rect.x * 100}%`;
           highlight.style.top = `${rect.y * 100}%`;

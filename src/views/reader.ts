@@ -43,6 +43,7 @@ interface MarkTarget {
   confirmDelete?: boolean;
   color: HighlightColor;
   colorsOpen?: boolean;
+  actionsOpen?: boolean;
 }
 
 export class ReaderView extends ItemView {
@@ -1075,11 +1076,15 @@ export class ReaderView extends ItemView {
       return;
     }
     menu.removeClass("qr-hidden");
-    const addAction = (label: string, action: () => void): void => {
-      const button = el("button", "qr-btn qr-btn-ghost", label);
+    const addAction = (label: string, icon: string, action: () => void, container = menu): HTMLButtonElement => {
+      const button = el("button", "qr-icon-btn");
+      button.title = label;
+      button.setAttribute("aria-label", label);
+      setIcon(button, icon);
       button.disabled = this.annotationSaving;
       button.onclick = action;
-      menu.appendChild(button);
+      container.appendChild(button);
+      return button;
     };
     const record = target.record;
     const selection = target.selection ?? (record ? {
@@ -1087,31 +1092,40 @@ export class ReaderView extends ItemView {
       pdfPage: record.pdfPage, itemRanges: record.itemRanges, sortKey: record.sortKey,
     } : undefined);
     if (selection) {
-      addAction("复制", () => void this.copySelection(selection, target));
-      addAction("AI 解读", () => this.openSelectionExplanation(selection, record, target.color));
+      addAction("复制", "copy", () => void this.copySelection(selection, target));
+      addAction("AI 解读", "sparkles", () => this.openSelectionExplanation(selection, record, target.color));
     }
     if (record || target.selection) this.appendHighlightControl(menu, target);
     if (record) {
-      addAction(target.confirmDelete ? "确认取消画线及批注" : "取消画线", () => {
+      addAction(record.kind === "highlight" ? "批注" : "编辑批注", "square-pen", () => this.openAnnotationEdit(record.id));
+      const actions = el("div", "qr-mark-secondary qr-mark-options");
+      actions.setAttribute("role", "group");
+      actions.setAttribute("aria-label", "更多标记操作");
+      actions.hidden = !target.actionsOpen;
+      const more = addAction("更多标记操作", "more-horizontal", () => {
+        target.actionsOpen = !target.actionsOpen;
+        target.colorsOpen = false;
+        this.renderMarkMenu();
+      });
+      more.setAttribute("aria-expanded", String(Boolean(target.actionsOpen)));
+      const remove = addAction(target.confirmDelete ? "确认取消画线及批注" : "取消画线", target.confirmDelete ? "circle-check" : "trash-2", () => {
         if (record.kind !== "highlight" && (record.note || record.aiExplanation) && !target.confirmDelete) {
           target.confirmDelete = true;
+          target.actionsOpen = true;
           this.renderMarkMenu();
         } else {
           void this.removeMark(target, false);
         }
-      });
-      addAction(record.kind === "highlight" ? "批注" : "编辑批注", () => this.openAnnotationEdit(record.id));
-      if (record.kind !== "highlight") addAction("取消批注", () => void this.removeMark(target, true));
+      }, actions);
+      remove.addClass("qr-mark-danger");
+      if (record.kind !== "highlight") addAction("取消批注", "eraser", () => void this.removeMark(target, true), actions);
+      addAction("关闭选文菜单", "x", () => this.closeMarkMenu(), actions);
+      menu.appendChild(actions);
     } else if (target.selection) {
       const selection = target.selection;
-      addAction("批注", () => this.openAnnotationCreate(selection, target.color));
+      addAction("批注", "square-pen", () => this.openAnnotationCreate(selection, target.color));
+      addAction("关闭选文菜单", "x", () => this.closeMarkMenu());
     }
-    const close = el("button", "qr-icon-btn");
-    setIcon(close, "x");
-    close.setAttribute("aria-label", "关闭选文菜单");
-    close.disabled = this.annotationSaving;
-    close.onclick = () => this.closeMarkMenu();
-    menu.appendChild(close);
     this.positionMarkMenu(target);
   }
 
@@ -1120,28 +1134,29 @@ export class ReaderView extends ItemView {
     const root = this.root.getBoundingClientRect();
     const box = menu.getBoundingClientRect();
     const anchor = target.anchor;
+    const edge = Math.max(2, Math.min(8, (root.width - box.width) / 2));
     const left = anchor ? (anchor.left + anchor.right) / 2 - root.left - box.width / 2 : (root.width - box.width) / 2;
     const above = anchor ? anchor.top - root.top - box.height - 8 : root.height / 2 - box.height;
     const top = above >= 8 ? above : (anchor?.bottom ?? root.top) - root.top + 8;
-    menu.style.left = `${Math.max(8, Math.min(left, root.width - box.width - 8))}px`;
+    menu.style.left = `${Math.max(edge, Math.min(left, root.width - box.width - edge))}px`;
     menu.style.top = `${Math.max(8, Math.min(top, root.height - box.height - 8))}px`;
+    for (const secondary of menu.querySelectorAll<HTMLElement>(".qr-mark-secondary")) {
+      if (secondary.hidden) continue;
+      const below = parseFloat(menu.style.top) + box.height + secondary.offsetHeight + 8 <= root.height - 8;
+      secondary.classList.toggle("qr-mark-secondary-above", !below);
+    }
   }
 
   private appendHighlightControl(menu: HTMLElement, target: MarkTarget): void {
-    const group = el("div", "qr-highlight-control");
-    const confirm = el("button", "qr-btn qr-btn-ghost qr-highlight-confirm");
+    const confirm = el("button", "qr-icon-btn qr-highlight-confirm");
     const indicator = el("span", "qr-highlight-indicator");
     indicator.setAttribute("aria-hidden", "true");
-    const label = el("span");
-    confirm.append(indicator, label);
-    const expand = el("button", "qr-icon-btn qr-highlight-expand");
-    setIcon(expand, "chevron-down");
-    expand.setAttribute("aria-label", target.colorsOpen ? "收起划线颜色" : "展开划线颜色");
-    expand.setAttribute("aria-expanded", String(Boolean(target.colorsOpen)));
-    confirm.disabled = expand.disabled = this.annotationSaving;
-    group.append(confirm, expand);
-    menu.appendChild(group);
-    const palette = el("div", "qr-highlight-palette");
+    confirm.appendChild(indicator);
+    confirm.setAttribute("aria-expanded", String(Boolean(target.colorsOpen)));
+    confirm.setAttribute("aria-keyshortcuts", "ArrowDown");
+    confirm.disabled = this.annotationSaving;
+    menu.appendChild(confirm);
+    const palette = el("div", "qr-mark-secondary qr-highlight-palette");
     palette.setAttribute("role", "group");
     palette.setAttribute("aria-label", "待确认划线颜色");
     palette.hidden = !target.colorsOpen;
@@ -1150,17 +1165,19 @@ export class ReaderView extends ItemView {
       const color = HIGHLIGHT_COLORS[target.color];
       indicator.style.setProperty("--qr-highlight-fill", color.fill);
       indicator.style.setProperty("--qr-highlight-edge", color.edge);
-      label.setText(`${target.record ? "应用" : "划线"} · ${color.label}`);
-      confirm.setAttribute("aria-label", `${target.record ? "应用划线颜色" : "保存划线"}：${color.label}；长按选择颜色`);
+      const label = `${target.record ? "应用划线颜色" : "保存划线"}：${color.label}；长按或按方向下键选择颜色`;
+      confirm.setAttribute("aria-label", label);
+      confirm.title = label;
       for (const [colorId, button] of choices) {
         button.setAttribute("aria-pressed", String(colorId === target.color));
       }
     };
     for (const colorId of Object.keys(HIGHLIGHT_COLORS) as HighlightColor[]) {
       const color = HIGHLIGHT_COLORS[colorId];
-      const choice = el("button", "qr-btn qr-highlight-color", color.label);
+      const choice = el("button", "qr-icon-btn qr-highlight-color");
       choice.disabled = this.annotationSaving;
       choice.setAttribute("aria-label", `${color.label}划线`);
+      choice.title = `${color.label}划线`;
       choice.style.setProperty("--qr-highlight-fill", color.fill);
       choice.style.setProperty("--qr-highlight-edge", color.edge);
       choice.onclick = () => {
@@ -1171,14 +1188,15 @@ export class ReaderView extends ItemView {
       choices.set(colorId, choice);
       palette.appendChild(choice);
     }
-    palette.appendChild(el("span", "qr-highlight-help", "选择后点击「划线」或「应用」保存"));
     menu.appendChild(palette);
     const toggleColors = (open: boolean): void => {
       if (!this.opened || this.markTarget !== target || this.annotationSaving) return;
       target.colorsOpen = open;
+      target.actionsOpen = false;
+      menu.querySelector<HTMLElement>(".qr-mark-options")?.setAttribute("hidden", "");
+      menu.querySelector<HTMLButtonElement>('[aria-label="更多标记操作"]')?.setAttribute("aria-expanded", "false");
       palette.hidden = !open;
-      expand.setAttribute("aria-expanded", String(open));
-      expand.setAttribute("aria-label", open ? "收起划线颜色" : "展开划线颜色");
+      confirm.setAttribute("aria-expanded", String(open));
       this.positionMarkMenu(target);
     };
     let timer: number | null = null;
@@ -1221,9 +1239,27 @@ export class ReaderView extends ItemView {
     confirm.onlostpointercapture = () => {
       if (pointer !== null) { suppressClick = true; stopPress(); }
     };
-    confirm.oncontextmenu = (event) => { event.preventDefault(); };
+    confirm.oncontextmenu = (event) => {
+      event.preventDefault();
+      stopPress();
+      toggleColors(true);
+    };
     confirm.onkeydown = (event) => {
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        stopPress();
+        toggleColors(true);
+        choices.get(target.color)?.focus({ preventScroll: true });
+      }
       if (event.key === "Enter" || event.key === " ") { stopPress(); suppressClick = false; }
+    };
+    palette.onkeydown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleColors(false);
+        confirm.focus({ preventScroll: true });
+      }
     };
     confirm.onclick = (event) => {
       if (suppressClick) {
@@ -1233,7 +1269,6 @@ export class ReaderView extends ItemView {
       }
       if (this.markTarget === target) void this.highlightSelection(target);
     };
-    expand.onclick = () => { stopPress(); toggleColors(!target.colorsOpen); };
     update();
   }
 

@@ -19,6 +19,7 @@ src/core/json-store.ts 对每本书串行执行变更、写入与校验，保留
 - 回答草稿由 Obsidian 视图历史和插件 `pageStates` 记录轻量数据，按阅读库、书籍、章节、模式、预约日期区分；提交成功清除暂存草稿。书架搜索和筛选、复习筛选随导航恢复，不保留旧阅读引擎。
 - `settings.categories` 保存用户分类；每本书的 `book.category?` 和 `book.readStatus?` 经串行 JsonStore 写入。旧记录不迁移，缺状态以全书进度是否完成为显示默认；分类变化不移动原书、不改章节/进度/批注。
 - `AnnotationRecord.color?` 保存五种颜色；旧记录缺色时黄色。菜单选色只是草稿，短按确认才写盘；EPUB/PDF 共用 `HIGHLIGHT_COLORS` 并保存标记对象副本，改色后立即重绘，避免对象原地修改隐藏旧值。默认下次颜色另存插件设置。
+- 1.1.3：书架 `pageIndex` 随原生导航/插件页面状态恢复，筛选或搜索变化重置为 0，书籍减少时夹到最后有效页；仅为当前四本加载封面。图标菜单 `colorsOpen/actionsOpen/confirmDelete` 都是短期 UI 状态，不新增磁盘字段。正文高亮去描边不迁移颜色或记录。
 
 ## 六种书籍格式与 AI 提供方契约
 

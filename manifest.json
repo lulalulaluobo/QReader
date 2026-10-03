@@ -1,7 +1,7 @@
 {
   "id": "qreader",
   "name": "QReader",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "minAppVersion": "1.5.0",
   "description": "带着问题读书：六格式沉浸阅读、每章三问、批注、闭卷回答与复习。",
   "author": "QReader",

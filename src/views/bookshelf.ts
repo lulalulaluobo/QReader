@@ -10,6 +10,7 @@ import { BOOK_FILE_ACCEPT } from "../core/book-formats";
 export const VIEW_TYPE_BOOKSHELF = "qreader-bookshelf";
 
 type ShelfFilter = "all" | BookReadStatus | `category:${string}`;
+const BOOKS_PER_PAGE = 4;
 
 class ConfirmationModal extends Modal {
   private settled = false;
@@ -41,6 +42,7 @@ class ConfirmationModal extends Modal {
 export class BookshelfView extends ItemView {
   private search = "";
   private selectedFilter: ShelfFilter = "all";
+  private pageIndex = 0;
   private unsub: (() => void) | null = null;
   private unsubSettings: (() => void) | null = null;
   private opened = false;
@@ -51,6 +53,7 @@ export class BookshelfView extends ItemView {
   private continueBox: HTMLElement | null = null;
   private status: HTMLElement | null = null;
   private filterBox: HTMLElement | null = null;
+  private pagination: HTMLElement | null = null;
   private organizationModal: Modal | null = null;
   private savingOrganization = new Set<string>();
   private importButton: HTMLButtonElement | null = null;
@@ -64,10 +67,11 @@ export class BookshelfView extends ItemView {
   getDisplayText(): string { return "QReader 书架"; }
   getIcon(): string { return "library"; }
 
-  getState(): Record<string, unknown> { return { search: this.search, selectedFilter: this.selectedFilter }; }
+  getState(): Record<string, unknown> { return { search: this.search, selectedFilter: this.selectedFilter, pageIndex: this.pageIndex }; }
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
     const previousSearch = this.search;
     const previousFilter = this.selectedFilter;
+    const previousPage = this.pageIndex;
     if (state && typeof state === "object") {
       if ("search" in state && typeof state.search === "string") this.search = state.search;
       if ("selectedFilter" in state) {
@@ -76,8 +80,10 @@ export class BookshelfView extends ItemView {
           this.selectedFilter = filter as ShelfFilter;
         }
       }
+      this.pageIndex = "pageIndex" in state && typeof state.pageIndex === "number" && Number.isFinite(state.pageIndex)
+        ? Math.max(0, Math.floor(state.pageIndex)) : 0;
     }
-    if (previousSearch !== this.search || previousFilter !== this.selectedFilter) result.history = true;
+    if (previousSearch !== this.search || previousFilter !== this.selectedFilter || previousPage !== this.pageIndex) result.history = true;
     await super.setState(state, result);
     if (this.opened) { this.buildShell(); await this.renderCards(); }
   }
@@ -106,7 +112,7 @@ export class BookshelfView extends ItemView {
     this.organizationModal?.close();
     this.organizationModal = null;
     this.entries = [];
-    this.listBox = this.continueBox = this.filterBox = this.status = null;
+    this.listBox = this.continueBox = this.filterBox = this.status = this.pagination = null;
     this.importButton = null;
     this.unsub = null;
   }
@@ -126,6 +132,7 @@ export class BookshelfView extends ItemView {
     input.value = this.search;
     input.oninput = () => {
       this.search = input.value;
+      this.pageIndex = 0;
       this.app.workspace.requestSaveLayout();
       void this.renderCards();
     };
@@ -149,7 +156,12 @@ export class BookshelfView extends ItemView {
     root.appendChild(this.continueBox);
     this.listBox = el("div", "qr-book-list");
     root.appendChild(this.listBox);
-    root.appendChild(this.bottomNav());
+    this.pagination = el("nav", "qr-shelf-pagination");
+    this.pagination.setAttribute("aria-label", "书架翻页");
+    this.pagination.hidden = true;
+    const footer = this.bottomNav();
+    footer.prepend(this.pagination);
+    root.appendChild(footer);
     this.contentEl.appendChild(root);
   }
 
@@ -383,10 +395,16 @@ export class BookshelfView extends ItemView {
       if (this.selectedFilter === "read" || this.selectedFilter === "unread") return getBookReadStatus(entry.reading) === this.selectedFilter;
       return entry.reading.book.category === this.selectedFilter.slice("category:".length);
     });
-    const cards = await Promise.all(filtered.map((entry) => this.buildCard(entry)));
+    const pageCount = Math.max(1, Math.ceil(filtered.length / BOOKS_PER_PAGE));
+    const pageIndex = Math.min(this.pageIndex, pageCount - 1);
+    const cards = await Promise.all(filtered.slice(pageIndex * BOOKS_PER_PAGE, (pageIndex + 1) * BOOKS_PER_PAGE).map((entry) => this.buildCard(entry)));
     const latest = filtered.find((entry): entry is HealthyBookEntry => isHealthyBook(entry) && Boolean(entry.reading.progress.lastReadAt));
     const continuing = latest && !query ? await this.buildContinue(latest) : null;
     if (!this.opened || revision !== this.renderRevision) return;
+    if (this.pageIndex !== pageIndex) {
+      this.pageIndex = pageIndex;
+      this.app.workspace.requestSaveLayout();
+    }
     box.empty();
     continueBox.empty();
     if (continuing) {
@@ -394,6 +412,30 @@ export class BookshelfView extends ItemView {
     }
     if (cards.length) box.append(...cards);
     else box.appendChild(el("div", "qr-muted qr-empty", this.entries.length ? "没有匹配的书" : "书架是空的。支持 EPUB、PDF、FB2、MOBI、AZW3 与 CBZ，导入原书即可开始阅读。"));
+    this.renderPagination(pageCount, filtered.length);
+  }
+
+  private renderPagination(pageCount: number, total: number): void {
+    const nav = this.pagination;
+    if (!nav) return;
+    nav.empty();
+    nav.hidden = pageCount <= 1;
+    if (nav.hidden) return;
+    const page = el("span", "qr-shelf-page qr-muted", `${this.pageIndex + 1} / ${pageCount}`);
+    page.setAttribute("role", "status");
+    page.setAttribute("aria-label", `共 ${total} 本书，第 ${this.pageIndex + 1} 页，共 ${pageCount} 页`);
+    const button = (label: string, icon: string, next: number): HTMLButtonElement => {
+      const control = el("button", `qr-icon-btn ${next < this.pageIndex ? "qr-shelf-page-previous" : "qr-shelf-page-next"}`);
+      control.setAttribute("aria-label", label);
+      control.title = label;
+      setIcon(control, icon);
+      control.disabled = next < 0 || next >= pageCount;
+      control.onclick = () => {
+        void this.leaf.setViewState({ type: VIEW_TYPE_BOOKSHELF, state: { ...this.getState(), pageIndex: next } });
+      };
+      return control;
+    };
+    nav.append(button("上一页书籍", "chevron-left", this.pageIndex - 1), page, button("下一页书籍", "chevron-right", this.pageIndex + 1));
   }
 
   private async coverEl(entry: HealthyBookEntry, cls: string): Promise<HTMLElement> {
