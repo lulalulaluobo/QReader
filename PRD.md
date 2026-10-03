@@ -43,10 +43,11 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 1. 初始化入口、Git 与中文 Trellis 规范。
 2. 完成阅读引擎、可靠存储和四页面交互。
 3. 构建并通过实际 Obsidian 六格式阅读、阅读记录与回忆闭环验收。
-4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.3 与 BRAT 安装文件。
+4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.4 与 BRAT 安装文件。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.3.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.4.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 1.1.4 在设置中选择简体中文/English，书架、阅读、回答、复习、设置、图标名称、菜单、命令和已知状态错误跟随切换。空白三问模板、选文/批注解释与回答/复习反馈使用对应语言；自定义模板、原书与历史内容保留。英文问题标签与旧 JSON 共用稳定类型/ID，无效响应拒绝入库。README 提供双语安装和使用说明。
 - 1.1.3 根据 Android 截图修正封面矮框：每页两列两行四本、原封面等比例、底部翻页、筛选搜索重置及回退页码。选文功能全部为单行图标，色圈长按选色、短按保存；正文高亮去掉外框及 PDF 底边，保持 28% 半透明色块与原定位。
 - 1.1.3 在 macOS Obsidian 1.13.7 独立 Vault 验证 14 组书架、14 组单行菜单、375×667 四卡、复制/解读/批注/删除两次确认、键盘、EPUB/PDF 持久化及 FB2/MOBI/AZW3 无边框高亮；16 本样书原文件哈希不变。具体证据见 Trellis reader-113 任务。
 - 1.1.2 增加可保存的每章三问提示词（留空用默认一问一靶模板）、当前标签页与原生回退、五色划线（长按选色、短按确认）、未读/已读及学科分类。重新出题保留未提交草稿引用的旧版本。
@@ -58,7 +59,7 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 - AI 预设使用官方核实的 `deepseek-flash` / `https://api.deepseek.com` 和 `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1`；本地 OpenAI-compatible 协议服务通过实际 UI 探针、三问、批注解释与回答反馈流程。无供应商密钥；未验证外部联网或模型效果。密钥仅保存在插件 `data.json`，未加密。
 - 克隆调研参考 `joeseesun/qiaomu-reader` commit `cff28ba6`（GPL-3.0-only），未复制其插件代码：`src/reader-engine.js` 说明 Foliate.js 的 EPUB/MOBI/AZW3/FB2（独立/压缩）/CBZ 与独立 PDF 路径；`src/main.js` 展示扩展名路由；`src/status-bar.js` 与 `src/styles.css` 展示跟随活动阅读视图、卸载清理的宿主导航控制；`src/epub-zip.js` 记录无 UTF-8 ZIP 标志时的中文路径兼容问题。QReader 自行采用 EPUB.js/PDF.js 双引擎和 MIT 格式适配；依赖 Foliate.js 1.0.1、fflate 0.8.2，保留上游许可证声明。
 - 验收用的独立 Obsidian 为 1.12.4 与 1.13.7；OS 为 macOS。Android/iOS 真机、加密/DRM 书籍、真实供应商密钥均未测试，不宣称受支持。
-- [GitHub Release 1.1.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 已正式发布为 latest，包含 BRAT 所需 main.js、manifest.json、styles.css 与 QReader-1.1.3.zip；四个公开附件与实测构建逐字节、SHA-256 及 GitHub digest 一致，源码标签指向 `c08b115`。完整记录见 `.trellis/tasks/10-04-reader-113/verification.md`。
+- [GitHub Release 1.1.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 已正式发布，包含 BRAT 所需 main.js、manifest.json、styles.css 与 QReader-1.1.3.zip；四个公开附件与实测构建逐字节、SHA-256 及 GitHub digest 一致，源码标签指向 `c08b115`。完整记录见 `.trellis/tasks/10-04-reader-113/verification.md`。
 - 历史 [GitHub Release 1.1.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2) 四个公开下载与实测构建逐字节及 SHA-256 一致，源码标签指向 `3443459`。完整校验记录见 Trellis 任务。
 - 历史 [GitHub Release 1.1.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1) 的四个公开附件已校验，标签指向源码提交 `b402b95`。
 - 1.1.1 长中文书名封面缓存使用 SHA-256 文件名，避免文件名过长；缓存仍位于插件目录，不改变原书文件。

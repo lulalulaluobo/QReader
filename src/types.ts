@@ -176,11 +176,11 @@ export interface TocNode {
   children?: TocNode[];
 }
 
-export const QUESTION_LABELS: Record<QuestionType, string> = {
+export const QUESTION_LABELS = {
   core: "核心问题",
   logic: "逻辑问题",
   retell: "复述问题",
-};
+} as const satisfies Record<QuestionType, string>;
 
 export function chaptersOrdered(reading: ReadingFile): ChapterState[] {
   return Object.values(reading.chapters).sort((a, b) => a.index - b.index);

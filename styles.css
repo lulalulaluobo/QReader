@@ -285,7 +285,9 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 .qr-view button.qr-nav-item {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 48px;
+  padding: 6px 2px;
   flex-direction: column;
   align-items: center;
   justify-content: center;
@@ -295,6 +297,11 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   color: var(--qr-muted);
   font-size: 0.75rem;
   box-shadow: none;
+}
+.qr-nav-item span {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 .qr-nav-item svg {
   width: 20px;
@@ -757,6 +764,13 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   display: flex;
   gap: 8px;
 }
+.qr-view .qr-reader-chapter-actions button.qr-btn {
+  height: auto;
+  min-height: 44px;
+  padding-inline: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
 .qr-reader-dock {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -781,6 +795,12 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-reader .qr-dock-btn:hover {
   background: var(--qr-hover);
+}
+.qr-dock-btn span {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.25;
 }
 .qr-dock-btn svg {
   width: 21px;

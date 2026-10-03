@@ -1,4 +1,5 @@
 // Small shared utilities with actual logic (formatting, ids, DOM helpers).
+import { translate, type AppLanguage } from "./i18n";
 
 export function pad2(n: number): string {
   return String(n).padStart(2, "0");
@@ -15,21 +16,21 @@ export function todayStr(): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 }
 
-export function relTime(iso: string | undefined | null): string {
-  if (!iso) return "未读";
+export function relTime(iso: string | undefined | null, language: AppLanguage = "zh-CN"): string {
+  if (!iso) return translate(language, "未读");
   const t = new Date(iso).getTime();
-  if (isNaN(t)) return "未读";
+  if (isNaN(t)) return translate(language, "未读");
   const days = Math.floor((Date.now() - t) / 86400000);
   if (days <= 0) {
     const hours = Math.floor((Date.now() - t) / 3600000);
-    if (hours <= 0) return "刚刚";
-    return `${hours} 小时前`;
+    if (hours <= 0) return translate(language, "刚刚");
+    return translate(language, "{0} 小时前", hours);
   }
-  if (days === 1) return "昨天";
-  if (days < 30) return `${days} 天前`;
+  if (days === 1) return translate(language, "昨天");
+  if (days < 30) return translate(language, "{0} 天前", days);
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months} 个月前`;
-  return `${Math.floor(months / 12)} 年前`;
+  if (months < 12) return translate(language, "{0} 个月前", months);
+  return translate(language, "{0} 年前", Math.floor(months / 12));
 }
 
 let idCounter = 0;

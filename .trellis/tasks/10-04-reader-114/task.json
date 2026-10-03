@@ -1,0 +1,13 @@
+{
+  "id": "reader-114",
+  "name": "reader-114",
+  "title": "增加中英文界面与语言提示词并发布 1.1.4",
+  "status": "in_progress",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-04",
+  "completedAt": null,
+  "branch": "main",
+  "commit": null,
+  "notes": "用户授权设置页增加中英文选择、前端和默认 AI 提示词跟随语言、更新 README 并推送补丁 Release。"
+}

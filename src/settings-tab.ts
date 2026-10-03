@@ -5,7 +5,8 @@ import type { App } from "obsidian";
 import type { QReaderPlugin } from "./main";
 import { validateLibraryPath } from "./settings";
 import { testConnection } from "./ai/client";
-import { DEFAULT_QUESTION_PROMPT } from "./ai/tasks";
+import { defaultQuestionPrompt } from "./ai/tasks";
+import { normalizeLanguage } from "./i18n";
 import { AI_PRESETS, getAiConfig } from "./ai/providers";
 import type { AiProvider } from "./ai/providers";
 
@@ -18,6 +19,7 @@ export class QReaderSettingTab extends PluginSettingTab {
   private promptDraft = "";
   private promptSaving = false;
   private promptStatus = "";
+  private pathDraft: string | null = null;
 
   constructor(app: App, private plugin: QReaderPlugin) {
     super(app, plugin);
@@ -28,29 +30,60 @@ export class QReaderSettingTab extends PluginSettingTab {
     this.testStatus = "";
     this.renderAi = null;
     this.renderPrompt = null;
+    this.pathDraft = null;
   }
 
-  display(): void {
+  display(preserveDraft = false): void {
     const { containerEl } = this;
     containerEl.empty();
     const s = this.plugin.settings;
-    let proposedPath = s.libraryPath;
+    containerEl.lang = s.language;
+    let proposedPath = preserveDraft ? this.pathDraft ?? s.libraryPath : s.libraryPath;
+    this.pathDraft = proposedPath;
+    this.promptStatus = this.plugin.localizeStatus(this.promptStatus);
+    this.testStatus = this.plugin.localizeStatus(this.testStatus);
 
     containerEl.createEl("h2", { text: "QReader" });
 
+    new Setting(containerEl).setName(this.plugin.t("语言"))
+      .setDesc(this.plugin.t("界面和默认 AI 提示词使用所选语言；已有书籍、笔记、问题和回答保持原样。"))
+      .addDropdown((dropdown) => {
+        dropdown.selectEl.id = "qreader-language";
+        dropdown.selectEl.setAttribute("aria-label", this.plugin.t("语言"));
+        dropdown.addOptions({ "zh-CN": "简体中文", en: "English" }).setValue(s.language)
+          .onChange(async (value) => {
+            const next = normalizeLanguage(value);
+            if (next === s.language) return;
+            const previous = s.language;
+            dropdown.setDisabled(true);
+            this.configRevision++;
+            try {
+              s.language = next;
+              await this.plugin.saveSettings();
+              this.plugin.notifySettingsChanged("language");
+              this.display(true);
+              this.containerEl.querySelector<HTMLElement>("#qreader-language")?.focus();
+            } catch {
+              s.language = previous;
+              new Notice(this.plugin.t("语言保存失败，请重试"));
+              dropdown.setValue(previous);
+            } finally { dropdown.setDisabled(false); }
+          });
+      });
+
     new Setting(containerEl)
-      .setName("阅读库路径")
-      .setDesc("Vault 内的相对路径，例如 Books。导入的书籍会存放在这里。")
+      .setName(this.plugin.t("阅读库路径"))
+      .setDesc(this.plugin.t("Vault 内的相对路径，例如 Books。导入的书籍会存放在这里。"))
       .addText((text) =>
         text
           .setPlaceholder("Books")
-          .setValue(s.libraryPath)
-          .onChange((value) => { proposedPath = value; })
+          .setValue(proposedPath)
+          .onChange((value) => { proposedPath = value; this.pathDraft = value; })
       )
-      .addButton((button) => button.setButtonText("保存路径").onClick(async () => {
+      .addButton((button) => button.setButtonText(this.plugin.t("保存路径")).onClick(async () => {
         const result = validateLibraryPath(proposedPath);
         if (!result.ok) {
-          new Notice(result.error ?? "路径无效");
+          new Notice(result.error ? this.plugin.errorText(result.error) : this.plugin.t("路径无效"));
           return;
         }
         const previous = s.libraryPath;
@@ -60,11 +93,11 @@ export class QReaderSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           await this.plugin.library.scan(true);
           this.plugin.notifyChanged();
-          new Notice("阅读库路径已保存");
+          new Notice(this.plugin.t("阅读库路径已保存"));
         } catch (error) {
           s.libraryPath = previous;
           await this.plugin.saveSettings();
-          new Notice(`路径保存失败：${error instanceof Error ? error.message : String(error)}`);
+          new Notice(this.plugin.t("路径保存失败：{0}", this.plugin.errorText(error)));
         } finally {
           button.setDisabled(false);
         }
@@ -75,15 +108,15 @@ export class QReaderSettingTab extends PluginSettingTab {
       aiContainer.empty();
       const ai = s.ai;
       const provider = ai.provider;
-      aiContainer.createEl("h3", { text: "AI 配置" });
+      aiContainer.createEl("h3", { text: this.plugin.t("AI 配置") });
       const providers = new Setting(aiContainer)
-        .setName("AI 服务")
-        .setDesc("DeepSeek 和 Agnes 只需填写各自的 API Key；自定义接口配置独立保留。");
+        .setName(this.plugin.t("AI 服务"))
+        .setDesc(this.plugin.t("DeepSeek 和 Agnes 只需填写各自的 API Key；自定义接口配置独立保留。"));
       providers.settingEl.addClass("qr-ai-providers");
       const options: AiProvider[] = ["deepseek", "agnes", "custom"];
       for (const option of options) {
         providers.addButton((button) => {
-          button.setButtonText(option === "custom" ? "自定义接口" : AI_PRESETS[option].name);
+          button.setButtonText(option === "custom" ? this.plugin.t("自定义接口") : AI_PRESETS[option].name);
           button.buttonEl.addClass("qr-ai-provider");
           if (option === provider) button.buttonEl.addClass("qr-ai-provider-active");
           button.buttonEl.setAttribute("aria-pressed", String(option === provider));
@@ -97,7 +130,7 @@ export class QReaderSettingTab extends PluginSettingTab {
             renderAi();
             aiContainer.querySelector<HTMLButtonElement>(".qr-ai-provider-active")?.focus();
             try { await this.plugin.saveSettings(); }
-            catch { new Notice("AI 服务选择保存失败，请重试"); }
+            catch { new Notice(this.plugin.t("AI 服务选择保存失败，请重试")); }
           });
         });
       }
@@ -106,64 +139,64 @@ export class QReaderSettingTab extends PluginSettingTab {
         this.testStatus = "";
         statusEl.setText("");
         try { await this.plugin.saveSettings(); }
-        catch { new Notice("AI 配置保存失败，请重新编辑后重试"); }
+        catch { new Notice(this.plugin.t("AI 配置保存失败，请重新编辑后重试")); }
       };
       if (provider === "custom") {
         new Setting(aiContainer).setName("Base URL")
-          .setDesc("自定义 OpenAI Compatible 接口地址，不影响内置服务。")
+          .setDesc(this.plugin.t("自定义 OpenAI Compatible 接口地址，不影响内置服务。"))
           .addText((text) => {
-            text.inputEl.setAttribute("aria-label", "自定义接口 Base URL");
+            text.inputEl.setAttribute("aria-label", this.plugin.t("自定义接口 Base URL"));
             text.setPlaceholder("https://api.openai.com/v1").setValue(ai.custom.baseUrl).onChange(async (value) => {
               ai.custom.baseUrl = value;
               await persistAiChange();
             });
           });
         new Setting(aiContainer).setName("Model").addText((text) => {
-          text.inputEl.setAttribute("aria-label", "自定义接口 Model");
-          text.setPlaceholder("模型 ID").setValue(ai.custom.model).onChange(async (value) => {
+          text.inputEl.setAttribute("aria-label", this.plugin.t("自定义接口 Model"));
+          text.setPlaceholder(this.plugin.t("模型 ID")).setValue(ai.custom.model).onChange(async (value) => {
             ai.custom.model = value;
             await persistAiChange();
           });
         });
       } else {
         const preset = AI_PRESETS[provider];
-        new Setting(aiContainer).setName("模型（预设）").setDesc(preset.model);
-        new Setting(aiContainer).setName("接口地址（预设）").setDesc(preset.baseUrl);
+        new Setting(aiContainer).setName(this.plugin.t("模型（预设）")).setDesc(preset.model);
+        new Setting(aiContainer).setName(this.plugin.t("接口地址（预设）")).setDesc(preset.baseUrl);
       }
-      const keyLabel = provider === "custom" ? "自定义接口 API Key" : `${AI_PRESETS[provider].name} API Key`;
+      const keyLabel = provider === "custom" ? this.plugin.t("自定义接口 API Key") : `${AI_PRESETS[provider].name} API Key`;
       const apiKey = provider === "deepseek" ? ai.deepseekApiKey : provider === "agnes" ? ai.agnesApiKey : ai.custom.apiKey;
       new Setting(aiContainer).setName(keyLabel)
-        .setDesc("保存在插件本地 data.json 中，未加密。请保护 Vault 同步和备份；不同服务的密钥互不继承。")
+        .setDesc(this.plugin.t("保存在插件本地 data.json 中，未加密。请保护 Vault 同步和备份；不同服务的密钥互不继承。"))
         .addText((text) => {
           text.inputEl.type = "password";
           text.inputEl.autocomplete = "off";
           text.inputEl.setAttribute("aria-label", keyLabel);
-          text.setPlaceholder("填写该服务的 API Key").setValue(apiKey).onChange(async (value) => {
+          text.setPlaceholder(this.plugin.t("填写该服务的 API Key")).setValue(apiKey).onChange(async (value) => {
             if (provider === "deepseek") ai.deepseekApiKey = value;
             else if (provider === "agnes") ai.agnesApiKey = value;
             else ai.custom.apiKey = value;
             await persistAiChange();
           });
         });
-      new Setting(aiContainer).setName("测试连接")
-        .setDesc("仅将章节正文、选文或回答发送到所选接口，用于三问生成、批注解释和回答反馈；不提供通用对话。连接测试只发送探针。")
-        .addButton((button) => button.setButtonText(this.testing ? "正在测试……" : "测试连接")
+      new Setting(aiContainer).setName(this.plugin.t("测试连接"))
+        .setDesc(this.plugin.t("仅将章节正文、选文或回答发送到所选接口，用于三问生成、批注解释和回答反馈；不提供通用对话。连接测试只发送探针。"))
+        .addButton((button) => button.setButtonText(this.testing ? this.plugin.t("正在测试……") : this.plugin.t("测试连接"))
           .setDisabled(this.testing).onClick(async () => {
             if (this.testing) return;
             const snapshot = { ...getAiConfig(ai) };
             const revision = this.configRevision;
             this.testing = true;
-            this.testStatus = "正在测试……";
+            this.testStatus = this.plugin.t("正在测试……");
             renderAi();
             try {
               const result = await testConnection(snapshot);
               const current = getAiConfig(s.ai);
               if (this.configRevision !== revision || s.ai.provider !== provider || current.baseUrl !== snapshot.baseUrl || current.model !== snapshot.model || current.apiKey !== snapshot.apiKey) return;
-              this.testStatus = result.message;
-              new Notice(result.ok ? "连接成功" : "连接失败", 4000);
+              this.testStatus = this.plugin.localizeStatus(result.message);
+              new Notice(result.ok ? this.plugin.t("连接成功") : this.plugin.t("连接失败"), 4000);
             } catch {
               if (this.configRevision === revision && s.ai.provider === provider) {
-                this.testStatus = "AI 连接失败，请检查网络和接口配置";
+                this.testStatus = this.plugin.t("AI 连接失败，请检查网络和接口配置");
                 new Notice(this.testStatus);
               }
             } finally {
@@ -179,7 +212,7 @@ export class QReaderSettingTab extends PluginSettingTab {
     renderAi();
 
     // 提示词独立于 provider 重绘，切换接口不会丢失编辑草稿或串配置。
-    if (!this.promptSaving) {
+    if (!this.promptSaving && !preserveDraft) {
       this.promptDraft = s.questionPrompt;
       this.promptStatus = "";
     }
@@ -187,17 +220,17 @@ export class QReaderSettingTab extends PluginSettingTab {
     const renderPrompt = (): void => {
       promptContainer.empty();
       const setting = new Setting(promptContainer)
-        .setName("每章三问提示词")
-        .setDesc("留空使用默认的一问一靶提示词。{{chapter_content}} 会替换为当前章节正文；没有占位符时自动追加正文。所有 AI 服务共用，保存后对新生成或重新生成的问题生效。");
+        .setName(this.plugin.t("每章三问提示词"))
+        .setDesc(this.plugin.t("留空使用默认的一问一靶提示词。{{chapter_content}} 会替换为当前章节正文；没有占位符时自动追加正文。所有 AI 服务共用，保存后对新生成或重新生成的问题生效。"));
       setting.settingEl.addClass("qr-question-prompt-setting");
       setting.addTextArea((text) => {
-        text.inputEl.setAttribute("aria-label", "每章三问提示词");
+        text.inputEl.setAttribute("aria-label", this.plugin.t("每章三问提示词"));
         text.inputEl.rows = 12;
-        text.setPlaceholder(DEFAULT_QUESTION_PROMPT).setValue(this.promptDraft)
+        text.setPlaceholder(defaultQuestionPrompt(s.language)).setValue(this.promptDraft)
           .setDisabled(this.promptSaving)
           .onChange((value) => {
             this.promptDraft = value;
-            this.promptStatus = "修改尚未保存";
+            this.promptStatus = this.plugin.t("修改尚未保存");
             statusEl.setText(this.promptStatus);
           });
       });
@@ -207,18 +240,18 @@ export class QReaderSettingTab extends PluginSettingTab {
         const draft = this.promptDraft;
         const next = restoreDefault || !draft.trim() ? "" : draft;
         this.promptSaving = true;
-        this.promptStatus = "正在保存……";
+        this.promptStatus = this.plugin.t("正在保存……");
         renderPrompt();
         try {
           s.questionPrompt = next;
           await this.plugin.saveSettings();
           this.promptDraft = next;
-          this.promptStatus = next ? "自定义提示词已保存" : "已恢复默认提示词";
+          this.promptStatus = next ? this.plugin.t("自定义提示词已保存") : this.plugin.t("已恢复默认提示词");
           new Notice(this.promptStatus);
         } catch {
           s.questionPrompt = previous;
           this.promptDraft = draft;
-          this.promptStatus = "提示词保存失败，已回滚；可点击保存重试";
+          this.promptStatus = this.plugin.t("提示词保存失败，已回滚；可点击保存重试");
           new Notice(this.promptStatus);
         } finally {
           this.promptSaving = false;
@@ -226,11 +259,11 @@ export class QReaderSettingTab extends PluginSettingTab {
         }
       };
       new Setting(promptContainer)
-        .setName(this.promptDraft.trim() ? "自定义提示词" : "当前使用默认提示词")
-        .setDesc("默认生成核心、逻辑、复述问题各一个。")
-        .addButton((button) => button.setButtonText(this.promptSaving ? "正在保存……" : "保存提示词")
+        .setName(this.promptDraft.trim() ? this.plugin.t("自定义提示词") : this.plugin.t("当前使用默认提示词"))
+        .setDesc(this.plugin.t("默认生成核心、逻辑、复述问题各一个。"))
+        .addButton((button) => button.setButtonText(this.promptSaving ? this.plugin.t("正在保存……") : this.plugin.t("保存提示词"))
           .setCta().setDisabled(this.promptSaving).onClick(() => savePrompt(false)))
-        .addButton((button) => button.setButtonText("清空并恢复默认")
+        .addButton((button) => button.setButtonText(this.plugin.t("清空并恢复默认"))
           .setDisabled(this.promptSaving).onClick(() => savePrompt(true)));
       const statusEl = promptContainer.createEl("p", { text: this.promptStatus, cls: "qr-settings-status" });
       statusEl.setAttribute("role", "status");
@@ -239,10 +272,10 @@ export class QReaderSettingTab extends PluginSettingTab {
     this.renderPrompt = renderPrompt;
     renderPrompt();
 
-    containerEl.createEl("h3", { text: "阅读设置" });
-    containerEl.createEl("p", { text: "排版选项适用于可重排书籍；PDF、CBZ 与固定版式书籍保留原页面。", cls: "setting-item-description" });
-    new Setting(containerEl).setName("字号").addSlider((slider) => {
-      slider.sliderEl.setAttribute("aria-label", "字号");
+    containerEl.createEl("h3", { text: this.plugin.t("阅读设置") });
+    containerEl.createEl("p", { text: this.plugin.t("排版选项适用于可重排书籍；PDF、CBZ 与固定版式书籍保留原页面。"), cls: "setting-item-description" });
+    new Setting(containerEl).setName(this.plugin.t("字号")).addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", this.plugin.t("字号"));
       return slider
         .setLimits(12, 28, 1)
         .setValue(s.reading.fontSize)
@@ -253,8 +286,8 @@ export class QReaderSettingTab extends PluginSettingTab {
           this.plugin.notifySettingsChanged();
         })
     });
-    new Setting(containerEl).setName("行距").addSlider((slider) => {
-      slider.sliderEl.setAttribute("aria-label", "行距");
+    new Setting(containerEl).setName(this.plugin.t("行距")).addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", this.plugin.t("行距"));
       return slider
         .setLimits(1.4, 2.4, 0.05)
         .setValue(s.reading.lineHeight)
@@ -265,8 +298,8 @@ export class QReaderSettingTab extends PluginSettingTab {
           this.plugin.notifySettingsChanged();
         })
     });
-    new Setting(containerEl).setName("页边距").setDesc("可重排书籍的左右留白，单位为像素。").addSlider((slider) => {
-      slider.sliderEl.setAttribute("aria-label", "页边距");
+    new Setting(containerEl).setName(this.plugin.t("页边距")).setDesc(this.plugin.t("可重排书籍的左右留白，单位为像素。")).addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", this.plugin.t("页边距"));
       return slider
         .setLimits(12, 48, 2)
         .setValue(s.reading.pageMargin)
@@ -277,9 +310,9 @@ export class QReaderSettingTab extends PluginSettingTab {
           this.plugin.notifySettingsChanged();
         })
     });
-    new Setting(containerEl).setName("字体").addDropdown((dropdown) => {
-      dropdown.selectEl.setAttribute("aria-label", "字体");
-      return dropdown.addOptions({ original: "原书字体", sans: "系统黑体", serif: "系统宋体" })
+    new Setting(containerEl).setName(this.plugin.t("字体")).addDropdown((dropdown) => {
+      dropdown.selectEl.setAttribute("aria-label", this.plugin.t("字体"));
+      return dropdown.addOptions({ original: this.plugin.t("原书字体"), sans: this.plugin.t("系统黑体"), serif: this.plugin.t("系统宋体") })
         .setValue(s.reading.fontFamily)
         .onChange(async (value) => {
           s.reading.fontFamily = value === "sans" || value === "serif" ? value : "original";
@@ -287,8 +320,8 @@ export class QReaderSettingTab extends PluginSettingTab {
           this.plugin.notifySettingsChanged();
         })
     });
-    new Setting(containerEl).setName("首行缩进").addToggle((toggle) => {
-      toggle.toggleEl.setAttribute("aria-label", "首行缩进");
+    new Setting(containerEl).setName(this.plugin.t("首行缩进")).addToggle((toggle) => {
+      toggle.toggleEl.setAttribute("aria-label", this.plugin.t("首行缩进"));
       toggle.toggleEl.setAttribute("role", "switch");
       toggle.toggleEl.setAttribute("aria-checked", String(s.reading.paragraphIndent));
       const input = toggle.toggleEl.querySelector("input");
@@ -309,10 +342,10 @@ export class QReaderSettingTab extends PluginSettingTab {
         this.plugin.notifySettingsChanged();
       })
     });
-    new Setting(containerEl).setName("主题").addDropdown((dd) => {
-      dd.selectEl.setAttribute("aria-label", "主题");
+    new Setting(containerEl).setName(this.plugin.t("主题")).addDropdown((dd) => {
+      dd.selectEl.setAttribute("aria-label", this.plugin.t("主题"));
       return dd
-        .addOptions({ auto: "跟随 Obsidian", light: "纸白", sepia: "暖纸", sage: "青绿", dark: "夜间" })
+        .addOptions({ auto: this.plugin.t("跟随 Obsidian"), light: this.plugin.t("纸白"), sepia: this.plugin.t("暖纸"), sage: this.plugin.t("青绿"), dark: this.plugin.t("夜间") })
         .setValue(s.reading.theme)
         .onChange(async (v) => {
           s.reading.theme = v as typeof s.reading.theme;
@@ -320,10 +353,10 @@ export class QReaderSettingTab extends PluginSettingTab {
           this.plugin.notifySettingsChanged();
         })
     });
-    new Setting(containerEl).setName("默认阅读模式").addDropdown((dd) => {
-      dd.selectEl.setAttribute("aria-label", "默认阅读模式");
+    new Setting(containerEl).setName(this.plugin.t("默认阅读模式")).addDropdown((dd) => {
+      dd.selectEl.setAttribute("aria-label", this.plugin.t("默认阅读模式"));
       return dd
-        .addOptions({ paginated: "左右翻页", scrolled: "上下滚动" })
+        .addOptions({ paginated: this.plugin.t("左右翻页"), scrolled: this.plugin.t("上下滚动") })
         .setValue(s.reading.defaultMode)
         .onChange(async (v) => {
           s.reading.defaultMode = v as typeof s.reading.defaultMode;

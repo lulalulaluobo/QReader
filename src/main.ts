@@ -12,10 +12,19 @@ import { ReaderView, VIEW_TYPE_READER } from "./views/reader";
 import { AnswerView, VIEW_TYPE_ANSWER } from "./views/answer";
 import { ReviewView, VIEW_TYPE_REVIEW } from "./views/review";
 import { QReaderSettingTab } from "./settings-tab";
+import { localizeMessage, localizedError, normalizeLanguage, translate } from "./i18n";
+import type { MessageKey } from "./i18n";
+
+export type SettingsChangeReason = "settings" | "language";
 
 // Obsidian's native settings controller is not exposed by its public typings.
 interface AppSettingsAccess extends App {
   setting: { open(): void; openTabById(id: string): void };
+}
+
+// Host method verified in Obsidian; absent from its public type declarations.
+interface LeafHeaderAccess extends WorkspaceLeaf {
+  updateHeader(): void;
 }
 
 export class QReaderPlugin extends Plugin {
@@ -23,7 +32,8 @@ export class QReaderPlugin extends Plugin {
   library!: LibraryManager;
   cache!: BookCache;
   private libraryListeners = new Set<() => void>();
-  private settingsListeners = new Set<() => void>();
+  private settingsListeners = new Set<(reason: SettingsChangeReason) => void>();
+  private ribbon: HTMLElement | null = null;
   private immersiveDocuments = new Set<Document>();
   private pageStates = new Map<string, Record<string, unknown>>();
 
@@ -36,6 +46,7 @@ export class QReaderPlugin extends Plugin {
         libraryPath: () => this.settings.libraryPath,
         aiConfig: () => getAiConfig(this.settings.ai),
         questionPrompt: () => this.settings.questionPrompt,
+        language: () => this.settings.language,
         configDir: this.app.vault.configDir,
         pluginId: this.manifest.id,
         notifyChanged: () => this.notifyChanged(),
@@ -48,38 +59,46 @@ export class QReaderPlugin extends Plugin {
     this.registerView(VIEW_TYPE_ANSWER, (leaf) => new AnswerView(leaf, this));
     this.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, this));
 
-    this.addRibbonIcon("book-open", "QReader 书架", () => void this.openBookshelf());
-
-    this.addCommand({
-      id: "open-bookshelf",
-      name: "打开书架",
-      callback: () => void this.openBookshelf(),
-    });
-    this.addCommand({
-      id: "import-book",
-      name: "导入书籍 (EPUB / PDF / FB2 / MOBI / AZW3 / CBZ)",
-      callback: () => void this.openBookshelf(true),
-    });
-    this.addCommand({
-      id: "open-review",
-      name: "进入复习",
-      callback: () => void this.openReview(),
-    });
+    this.ribbon = this.addRibbonIcon("book-open", this.t("QReader 书架"), () => void this.openBookshelf());
+    this.registerCommands();
 
     this.addSettingTab(new QReaderSettingTab(this.app, this));
 
-    this.registerEvent(
-      this.app.workspace.on("css-change", () => this.notifySettingsChanged())
-    );
+    this.registerEvent(this.app.workspace.on("css-change", () => this.notifySettingsChanged()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.syncReadingChrome()));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.syncReadingChrome()));
     this.app.workspace.onLayoutReady(() => this.syncReadingChrome());
 
-    // initial scan in the background so the bookshelf opens fast
     void this.library.scan().catch(() => {
-      new Notice("扫描阅读库失败，请检查设置中的阅读库路径");
+      new Notice(this.t("扫描阅读库失败，请检查设置中的阅读库路径"));
     });
   }
+
+  private registerCommands(): void {
+    this.addCommand({
+      id: "open-bookshelf",
+      name: this.t("打开书架"),
+      callback: () => void this.openBookshelf(),
+    });
+    this.addCommand({
+      id: "import-book",
+      name: this.t("导入书籍 (EPUB / PDF / FB2 / MOBI / AZW3 / CBZ)"),
+      callback: () => void this.openBookshelf(true),
+    });
+    this.addCommand({
+      id: "open-review",
+      name: this.t("进入复习"),
+      callback: () => void this.openReview(),
+    });
+
+  }
+
+  t(key: MessageKey, ...values: Array<string | number>): string {
+    return translate(this.settings.language, key, ...values);
+  }
+
+  errorText(error: unknown): string { return localizedError(this.settings.language, error); }
+  localizeStatus(text: string): string { return localizeMessage(this.settings.language, text); }
 
   onunload(): void {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_READER);
@@ -101,6 +120,7 @@ export class QReaderPlugin extends Plugin {
     const ai = loadAiSettings(data.ai);
     const reading = typeof data.reading === "object" && data.reading !== null ? data.reading : DEFAULT_SETTINGS.reading;
     this.settings = {
+      language: normalizeLanguage(data.language),
       libraryPath: libraryPath?.ok ? libraryPath.path : DEFAULT_SETTINGS.libraryPath,
       ai,
       questionPrompt: typeof data.questionPrompt === "string" ? data.questionPrompt : "",
@@ -135,7 +155,7 @@ export class QReaderPlugin extends Plugin {
     return () => this.libraryListeners.delete(cb);
   }
 
-  onSettingsChanged(cb: () => void): () => void {
+  onSettingsChanged(cb: (reason: SettingsChangeReason) => void): () => void {
     this.settingsListeners.add(cb);
     return () => this.settingsListeners.delete(cb);
   }
@@ -144,8 +164,20 @@ export class QReaderPlugin extends Plugin {
     for (const cb of this.libraryListeners) cb();
   }
 
-  notifySettingsChanged(): void {
-    for (const cb of this.settingsListeners) cb();
+  notifySettingsChanged(reason: SettingsChangeReason = "settings"): void {
+    if (reason === "language") {
+      this.registerCommands();
+      this.ribbon?.setAttribute("aria-label", this.t("QReader 书架"));
+      this.app.workspace.iterateAllLeaves((leaf) => {
+        if (leaf.view instanceof ReaderView || leaf.view instanceof BookshelfView || leaf.view instanceof AnswerView || leaf.view instanceof ReviewView) {
+          leaf.view.contentEl.lang = this.settings.language;
+          const header = leaf as LeafHeaderAccess;
+          if (typeof header.updateHeader === "function") header.updateHeader();
+        }
+      });
+    }
+    for (const cb of this.settingsListeners) cb(reason);
+    if (reason === "language") this.app.workspace.trigger("layout-change");
   }
 
   syncReadingChrome(): void {

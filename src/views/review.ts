@@ -20,13 +20,14 @@ export class ReviewView extends ItemView {
   private loading = false;
   private error = "";
   private unsub: (() => void) | null = null;
+  private unsubSettings: (() => void) | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
     this.navigation = true;
   }
   getViewType(): string { return VIEW_TYPE_REVIEW; }
-  getDisplayText(): string { return "QReader 复习"; }
+  getDisplayText(): string { return this.plugin.t("QReader 复习"); }
   getIcon(): string { return "repeat"; }
 
   getState(): Record<string, unknown> { return { tab: this.tab, selectedBook: this.selectedBook }; }
@@ -44,9 +45,13 @@ export class ReviewView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.opened = true;
+    this.contentEl.lang = this.plugin.settings.language;
     this.plugin.syncReadingChrome();
     this.contentEl.addClass("qr-view");
     this.unsub = this.plugin.onLibraryChanged(() => void this.refresh());
+    this.unsubSettings = this.plugin.onSettingsChanged((reason) => {
+      if (reason === "language") this.render();
+    });
     await this.refresh();
   }
   async onClose(): Promise<void> {
@@ -54,6 +59,8 @@ export class ReviewView extends ItemView {
     this.opened = false;
     this.revision++;
     this.unsub?.();
+    this.unsubSettings?.();
+    this.unsubSettings = null;
     this.unsub = null;
   }
 
@@ -69,18 +76,18 @@ export class ReviewView extends ItemView {
       const classifications = await Promise.all(entries.map(async (entry): Promise<[string, ReadonlyMap<string, boolean>]> => {
         try { return [entry.id, await this.plugin.cache.getReviewExclusions(entry)]; }
         catch (error) {
-          failures.push(`《${entry.reading.book.title}》：${error instanceof Error ? error.message : String(error)}`);
+          failures.push(`《${entry.reading.book.title}》：${this.plugin.errorText(error)}`);
           return [entry.id, new Map()];
         }
       }));
       if (!this.opened || revision !== this.revision) return;
       this.entries = entries;
       this.reviewExclusions = new Map(classifications);
-      this.classificationError = failures.length ? `部分书籍的结构信息读取失败，暂按章节标题和路径筛选。${failures.join("；")}` : "";
+      this.classificationError = failures.length ? this.plugin.t("部分书籍的结构信息读取失败，暂按章节标题和路径筛选。{0}", failures.join("；")) : "";
       if (!this.entries.some((entry) => entry.id === this.selectedBook)) this.selectedBook = this.entries[0]?.id ?? null;
     } catch (error) {
       if (!this.opened || revision !== this.revision) return;
-      this.error = `读取复习记录失败：${error instanceof Error ? error.message : String(error)}`;
+      this.error = this.plugin.t("读取复习记录失败：{0}", this.plugin.errorText(error));
     } finally {
       if (this.opened && revision === this.revision) {
         this.loading = false;
@@ -94,10 +101,10 @@ export class ReviewView extends ItemView {
     this.contentEl.empty();
     const root = el("div", "qr-review");
     const header = el("div", "qr-review-header");
-    header.appendChild(el("h1", "qr-review-title", "复习"));
+    header.appendChild(el("h1", "qr-review-title", this.plugin.t("复习")));
     const tabs = el("div", "qr-tabs");
-    tabs.setAttribute("aria-label", "复习章节范围");
-    for (const tab of [{ id: "due", title: "待复习" }, { id: "all", title: "全部章节" }]) {
+    tabs.setAttribute("aria-label", this.plugin.t("复习章节范围"));
+    for (const tab of [{ id: "due", title: this.plugin.t("待复习") }, { id: "all", title: this.plugin.t("全部章节") }]) {
       const button = el("button", `qr-tab${this.tab === tab.id ? " qr-tab-active" : ""}`, tab.title);
       button.setAttribute("aria-pressed", String(this.tab === tab.id));
       button.onclick = () => {
@@ -110,20 +117,20 @@ export class ReviewView extends ItemView {
     header.appendChild(tabs);
     root.appendChild(header);
     if (this.classificationError) {
-      const warning = el("div", "qr-inline-error", this.classificationError);
+      const warning = el("div", "qr-inline-error", this.plugin.localizeStatus(this.classificationError));
       warning.setAttribute("role", "status");
-      const retry = el("button", "qr-btn", "重试读取结构");
+      const retry = el("button", "qr-btn", this.plugin.t("重试读取结构"));
       retry.onclick = () => void this.refresh();
       root.append(warning, retry);
     }
     if (this.error) {
-      const error = el("div", "qr-inline-error", this.error);
+      const error = el("div", "qr-inline-error", this.plugin.localizeStatus(this.error));
       error.setAttribute("role", "alert");
-      const retry = el("button", "qr-btn", "重试");
+      const retry = el("button", "qr-btn", this.plugin.t("重试"));
       retry.onclick = () => void this.refresh();
       root.append(error, retry);
     } else if (this.loading && !this.entries.length) {
-      const status = el("div", "qr-muted qr-empty", "正在读取复习记录……");
+      const status = el("div", "qr-muted qr-empty", this.plugin.t("正在读取复习记录……"));
       status.setAttribute("role", "status");
       root.appendChild(status);
     } else if (this.tab === "due") this.renderDue(root);
@@ -144,17 +151,17 @@ export class ReviewView extends ItemView {
       const hasChapters = this.entries.some((entry) => Object.entries(entry.reading.chapters)
         .some(([id, chapter]) => isReviewableChapter(chapter, this.reviewExclusions.get(entry.id)?.get(id))));
       const copy = this.entries.length && !hasChapters
-        ? "还没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看；PDF 可在阅读页的目录中新建章节。"
-        : "没有到期的复习。\n你可以自由设置未来的复习日期，也可以从“全部章节”随时重新回答。";
+        ? this.plugin.t("还没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看；PDF 可在阅读页的目录中新建章节。")
+        : this.plugin.t("没有到期的复习。\n你可以自由设置未来的复习日期，也可以从“全部章节”随时重新回答。");
       body.appendChild(el("div", "qr-muted qr-empty", copy));
       return;
     }
     for (const { entry, chapterId, ch, r } of rows) {
       const row = el("div", "qr-review-row");
       const info = el("div", "qr-review-row-info");
-      info.append(el("div", "qr-review-row-book", `${entry.reading.book.title} · ${ch.title}`), el("div", "qr-muted qr-tiny", `复习日期：${r.scheduledFor}`));
-      const go = el("button", "qr-btn qr-btn-primary", "重新回答");
-      go.setAttribute("aria-label", `重新回答《${entry.reading.book.title}》${ch.title}`);
+      info.append(el("div", "qr-review-row-book", `${entry.reading.book.title} · ${ch.title}`), el("div", "qr-muted qr-tiny", this.plugin.t("复习日期：{0}", r.scheduledFor ?? "")));
+      const go = el("button", "qr-btn qr-btn-primary", this.plugin.t("重新回答"));
+      go.setAttribute("aria-label", this.plugin.t("重新回答《{0}》{1}", entry.reading.book.title, ch.title));
       go.onclick = () => void this.plugin.openAnswer(entry.id, chapterId, "review", r.scheduledFor);
       row.append(info, go);
       body.appendChild(row);
@@ -164,9 +171,9 @@ export class ReviewView extends ItemView {
   private renderAll(root: HTMLElement): void {
     const body = el("div", "qr-review-body");
     root.appendChild(body);
-    if (!this.entries.length) { body.appendChild(el("div", "qr-muted qr-empty", "还没有可复习的书籍。请先导入书籍；损坏书籍可在书架中恢复。")); return; }
+    if (!this.entries.length) { body.appendChild(el("div", "qr-muted qr-empty", this.plugin.t("还没有可复习的书籍。请先导入书籍；损坏书籍可在书架中恢复。"))); return; }
     const chips = el("div", "qr-book-chips");
-    chips.setAttribute("aria-label", "选择复习书籍");
+    chips.setAttribute("aria-label", this.plugin.t("选择复习书籍"));
     for (const entry of this.entries) {
       const chip = el("button", `qr-chip${this.selectedBook === entry.id ? " qr-chip-active" : ""}`, entry.reading.book.title);
       chip.setAttribute("aria-pressed", String(this.selectedBook === entry.id));
@@ -185,12 +192,12 @@ export class ReviewView extends ItemView {
       .sort((a, b) => a[1].index - b[1].index);
     if (!chapters.length) {
       const copy = Object.keys(target.reading.chapters).length
-        ? "这本书没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看。"
-        : "这本书还没有章节。PDF 可在阅读页的目录中新建章节。";
+        ? this.plugin.t("这本书没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看。")
+        : this.plugin.t("这本书还没有章节。PDF 可在阅读页的目录中新建章节。");
       body.appendChild(el("div", "qr-muted qr-empty", copy));
       return;
     }
-    body.appendChild(el("p", "qr-muted qr-tiny", "每次选择章节都会开始新的回忆；三题提交之后才能查看历次回答。"));
+    body.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("每次选择章节都会开始新的回忆；三题提交之后才能查看历次回答。")));
     for (const [chapterId, chapter] of chapters) {
       const row = el("div", "qr-review-row");
       const info = el("div", "qr-review-row-info");
@@ -199,9 +206,9 @@ export class ReviewView extends ItemView {
       const times = chapter.answers.length + completed.length;
       const dates = [...chapter.answers.map((answer) => answer.answeredAt), ...completed.map((review) => review.completedAt ?? "")].filter(Boolean).sort();
       const last = dates.at(-1);
-      info.appendChild(el("div", "qr-muted qr-tiny", times ? `已回答 ${times} 次${last ? ` · 上次 ${relTime(last)}` : ""}` : "尚未回答"));
-      const go = el("button", "qr-btn", "重新回答");
-      go.setAttribute("aria-label", `重新回答${chapter.title}`);
+      info.appendChild(el("div", "qr-muted qr-tiny", times ? this.plugin.t("已回答 {0} 次{1}", times, last ? this.plugin.t(" · 上次 {0}", relTime(last, this.plugin.settings.language)) : "") : this.plugin.t("尚未回答")));
+      const go = el("button", "qr-btn", this.plugin.t("重新回答"));
+      go.setAttribute("aria-label", this.plugin.t("重新回答{0}", chapter.title));
       go.onclick = () => void this.plugin.openAnswer(target.id, chapterId, "review");
       row.append(info, go);
       body.appendChild(row);
@@ -210,11 +217,11 @@ export class ReviewView extends ItemView {
 
   private bottomNav(): HTMLElement {
     const nav = el("nav", "qr-bottom-nav");
-    nav.setAttribute("aria-label", "QReader 导航");
+    nav.setAttribute("aria-label", this.plugin.t("QReader 导航"));
     const routes = [
-      { label: "书架", icon: "library", active: false, go: () => this.plugin.openBookshelf() },
-      { label: "复习", icon: "repeat", active: true, go: () => this.plugin.openReview() },
-      { label: "设置", icon: "settings", active: false, go: () => this.plugin.openSettings() },
+      { label: this.plugin.t("书架"), icon: "library", active: false, go: () => this.plugin.openBookshelf() },
+      { label: this.plugin.t("复习"), icon: "repeat", active: true, go: () => this.plugin.openReview() },
+      { label: this.plugin.t("设置"), icon: "settings", active: false, go: () => this.plugin.openSettings() },
     ];
     for (const route of routes) {
       const button = el("button", `qr-nav-item${route.active ? " qr-nav-active" : ""}`);

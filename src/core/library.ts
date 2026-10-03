@@ -11,6 +11,8 @@ import { BookCache, buildEpubChapters, epubChapterText, pdfPagesText, tocNodesFr
 import { openPdf } from "../reader/pdfjs-setup";
 import { generateQuestions } from "../ai/tasks";
 import { BOOK_EXTENSION, bookAsEpub, detectBookFormat } from "./book-formats";
+import { translate } from "../i18n";
+import type { AppLanguage } from "../i18n";
 
 export const ANNOTATIONS_MD = "批注.md";
 export const READING_JSON = "reading.json";
@@ -19,6 +21,7 @@ export interface LibraryDeps {
   libraryPath(): string;
   aiConfig(): AiConfig;
   questionPrompt(): string;
+  language(): AppLanguage;
   configDir: string;
   pluginId: string;
   notifyChanged(): void;
@@ -131,7 +134,7 @@ export class LibraryManager {
     const format = await detectBookFormat(fileName, bytes);
     const baseName = fileName.split(/[\\/]/).pop() ?? "";
     const safeName = `${sanitizeFolderName(baseName.replace(BOOK_EXTENSION, "")) || "原书"}.${format}`;
-    new Notice(`正在导入《${baseName}》……`);
+    new Notice(translate(this.deps.language(), "正在导入《{0}》……", baseName));
     const { reading, cover } = await readBook(bytes, safeName, format);
     this.root();
     if (generation !== this.rootGeneration) throw new Error("导入期间书库路径发生变化，请重试");
@@ -149,7 +152,7 @@ export class LibraryManager {
     if (generation !== this.rootGeneration) throw new Error("导入已保存在原书库，但书库路径已改变，请从原书库打开");
     this.entriesById.set(id, entry);
     this.deps.notifyChanged();
-    new Notice(`已导入《${reading.book.title}》`);
+    new Notice(translate(this.deps.language(), "已导入《{0}》", reading.book.title));
     return { entry, created: true };
   }
 
@@ -281,7 +284,7 @@ export class LibraryManager {
       if (!chapter) throw new Error("章节不存在");
       if (!regenerate && chapter.questionVersions.length) return;
       const text = await this.getChapterText(healthy, chapterId);
-      const questions = await generateQuestions(this.deps.aiConfig(), healthy.reading.book.title, chapter.title, text, this.deps.questionPrompt());
+      const questions = await generateQuestions(this.deps.aiConfig(), healthy.reading.book.title, chapter.title, text, this.deps.questionPrompt(), this.deps.language());
       this.healthy(healthy);
       await healthy.store.mutate((value) => {
         const target = value.chapters[chapterId];

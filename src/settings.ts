@@ -2,8 +2,10 @@
 
 import type { ReadMode, ReadingTheme, ReadingLayout, ReadingColors, HighlightColor } from "./types";
 import type { AiSettings } from "./ai/providers";
+import type { AppLanguage, MessageKey } from "./i18n";
 
 export interface QReaderSettings {
+  language: AppLanguage;
   libraryPath: string; // vault-relative, e.g. "Books"
   ai: AiSettings;
   questionPrompt: string; // Empty uses the built-in chapter prompt.
@@ -16,6 +18,7 @@ export interface QReaderSettings {
 }
 
 export const DEFAULT_SETTINGS: QReaderSettings = {
+  language: "zh-CN",
   libraryPath: "Books",
   ai: {
     provider: "deepseek",
@@ -44,7 +47,7 @@ export const READING_PALETTES: Record<Exclude<ReadingTheme, "auto">, ReadingColo
   dark: { background: "#202124", foreground: "#d8d9db", muted: "#a6a8ad", dark: true },
 };
 
-export const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; fill: string; edge: string }> = {
+export const HIGHLIGHT_COLORS: Record<HighlightColor, { label: MessageKey; fill: string; edge: string }> = {
   yellow: { label: "黄色", fill: "#f1c84e", edge: "#9e7500" },
   green: { label: "绿色", fill: "#88c58a", edge: "#357546" },
   blue: { label: "蓝色", fill: "#78b8df", edge: "#346e9b" },
@@ -57,6 +60,10 @@ export const READING_FONTS = {
   sans: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
   serif: '"Songti SC", "STSong", "SimSun", serif',
 };
+
+export function isReservedCategoryName(name: string): boolean {
+  return ["全部", "未读", "已读", "all", "unread", "read"].includes(name.trim().toLowerCase());
+}
 
 /** Only forward-slash, Vault-relative paths are accepted. */
 export function validateLibraryPath(raw: string): { ok: boolean; path: string; error?: string } {
