@@ -5,6 +5,7 @@ import { QUESTION_LABELS, isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
 import { el, fmtDateTime, todayStr } from "../util";
 import { generateFeedback } from "../ai/tasks";
+import { getAiConfig } from "../ai/providers";
 
 export const VIEW_TYPE_ANSWER = "qreader-answer";
 export type AnswerMode = "answer" | "review";
@@ -315,7 +316,7 @@ export class AnswerView extends ItemView {
     try {
       const text = await this.plugin.library.getChapterText(entry, chapterId);
       if (session !== this.session || lifetime !== this.lifetime || !this.opened) return;
-      const feedback = await generateFeedback(this.plugin.settings.ai, entry.reading.book.title, entry.reading.chapters[chapterId]?.title ?? "", text, questions, answerMap);
+      const feedback = await generateFeedback(getAiConfig(this.plugin.settings.ai), entry.reading.book.title, entry.reading.chapters[chapterId]?.title ?? "", text, questions, answerMap);
       if (session !== this.session || lifetime !== this.lifetime || !this.opened) return;
       await this.plugin.library.attachFeedback(entry, chapterId, feedback, saved.record);
     } catch (error) {

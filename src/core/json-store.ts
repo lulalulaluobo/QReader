@@ -221,7 +221,7 @@ export function validateReading(raw: unknown): ReadingFile {
   const b = requireRecord(v.book, "book");
   string(b.title, "title"); string(b.author, "author"); string(b.fileName, "fileName");
   if (!b.fileName || /[\\/]/.test(b.fileName) || b.fileName === "." || b.fileName === "..") throw new Error("reading.json 原书文件名无效");
-  if (b.format !== "epub" && b.format !== "pdf") throw new Error("reading.json 书籍格式无效");
+  if (b.format !== "epub" && b.format !== "pdf" && b.format !== "fb2" && b.format !== "mobi" && b.format !== "azw3" && b.format !== "cbz") throw new Error("reading.json 书籍格式无效");
   if (b.spineLength !== undefined) integer(b.spineLength, "spineLength", 1);
   if (b.numPages !== undefined) integer(b.numPages, "numPages", 1);
   string(v.importedAt, "importedAt");

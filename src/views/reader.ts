@@ -8,6 +8,7 @@ import type {
   HealthyBookEntry,
   ReadMode,
   ReadingTheme,
+  ReadingColors,
   TocNode,
 } from "../types";
 import { QUESTION_LABELS, chaptersOrdered, isHealthyBook } from "../types";
@@ -15,8 +16,10 @@ import type { QReaderPlugin } from "../main";
 import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, SelectionAnchor } from "../reader/engine";
 import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
-import { el, genId } from "../util";
+import { el, genId, fmtDateTime } from "../util";
 import { explainSelection } from "../ai/tasks";
+import { READING_PALETTES } from "../settings";
+import { getAiConfig } from "../ai/providers";
 
 export const VIEW_TYPE_READER = "qreader-reader";
 
@@ -53,6 +56,7 @@ export class ReaderView extends ItemView {
   private generation = 0;
   private progressTimer: number | null = null;
   private annotationSaving = false;
+  private opened = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -70,6 +74,7 @@ export class ReaderView extends ItemView {
   }
 
   async onOpen(): Promise<void> {
+    this.opened = true;
     this.contentEl.empty();
     this.buildSkeleton();
     this.applyThemeClass();
@@ -84,19 +89,22 @@ export class ReaderView extends ItemView {
         this.engine?.clearSelection();
         this.draft = null;
         this.renderAnnotationCard();
+        if (this.chromeHidden) this.toggleChrome();
       }
     });
   }
 
   async onClose(): Promise<void> {
+    this.opened = false;
     ++this.generation;
     this.unsub?.();
     this.unsubSettings?.();
     this.unsub = this.unsubSettings = null;
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
-    await this.persistProgress(true);
+    const saving = this.persistProgress(true);
     this.engine?.destroy();
     this.engine = null;
+    await saving;
     if (this.entry) await this.releaseSource(this.entry);
   }
 
@@ -128,6 +136,9 @@ export class ReaderView extends ItemView {
   private readerTitleEl!: HTMLElement;
   private progressEl!: HTMLElement;
   private progressBar!: HTMLProgressElement;
+  private runningTitleEl!: HTMLElement;
+  private positionEl!: HTMLElement;
+  private panelTrigger: HTMLElement | null = null;
   private tocPanel!: HTMLElement;
   private tocBody!: HTMLElement;
   private questionsPanel!: HTMLElement;
@@ -137,11 +148,15 @@ export class ReaderView extends ItemView {
 
   private buildSkeleton(): void {
     this.contentEl.empty();
-    this.contentEl.addClass("qr-view");
+    this.contentEl.addClass("qr-view", "qr-reader-view");
     const root = el("div", "qr-reader");
     root.toggleClass("qr-chrome-hidden", this.chromeHidden);
     this.contentEl.appendChild(root);
     this.root = root;
+    root.tabIndex = -1;
+    this.runningTitleEl = el("div", "qr-reader-running-title");
+    this.positionEl = el("div", "qr-reader-position");
+    root.append(this.runningTitleEl, this.positionEl);
 
     const top = el("div", "qr-reader-top");
     const back = el("button", "qr-icon-btn");
@@ -151,44 +166,64 @@ export class ReaderView extends ItemView {
     const title = el("div", "qr-reader-title");
     this.readerTitleEl = title;
     const actions = el("div", "qr-top-actions");
-    const tocBtn = el("button", "qr-icon-btn");
+    const tocBtn = el("button", "qr-dock-btn");
     setIcon(tocBtn, "list");
     tocBtn.setAttribute("aria-label", "目录");
     tocBtn.title = "目录";
     tocBtn.onclick = () => this.toggleToc();
-    const qBtn = el("button", "qr-icon-btn qr-bulb");
+    tocBtn.appendChild(el("span", undefined, "目录"));
+    const qBtn = el("button", "qr-dock-btn qr-bulb");
     setIcon(qBtn, "lightbulb");
     qBtn.setAttribute("aria-label", "本章三问");
     qBtn.title = "本章三问";
     qBtn.onclick = () => this.toggleQuestions();
+    qBtn.appendChild(el("span", undefined, "三问"));
+    qBtn.disabled = this.entry?.reading.book.format === "cbz";
+    if (qBtn.disabled) qBtn.title = "图片书没有文字层，不能生成三问";
     const moreBtn = el("button", "qr-icon-btn");
     setIcon(moreBtn, "more-horizontal");
     moreBtn.setAttribute("aria-label", "更多阅读操作");
     moreBtn.onclick = (e) => this.openMoreMenu(e);
-    actions.append(tocBtn, qBtn, moreBtn);
+    actions.append(moreBtn);
     top.append(back, title, actions);
 
     const host = el("div", "qr-reader-content");
     this.contentHost = host;
+    host.tabIndex = 0;
+    host.setAttribute("aria-label", "阅读正文；轻点中央或按 Escape 显示操作栏");
 
     const bottom = el("div", "qr-reader-bottom");
+    const chapters = el("div", "qr-reader-chapter-actions");
     const prevCh = el("button", "qr-btn", "上一章");
     prevCh.onclick = () => void this.stepChapter(-1);
     const done = el("button", "qr-btn qr-btn-primary", "完成本章");
+    done.disabled = this.entry?.reading.book.format === "cbz";
+    if (done.disabled) done.title = "图片书没有文字层，不能闭卷回答";
     done.onclick = () => void this.finishChapter();
     const nextCh = el("button", "qr-btn", "下一章");
     nextCh.onclick = () => void this.stepChapter(1);
-    const prog = el("span", "qr-progress");
-    this.progressEl = prog;
+    chapters.append(prevCh, done, nextCh);
+    this.progressEl = el("span", "qr-progress");
     this.progressBar = document.createElement("progress");
     this.progressBar.max = 1;
     this.progressBar.setAttribute("aria-label", "全书阅读进度");
     const meter = el("div", "qr-reader-meter");
-    meter.append(this.progressBar, prog);
-    bottom.append(prevCh, done, nextCh);
-
+    meter.append(this.progressBar, this.progressEl);
+    const dock = el("div", "qr-reader-dock");
+    const control = (label: string, icon: string, action: () => void): HTMLButtonElement => {
+      const button = el("button", "qr-dock-btn");
+      button.setAttribute("aria-label", label);
+      setIcon(button, icon);
+      button.appendChild(el("span", undefined, label));
+      button.onclick = action;
+      return button;
+    };
+    dock.append(tocBtn, qBtn, control("笔记", "notebook-pen", () => this.openNotes()),
+      control("字号", "type", () => this.openReaderSettings()),
+      control("背景", "palette", () => this.openReaderSettings("theme")));
+    bottom.append(meter, chapters, dock);
     const header = el("div", "qr-reader-header");
-    header.append(top, meter);
+    header.append(top);
     root.append(header, host, bottom);
     this.header = header;
     this.bottomBar = bottom;
@@ -228,6 +263,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ open book
 
   async openBook(bookId: string): Promise<void> {
+    if (!this.opened) return;
     const entry = this.plugin.library.get(bookId);
     if (!entry || !isHealthyBook(entry)) {
       new Notice("书籍不存在或记录已损坏");
@@ -237,9 +273,10 @@ export class ReaderView extends ItemView {
       this.applyThemeClass();
       return;
     }
-    await this.persistProgress(true);
-    const previous = this.entry;
     const generation = ++this.generation;
+    await this.persistProgress(true);
+    if (generation !== this.generation) return;
+    const previous = this.entry;
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.engine?.destroy();
     this.engine = null;
@@ -283,19 +320,17 @@ export class ReaderView extends ItemView {
       return;
     }
     if (generation !== this.generation) return;
-    this.plugin.library
-      .ensureQuestions(entry, this.currentChapterId ?? "")
-      .then(() => this.renderQuestions())
-      .catch(() => this.renderQuestions());
+    if (entry.reading.book.format !== "cbz") {
+      this.plugin.library.ensureQuestions(entry, this.currentChapterId ?? "")
+        .then(() => this.renderQuestions())
+        .catch(() => this.renderQuestions());
+    }
     this.renderQuestions();
     this.app.workspace.requestSaveLayout();
   }
 
   private async createEngine(entry: HealthyBookEntry): Promise<ReaderEngine> {
-    const layout = {
-      fontSize: this.plugin.settings.reading.fontSize,
-      lineHeight: this.plugin.settings.reading.lineHeight,
-    };
+    const layout = this.plugin.settings.reading;
     const theme = this.resolvedTheme();
     const generation = this.generation;
     const hooks: EngineHooks = {
@@ -307,14 +342,14 @@ export class ReaderView extends ItemView {
       onError: (error) => new Notice(`阅读失败：${error.message}`),
     };
     const chapters = chaptersOrdered(entry.reading);
-    if (entry.reading.book.format === "epub") {
+    if (entry.reading.book.format !== "pdf") {
       const book = await this.plugin.cache.getEpub(entry);
       const progress = entry.reading.progress;
       return new EpubEngine(book, chapters, {
         cfi: progress.cfi ?? null,
         percent: progress.percent,
         chapterId: progress.chapterId,
-      }, hooks, entry.reading.annotations, { mode: this.mode, layout, theme });
+      }, hooks, entry.reading.annotations, { mode: this.mode, layout, theme, format: entry.reading.book.format });
     }
     const doc = await this.plugin.cache.getPdf(entry);
     const progress = entry.reading.progress;
@@ -338,7 +373,7 @@ export class ReaderView extends ItemView {
     this.renderProgress(loc.percent);
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.progressTimer = window.setTimeout(() => void this.persistProgress(true), 500);
-    if (chapterChanged && loc.chapterId) {
+    if (chapterChanged && loc.chapterId && entry.reading.book.format !== "cbz") {
       this.plugin.library
         .ensureQuestions(entry, loc.chapterId)
         .then(() => this.renderQuestions())
@@ -379,11 +414,16 @@ export class ReaderView extends ItemView {
     this.readerTitleEl.empty();
     this.readerTitleEl.appendChild(el("div", "qr-reader-book-title", entry.reading.book.title));
     if (chTitle) this.readerTitleEl.appendChild(el("div", "qr-reader-chapter-title", chTitle));
+    this.runningTitleEl.setText(chTitle || entry.reading.book.title);
   }
 
   private renderProgress(percent: number): void {
     this.progressEl.setText(`${Math.round(percent * 100)}%`);
     this.progressBar.value = Math.max(0, Math.min(1, percent));
+    const page = this.lastLoc?.pdfPage;
+    this.positionEl.setText(page
+      ? `第 ${page} / ${this.entry?.reading.book.numPages ?? page} 页 · ${Math.round(percent * 100)}%`
+      : `${Math.round(percent * 100)}%`);
   }
 
   // ------------------------------------------------------------ chrome
@@ -404,24 +444,23 @@ export class ReaderView extends ItemView {
     this.header.inert = this.bottomBar.inert = this.chromeHidden;
   }
 
-  private resolvedTheme(): "light" | "dark" {
-    const t: ReadingTheme = this.plugin.settings.reading.theme;
-    if (t === "light") return "light";
-    if (t === "dark") return "dark";
-    return document.body.hasClass("theme-dark") ? "dark" : "light";
+  private resolvedTheme(): ReadingColors {
+    const theme = this.plugin.settings.reading.theme;
+    return READING_PALETTES[theme === "auto"
+      ? (this.contentEl.ownerDocument.body.hasClass("theme-dark") ? "dark" : "light")
+      : theme];
   }
 
   private applyThemeClass(): void {
-    this.root.toggleClass("qr-theme-dark", this.resolvedTheme() === "dark");
-    this.root.toggleClass("qr-theme-light", this.resolvedTheme() === "light");
+    const colors = this.resolvedTheme();
+    this.root.toggleClass("qr-theme-dark", colors.dark);
+    this.root.toggleClass("qr-theme-light", !colors.dark);
+    this.root.style.setProperty("--qr-surface", colors.background);
+    this.root.style.setProperty("--qr-reading-fg", colors.foreground);
+    this.root.style.setProperty("--qr-reading-muted", colors.muted);
     if (this.engine) {
-      void this.engine.applyLayout(
-        {
-          fontSize: this.plugin.settings.reading.fontSize,
-          lineHeight: this.plugin.settings.reading.lineHeight,
-        },
-        this.resolvedTheme()
-      ).catch((error: unknown) => new Notice(`布局更新失败：${error instanceof Error ? error.message : String(error)}`));
+      void this.engine.applyLayout(this.plugin.settings.reading, colors)
+        .catch((error: unknown) => new Notice(`布局更新失败：${error instanceof Error ? error.message : String(error)}`));
     }
   }
 
@@ -451,7 +490,7 @@ export class ReaderView extends ItemView {
     this.tocBody.empty();
     if (entry.reading.book.format === "pdf") this.buildPdfChapterTools();
     const nodes = this.tocNodes ?? [];
-    if (nodes.length === 0 && entry.reading.book.format === "epub") {
+    if (nodes.length === 0 && entry.reading.book.format !== "pdf") {
       this.tocBody.appendChild(el("div", "qr-muted", "本书没有可用目录"));
       return;
     }
@@ -574,6 +613,10 @@ export class ReaderView extends ItemView {
     const body = this.questionsBody;
     body.empty();
     if (!entry) return;
+    if (entry.reading.book.format === "cbz") {
+      body.appendChild(el("div", "qr-muted", "图片书没有文字层，不能生成本章三问。"));
+      return;
+    }
     const ch = this.currentChapterId ? entry.reading.chapters[this.currentChapterId] : undefined;
     if (!ch) {
       body.appendChild(el("div", "qr-muted", "当前不在任何章节中"));
@@ -638,82 +681,226 @@ export class ReaderView extends ItemView {
           }
         })
     );
-    menu.addItem((item) =>
-      item.setTitle("重新生成三问").setIcon("refresh-cw").onClick(() => void this.regenerate())
-    );
+    if (this.entry?.reading.book.format !== "cbz") {
+      menu.addItem((item) => item.setTitle("重新生成三问").setIcon("refresh-cw").onClick(() => void this.regenerate()));
+    }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle("阅读设置").setIcon("sliders-horizontal").onClick(() => this.openReaderSettings()));
     menu.showAtMouseEvent(e);
   }
 
-  private openReaderSettings(): void {
-    this.closePanels();
+  private openReaderSettings(section: "type" | "theme" = "type"): void {
     const s = this.plugin.settings.reading;
-    const box = el("div", "qr-reader-settings");
-    const close = el("button", "qr-icon-btn qr-settings-close");
-    setIcon(close, "x");
-    close.setAttribute("aria-label", "关闭阅读设置");
-    close.onclick = () => box.remove();
-    box.appendChild(close);
-    box.appendChild(el("div", "qr-settings-title", "阅读设置"));
-
-    const fontRow = el("div", "qr-settings-row");
-    fontRow.appendChild(el("span", undefined, "字号"));
-    const minus = el("button", "qr-btn qr-btn-sm", "−");
-    const val = el("span", "qr-settings-value", `${s.fontSize}px`);
-    const plus = el("button", "qr-btn qr-btn-sm", "＋");
-    minus.onclick = () => this.adjFontSize(-1, val);
-    plus.onclick = () => this.adjFontSize(1, val);
-    fontRow.append(minus, val, plus);
-    box.appendChild(fontRow);
-
-    box.appendChild(this.selectRow("行距", ["1.5", "1.75", "2"], String(s.lineHeight), async (v) => {
-      s.lineHeight = Number(v);
-      await this.plugin.saveSettings();
-      this.applyThemeClass();
-    }));
-    box.appendChild(
-      this.selectRow("主题", ["auto", "light", "dark"], s.theme, async (v) => {
-        s.theme = v as ReadingTheme;
-        await this.plugin.saveSettings();
-        this.applyThemeClass();
-      })
-    );
-    box.appendChild(
-      this.selectRow("默认阅读模式", ["paginated", "scrolled"], s.defaultMode, async (v) => {
-        s.defaultMode = v as ReadMode;
-        await this.plugin.saveSettings();
-      })
-    );
-    this.root.appendChild(box);
+    const box = this.createReadingSheet(section === "type" ? "字号与排版" : "阅读背景");
+    const body = el("div", "qr-reading-sheet-body");
+    box.appendChild(body);
+    if (section === "theme") {
+      const themes: Record<ReadingTheme, string> = {
+        light: "纸白", sepia: "暖纸", sage: "青绿", dark: "夜间", auto: "跟随系统",
+      };
+      const choices = el("div", "qr-theme-choices");
+      for (const value in themes) {
+        const theme = value as ReadingTheme;
+        const button = el("button", "qr-theme-choice");
+        button.setAttribute("aria-label", themes[theme]);
+        button.setAttribute("aria-pressed", String(s.theme === theme));
+        button.toggleClass("qr-theme-choice-active", s.theme === theme);
+        const sample = el("span", "qr-theme-sample", "文");
+        const colors = theme === "auto" ? this.resolvedTheme() : READING_PALETTES[theme];
+        sample.style.background = colors.background;
+        sample.style.color = colors.foreground;
+        button.append(sample, el("span", undefined, themes[theme]));
+        button.onclick = () => {
+          s.theme = theme;
+          for (const choice of choices.querySelectorAll<HTMLButtonElement>("button")) {
+            const active = choice === button;
+            choice.toggleClass("qr-theme-choice-active", active);
+            choice.setAttribute("aria-pressed", String(active));
+          }
+          void this.saveReadingSettings();
+        };
+        choices.appendChild(button);
+      }
+      body.append(choices, el("p", "qr-reading-help", "只改变阅读页配色；PDF 与图片书保留原始页面颜色。"));
+    } else {
+      if (this.engine?.reflowable) {
+        body.appendChild(this.sliderRow("字号", 12, 28, 1, s.fontSize, (value) => { s.fontSize = value; }));
+        body.appendChild(this.sliderRow("行距", 1.4, 2.4, 0.05, s.lineHeight, (value) => { s.lineHeight = value; }));
+        body.appendChild(this.sliderRow("页边距", 12, 48, 2, s.pageMargin, (value) => { s.pageMargin = value; }));
+        body.appendChild(this.selectRow("字体", { original: "原书字体", sans: "系统黑体", serif: "系统宋体" },
+          s.fontFamily, async (value) => {
+            s.fontFamily = value === "sans" || value === "serif" ? value : "original";
+            await this.saveReadingSettings();
+          }));
+        const row = el("label", "qr-reading-toggle");
+        const indent = el("input");
+        indent.type = "checkbox";
+        indent.checked = s.paragraphIndent;
+        indent.onchange = () => {
+          s.paragraphIndent = indent.checked;
+          void this.saveReadingSettings();
+        };
+        row.append(el("span", undefined, "首行缩进"), indent);
+        body.appendChild(row);
+      } else {
+        body.appendChild(el("p", "qr-reading-help", "本书保留原始版式，字号、行距、字体和页边距不能重排。"));
+      }
+      body.appendChild(this.selectRow("翻页方式", { paginated: "左右翻页", scrolled: "上下滚动" },
+        this.mode, async (value) => {
+          if (!this.engine) return;
+          const mode = value === "scrolled" ? "scrolled" : "paginated";
+          await this.engine.setMode(mode);
+          this.mode = mode;
+          s.defaultMode = mode;
+          await this.persistProgress(true);
+          await this.saveReadingSettings();
+        }));
+    }
   }
 
-  private adjFontSize(delta: number, valEl: HTMLElement): void {
-    const s = this.plugin.settings.reading;
-    s.fontSize = Math.max(12, Math.min(28, s.fontSize + delta));
-    valEl.setText(`${s.fontSize}px`);
-    void this.plugin.saveSettings();
-    this.applyThemeClass();
-  }
 
   private selectRow(
     label: string,
-    options: string[],
+    options: Record<string, string>,
     current: string,
-    onChange: (v: string) => Promise<void> | void
+    onChange: (value: string) => Promise<void>
   ): HTMLElement {
     const row = el("div", "qr-settings-row");
     row.appendChild(el("span", undefined, label));
-    const sel = el("select", "qr-select") as HTMLSelectElement;
-    for (const o of options) {
-      const opt = el("option", undefined, o) as HTMLOptionElement;
-      opt.value = o;
-      sel.appendChild(opt);
+    const select = el("select", "qr-select");
+    select.setAttribute("aria-label", label);
+    for (const value in options) {
+      const option = el("option", undefined, options[value]);
+      option.value = value;
+      select.appendChild(option);
     }
-    sel.value = current;
-    sel.onchange = () => void onChange(sel.value);
-    row.appendChild(sel);
+    select.value = current;
+    select.onchange = () => {
+      void onChange(select.value).catch((error: unknown) => {
+        select.value = current;
+        new Notice(`设置更新失败：${error instanceof Error ? error.message : String(error)}`);
+      });
+    };
+    row.appendChild(select);
     return row;
+  }
+
+  private createReadingSheet(title: string, extraClass = ""): HTMLElement {
+    const active = this.contentEl.ownerDocument.activeElement;
+    this.closePanels();
+    this.panelTrigger = active instanceof HTMLElement ? active : null;
+    this.contentHost.inert = true;
+    this.root.querySelector(".qr-mask")?.addClass("qr-show");
+    const sheet = el("section", `qr-reader-settings qr-reading-sheet ${extraClass}`);
+    sheet.setAttribute("role", "dialog");
+    sheet.setAttribute("aria-modal", "true");
+    sheet.setAttribute("aria-label", title);
+    const header = el("div", "qr-reading-sheet-header");
+    const close = el("button", "qr-icon-btn");
+    close.setAttribute("aria-label", `关闭${title}`);
+    setIcon(close, "x");
+    close.onclick = () => this.closePanels();
+    header.append(el("h2", undefined, title), close);
+    sheet.appendChild(header);
+    sheet.onkeydown = (event) => {
+      if (event.key !== "Tab") return;
+      const controls = sheet.querySelectorAll<HTMLElement>("button:not(:disabled), input, select, textarea");
+      const first = controls[0];
+      const last = controls[controls.length - 1];
+      const focused = sheet.ownerDocument.activeElement;
+      if (event.shiftKey && focused === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && focused === last) { event.preventDefault(); first?.focus(); }
+    };
+    this.root.appendChild(sheet);
+    close.focus({ preventScroll: true });
+    return sheet;
+  }
+
+  private async saveReadingSettings(): Promise<void> {
+    try {
+      await this.plugin.saveSettings();
+      this.plugin.notifySettingsChanged();
+    } catch (error) {
+      new Notice(`阅读设置保存失败：${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+
+  private sliderRow(label: string, min: number, max: number, step: number, current: number,
+    onChange: (value: number) => void): HTMLElement {
+    const row = el("div", "qr-reading-slider");
+    const value = el("output", "qr-settings-value", String(current));
+    const slider = el("input");
+    slider.type = "range";
+    slider.min = String(min);
+    slider.max = String(max);
+    slider.step = String(step);
+    slider.value = String(current);
+    slider.setAttribute("aria-label", label);
+    slider.oninput = () => value.setText(String(Number(slider.value)));
+    slider.onchange = () => {
+      onChange(Number(slider.value));
+      void this.saveReadingSettings();
+    };
+    row.append(el("span", undefined, label), slider, value);
+    return row;
+  }
+
+  private openNotes(): void {
+    const sheet = this.createReadingSheet("笔记", "qr-notes-sheet");
+    sheet.appendChild(el("div", "qr-reading-sheet-body qr-notes-body"));
+    this.renderNotes();
+  }
+
+  private renderNotes(): void {
+    const body = this.root.querySelector<HTMLElement>(".qr-notes-body");
+    const entry = this.entry;
+    if (!body || !entry) return;
+    body.empty();
+    const records = entry.reading.annotations.slice().sort((a, b) =>
+      (entry.reading.chapters[a.chapterId]?.index ?? 0) - (entry.reading.chapters[b.chapterId]?.index ?? 0) ||
+      a.sortKey - b.sortKey);
+    if (records.length === 0) {
+      body.appendChild(el("div", "qr-empty", entry.reading.book.format === "cbz"
+        ? "图片书没有文字层，不能添加文字批注。"
+        : "还没有笔记。选择正文可以划线，也可以写下自己的理解。"));
+      return;
+    }
+    let chapterId: string | null = null;
+    for (const record of records) {
+      if (chapterId !== record.chapterId) {
+        chapterId = record.chapterId;
+        body.appendChild(el("h3", "qr-note-chapter", entry.reading.chapters[chapterId]?.title ?? "未分章"));
+      }
+      const note = el("article", "qr-reading-note");
+      note.appendChild(el("div", "qr-note-meta", `${record.kind === "highlight" ? "划线" : "批注"} · ${fmtDateTime(record.createdAt)}`));
+      note.appendChild(el("blockquote", "qr-note-quote", record.text));
+      if (record.note) note.appendChild(el("p", "qr-note-understanding", record.note));
+      if (record.aiExplanation) {
+        const explanation = el("details", "qr-note-ai");
+        explanation.append(el("summary", undefined, "已收录的 AI 解释"), el("p", undefined, record.aiExplanation));
+        note.appendChild(explanation);
+      }
+      const actions = el("div", "qr-note-actions");
+      const jump = el("button", "qr-btn qr-btn-sm", "回到原文");
+      jump.onclick = async () => {
+        const engine = this.engine;
+        if (!engine) return;
+        jump.disabled = true;
+        try {
+          await engine.goToAnnotation(record);
+          if (this.engine !== engine) return;
+          this.closePanels();
+          this.engine.clearSelection();
+        } catch (error) {
+          new Notice(`批注定位失败：${error instanceof Error ? error.message : String(error)}`);
+        } finally { jump.disabled = false; }
+      };
+      const edit = el("button", "qr-btn qr-btn-sm", record.kind === "highlight" ? "写批注" : "编辑批注");
+      edit.onclick = () => { this.closePanels(); this.openAnnotationEdit(record.id); };
+      actions.append(jump, edit);
+      note.appendChild(actions);
+      body.appendChild(note);
+    }
   }
 
   // ------------------------------------------------------------ navigation
@@ -740,6 +927,10 @@ export class ReaderView extends ItemView {
   private async finishChapter(): Promise<void> {
     const entry = this.entry;
     if (!entry) return;
+    if (entry.reading.book.format === "cbz") {
+      new Notice("图片书没有文字层，不能闭卷回答");
+      return;
+    }
     if (!this.currentChapterId) {
       new Notice(entry.reading.book.format === "pdf" ? "请先在目录中创建章节" : "当前不在章节中");
       return;
@@ -1042,7 +1233,7 @@ export class ReaderView extends ItemView {
       }
       const ch = entry.reading.chapters[draft.chapterId];
       const text = await explainSelection(
-        this.plugin.settings.ai,
+        getAiConfig(this.plugin.settings.ai),
         entry.reading.book.title,
         ch?.title ?? "",
         sel.text,
@@ -1089,6 +1280,10 @@ export class ReaderView extends ItemView {
     this.tocPanel.removeClass("qr-open");
     this.questionsPanel.removeClass("qr-open");
     this.root.querySelector(".qr-mask")?.removeClass("qr-show");
+    this.contentHost.inert = false;
+    const trigger = this.panelTrigger;
+    this.panelTrigger = null;
+    trigger?.focus({ preventScroll: true });
     this.root.querySelectorAll(".qr-reader-settings").forEach((n) => n.remove());
     this.root.querySelectorAll(".qr-modal-form").forEach((n) => n.remove());
   }
@@ -1109,5 +1304,6 @@ export class ReaderView extends ItemView {
     this.entry = fresh;
     this.engine?.updateChapters?.(chaptersOrdered(fresh.reading));
     this.renderQuestions();
+    this.renderNotes();
   }
 }

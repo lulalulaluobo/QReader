@@ -4,6 +4,7 @@ import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
 import { DEFAULT_SETTINGS, validateLibraryPath } from "./settings";
 import type { QReaderSettings } from "./settings";
+import { getAiConfig, loadAiSettings } from "./ai/providers";
 import { BookCache } from "./core/book-source";
 import { LibraryManager } from "./core/library";
 import { BookshelfView, VIEW_TYPE_BOOKSHELF } from "./views/bookshelf";
@@ -23,6 +24,7 @@ export class QReaderPlugin extends Plugin {
   cache!: BookCache;
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<() => void>();
+  private immersiveDocuments = new Set<Document>();
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -31,7 +33,7 @@ export class QReaderPlugin extends Plugin {
       {
         app: this.app,
         libraryPath: () => this.settings.libraryPath,
-        aiConfig: () => this.settings.ai,
+        aiConfig: () => getAiConfig(this.settings.ai),
         configDir: this.app.vault.configDir,
         pluginId: this.manifest.id,
         notifyChanged: () => this.notifyChanged(),
@@ -53,7 +55,7 @@ export class QReaderPlugin extends Plugin {
     });
     this.addCommand({
       id: "import-book",
-      name: "导入书籍 (EPUB / PDF)",
+      name: "导入书籍 (EPUB / PDF / FB2 / MOBI / AZW3 / CBZ)",
       callback: () => void this.openBookshelf(true),
     });
     this.addCommand({
@@ -67,6 +69,9 @@ export class QReaderPlugin extends Plugin {
     this.registerEvent(
       this.app.workspace.on("css-change", () => this.notifySettingsChanged())
     );
+    this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.syncReadingChrome()));
+    this.registerEvent(this.app.workspace.on("layout-change", () => this.syncReadingChrome()));
+    this.app.workspace.onLayoutReady(() => this.syncReadingChrome());
 
     // initial scan in the background so the bookshelf opens fast
     void this.library.scan().catch(() => {
@@ -82,26 +87,30 @@ export class QReaderPlugin extends Plugin {
     void this.cache.dispose();
     this.libraryListeners.clear();
     this.settingsListeners.clear();
+    for (const doc of this.immersiveDocuments) doc.body.removeClass("qr-reading-active");
+    this.immersiveDocuments.clear();
   }
 
   async loadSettings(): Promise<void> {
     const raw: unknown = await this.loadData();
     const data = typeof raw === "object" && raw !== null ? raw as Partial<QReaderSettings> : {};
     const libraryPath = typeof data.libraryPath === "string" ? validateLibraryPath(data.libraryPath) : null;
-    const ai = typeof data.ai === "object" && data.ai !== null ? data.ai : DEFAULT_SETTINGS.ai;
+    const ai = loadAiSettings(data.ai);
     const reading = typeof data.reading === "object" && data.reading !== null ? data.reading : DEFAULT_SETTINGS.reading;
     this.settings = {
       libraryPath: libraryPath?.ok ? libraryPath.path : DEFAULT_SETTINGS.libraryPath,
-      ai: {
-        baseUrl: typeof ai.baseUrl === "string" ? ai.baseUrl : DEFAULT_SETTINGS.ai.baseUrl,
-        apiKey: typeof ai.apiKey === "string" ? ai.apiKey : "",
-        model: typeof ai.model === "string" ? ai.model : DEFAULT_SETTINGS.ai.model,
-      },
+      ai,
       reading: {
         fontSize: typeof reading.fontSize === "number" && Number.isFinite(reading.fontSize)
           ? Math.max(12, Math.min(28, reading.fontSize)) : DEFAULT_SETTINGS.reading.fontSize,
-        lineHeight: [1.5, 1.75, 2].includes(reading.lineHeight) ? reading.lineHeight : DEFAULT_SETTINGS.reading.lineHeight,
-        theme: reading.theme === "dark" || reading.theme === "light" ? reading.theme : "auto",
+        lineHeight: typeof reading.lineHeight === "number" && Number.isFinite(reading.lineHeight)
+          ? Math.max(1.4, Math.min(2.4, reading.lineHeight)) : DEFAULT_SETTINGS.reading.lineHeight,
+        pageMargin: typeof reading.pageMargin === "number" && Number.isFinite(reading.pageMargin)
+          ? Math.max(12, Math.min(48, reading.pageMargin)) : DEFAULT_SETTINGS.reading.pageMargin,
+        fontFamily: reading.fontFamily === "sans" || reading.fontFamily === "serif" ? reading.fontFamily : "original",
+        paragraphIndent: reading.paragraphIndent === true,
+        theme: reading.theme === "dark" || reading.theme === "light" || reading.theme === "sepia" || reading.theme === "sage"
+          ? reading.theme : "auto",
         defaultMode: reading.defaultMode === "scrolled" ? "scrolled" : "paginated",
       },
     };
@@ -129,6 +138,21 @@ export class QReaderPlugin extends Plugin {
 
   notifySettingsChanged(): void {
     for (const cb of this.settingsListeners) cb();
+  }
+
+  private syncReadingChrome(): void {
+    const active = this.app.workspace.getActiveViewOfType(ReaderView);
+    const doc = active?.contentEl.ownerDocument;
+    for (const previous of this.immersiveDocuments) {
+      if (previous !== doc) {
+        previous.body.removeClass("qr-reading-active");
+        this.immersiveDocuments.delete(previous);
+      }
+    }
+    if (doc) {
+      doc.body.addClass("qr-reading-active");
+      this.immersiveDocuments.add(doc);
+    }
   }
 
   // ------------------------------------------------------------- navigation

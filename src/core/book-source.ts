@@ -6,6 +6,7 @@ import { epubChapterId, isHealthyBook } from "../types";
 import { openPdf } from "../reader/pdfjs-setup";
 import type { DataAdapter } from "obsidian";
 import { isReviewableChapter, reviewExclusionFromSemantics } from "./review-chapters";
+import { bookAsEpub } from "./book-formats";
 
 function epubHrefKey(book: Book, href: string, base = book.path.toString()): string {
   return new URL(href, new URL(base, "https://qreader.invalid/")).href;
@@ -202,7 +203,7 @@ export class BookCache {
     const bytes = await this.adapter.readBinary(`${entry.dir}/${entry.reading.book.fileName}`);
     const book = new Book();
     try {
-      await book.open(bytes, "binary");
+      await book.open(await bookAsEpub(bytes, entry.reading.book.fileName, entry.reading.book.format), "binary");
       await book.ready;
       await book.loaded.navigation;
       return book;
@@ -237,7 +238,8 @@ export class BookCache {
 
   /** Legacy classification is cached by chapter locators, never written into reading.json. */
   async getReviewExclusions(entry: HealthyBookEntry): Promise<ReadonlyMap<string, boolean>> {
-    if (entry.reading.book.format !== "epub" || !Object.values(entry.reading.chapters).some((chapter) => chapter.reviewExcluded === undefined)) return new Map();
+    if (entry.reading.book.format === "cbz") return new Map(Object.keys(entry.reading.chapters).map((id) => [id, true]));
+    if (entry.reading.book.format === "pdf" || !Object.values(entry.reading.chapters).some((chapter) => chapter.reviewExcluded === undefined)) return new Map();
     const legacy = Object.entries(entry.reading.chapters).filter(([, chapter]) => chapter.reviewExcluded === undefined);
     const key = JSON.stringify([entry.dir, entry.reading.book.fileName, legacy.map(([id, chapter]) => [id, chapter.spineIndex, chapter.href, chapter.hrefEnd])]);
     let pending = this.reviewExclusions.get(key);

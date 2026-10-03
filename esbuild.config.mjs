@@ -36,12 +36,32 @@ const pdfAssetsPlugin = {
   },
 };
 
+// Foliate 1.0.1 的 FB2 样式在模块初始化时创建无法由 book.destroy() 释放的
+// blob URL。静态 CSS 改用 data URL；图像等书籍资源仍由 Foliate 释放。
+const foliateStylesPlugin = {
+  name: "foliate-static-fb2-style",
+  setup(build) {
+    build.onLoad({ filter: /foliate-js\/fb2\.js$/ }, async (args) => {
+      const source = await fs.promises.readFile(args.path, "utf8");
+      const allocation = /const style = URL\.createObjectURL\(new Blob\(\[(`[\s\S]*?`)\], \{ type: 'text\/css' \}\)\)/g;
+      if ([...source.matchAll(allocation)].length !== 1) {
+        throw new Error("Foliate FB2 样式结构已改变，请检查静态资源适配");
+      }
+      return {
+        contents: source.replace(allocation, "const style = 'data:text/css;charset=utf-8,' + encodeURIComponent($1)"),
+        loader: "js",
+      };
+    });
+  },
+};
+
 const context = await esbuild.context({
   banner: { js: banner },
   entryPoints: ["src/main.ts"],
   bundle: true,
   platform: "browser",
   alias: {
+    "jszip": "jszip/lib/index.js",
     "jszip/dist/jszip": "jszip/lib/index.js",
     stream: "stream-browserify",
     buffer: "buffer/",
@@ -67,7 +87,7 @@ const context = await esbuild.context({
   sourcemap: prod ? false : "inline",
   minify: prod,
   loader: { ".pfb": "base64", ".ttf": "base64" },
-  plugins: [pdfAssetsPlugin],
+  plugins: [pdfAssetsPlugin, foliateStylesPlugin],
 });
 
 if (prod) {

@@ -7,6 +7,7 @@ import type {
   PdfItemRange,
   ReadMode,
   ReadingLayout,
+  ReadingColors,
 } from "../types";
 
 export interface EngineLocation {
@@ -49,14 +50,16 @@ export interface EngineHooks {
 
 export interface ReaderEngine {
   readonly format: BookFormat;
+  readonly reflowable: boolean;
   mount(container: HTMLElement): Promise<void>;
   destroy(): void;
   goToChapter(chapterId: string, targetHref?: string): Promise<void>;
+  goToAnnotation(annotation: AnnotationRecord): Promise<void>;
   next(): Promise<void>;
   prev(): Promise<void>;
   getMode(): ReadMode;
   setMode(mode: ReadMode): Promise<void>;
-  applyLayout(layout: ReadingLayout, theme: "light" | "dark"): Promise<void>;
+  applyLayout(layout: ReadingLayout, theme: ReadingColors): Promise<void>;
   addHighlight(a: AnnotationRecord): void;
   removeHighlight(a: AnnotationRecord): void;
   clearSelection(): void;

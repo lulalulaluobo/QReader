@@ -1,6 +1,7 @@
 import { requestUrl } from "obsidian";
 import type { RequestUrlResponse } from "obsidian";
 import type { AiConfig } from "../types";
+import { AI_PRESETS } from "./providers";
 
 export interface ChatMessage { role: "system" | "user" | "assistant"; content: string }
 export class AiError extends Error {
@@ -15,10 +16,13 @@ export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opt
   try { endpoint = new URL(cfg.baseUrl.trim().replace(/\/+$/, "") + "/chat/completions"); }
   catch { throw new AiError("AI Base URL 格式无效"); }
   if (!/^https?:$/.test(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new AiError("AI Base URL 必须是不含凭据、查询或片段的 HTTP(S) 地址");
-  const body: { model: string; messages: ChatMessage[]; temperature: number; max_tokens?: number } = {
+  const body: { model: string; messages: ChatMessage[]; temperature: number; max_tokens?: number; thinking?: { type: "disabled" } } = {
     model: cfg.model.trim(), messages, temperature: opts?.temperature ?? 0.7,
   };
   if (opts?.maxTokens) body.max_tokens = opts.maxTokens;
+  if (endpoint.origin === AI_PRESETS.deepseek.baseUrl && (endpoint.pathname === "/chat/completions" || endpoint.pathname === "/v1/chat/completions") && body.model === AI_PRESETS.deepseek.model) {
+    body.thinking = { type: "disabled" };
+  }
   let response: RequestUrlResponse;
   let timer: number | NodeJS.Timeout | undefined;
   try {

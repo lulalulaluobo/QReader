@@ -5,10 +5,14 @@ import type { App } from "obsidian";
 import type { QReaderPlugin } from "./main";
 import { validateLibraryPath } from "./settings";
 import { testConnection } from "./ai/client";
+import { AI_PRESETS, getAiConfig } from "./ai/providers";
+import type { AiProvider } from "./ai/providers";
 
 export class QReaderSettingTab extends PluginSettingTab {
   private testStatus = "";
   private testing = false;
+  private configRevision = 0;
+  private renderAi: (() => void) | null = null;
 
   constructor(app: App, private plugin: QReaderPlugin) {
     super(app, plugin);
@@ -54,60 +58,119 @@ export class QReaderSettingTab extends PluginSettingTab {
         }
       }));
 
-    containerEl.createEl("h3", { text: "AI 配置（OpenAI Compatible）" });
-    new Setting(containerEl)
-      .setName("Base URL")
-      .setDesc("例如 https://api.openai.com/v1 或其他兼容接口地址")
-      .addText((text) =>
-        text.setPlaceholder("https://api.openai.com/v1").setValue(s.ai.baseUrl).onChange(async (v) => {
-          s.ai.baseUrl = v.trim();
-          await this.plugin.saveSettings();
-        })
-      );
-    new Setting(containerEl).setName("API Key")
-      .setDesc("保存在插件本地 data.json 中，未加密。请保护 Vault 同步和备份；AI 请求只发往你配置的地址。")
-      .addText((text) => {
-      text.inputEl.type = "password";
-      text.setValue(s.ai.apiKey).onChange(async (v) => {
-        s.ai.apiKey = v.trim();
-        await this.plugin.saveSettings();
-      });
-    });
-    new Setting(containerEl).setName("Model").addText((text) =>
-      text.setPlaceholder("gpt-4o-mini").setValue(s.ai.model).onChange(async (v) => {
-        s.ai.model = v.trim();
-        await this.plugin.saveSettings();
-      })
-    );
-    new Setting(containerEl)
-      .setName("测试连接")
-      .setDesc("AI 只用于：三问生成、批注解释、回答反馈。不提供通用对话。")
-      .addButton((btn) =>
-        btn.setButtonText(this.testing ? "正在测试……" : "测试连接").setDisabled(this.testing).onClick(async () => {
-          if (this.testing) return;
-          this.testing = true;
-          this.testStatus = "正在测试……";
-          this.display();
-          try {
-            const res = await testConnection(s.ai);
-            this.testStatus = res.message;
-            new Notice(res.ok ? "连接成功" : "连接失败", 4000);
-          } catch (error) {
-            this.testStatus = error instanceof Error ? error.message : String(error);
-          } finally {
-            this.testing = false;
-            this.display();
-          }
-        })
-      );
-    if (this.testStatus) {
-      const p = containerEl.createEl("p", { text: this.testStatus });
-      p.addClass("qr-settings-status");
-    }
+    const aiContainer = containerEl.createDiv({ cls: "qr-ai-settings" });
+    const renderAi = (): void => {
+      aiContainer.empty();
+      const ai = s.ai;
+      const provider = ai.provider;
+      aiContainer.createEl("h3", { text: "AI 配置" });
+      const providers = new Setting(aiContainer)
+        .setName("AI 服务")
+        .setDesc("DeepSeek 和 Agnes 只需填写各自的 API Key；自定义接口配置独立保留。");
+      providers.settingEl.addClass("qr-ai-providers");
+      const options: AiProvider[] = ["deepseek", "agnes", "custom"];
+      for (const option of options) {
+        providers.addButton((button) => {
+          button.setButtonText(option === "custom" ? "自定义接口" : AI_PRESETS[option].name);
+          button.buttonEl.addClass("qr-ai-provider");
+          if (option === provider) button.buttonEl.addClass("qr-ai-provider-active");
+          button.buttonEl.setAttribute("aria-pressed", String(option === provider));
+          button.buttonEl.style.minHeight = "44px";
+          button.buttonEl.style.minWidth = "44px";
+          button.onClick(async () => {
+            if (ai.provider === option) return;
+            ai.provider = option;
+            this.configRevision++;
+            this.testStatus = "";
+            renderAi();
+            aiContainer.querySelector<HTMLButtonElement>(".qr-ai-provider-active")?.focus();
+            try { await this.plugin.saveSettings(); }
+            catch { new Notice("AI 服务选择保存失败，请重试"); }
+          });
+        });
+      }
+      const persistAiChange = async (): Promise<void> => {
+        this.configRevision++;
+        this.testStatus = "";
+        statusEl.setText("");
+        try { await this.plugin.saveSettings(); }
+        catch { new Notice("AI 配置保存失败，请重新编辑后重试"); }
+      };
+      if (provider === "custom") {
+        new Setting(aiContainer).setName("Base URL")
+          .setDesc("自定义 OpenAI Compatible 接口地址，不影响内置服务。")
+          .addText((text) => {
+            text.inputEl.setAttribute("aria-label", "自定义接口 Base URL");
+            text.setPlaceholder("https://api.openai.com/v1").setValue(ai.custom.baseUrl).onChange(async (value) => {
+              ai.custom.baseUrl = value;
+              await persistAiChange();
+            });
+          });
+        new Setting(aiContainer).setName("Model").addText((text) => {
+          text.inputEl.setAttribute("aria-label", "自定义接口 Model");
+          text.setPlaceholder("模型 ID").setValue(ai.custom.model).onChange(async (value) => {
+            ai.custom.model = value;
+            await persistAiChange();
+          });
+        });
+      } else {
+        const preset = AI_PRESETS[provider];
+        new Setting(aiContainer).setName("模型（预设）").setDesc(preset.model);
+        new Setting(aiContainer).setName("接口地址（预设）").setDesc(preset.baseUrl);
+      }
+      const keyLabel = provider === "custom" ? "自定义接口 API Key" : `${AI_PRESETS[provider].name} API Key`;
+      const apiKey = provider === "deepseek" ? ai.deepseekApiKey : provider === "agnes" ? ai.agnesApiKey : ai.custom.apiKey;
+      new Setting(aiContainer).setName(keyLabel)
+        .setDesc("保存在插件本地 data.json 中，未加密。请保护 Vault 同步和备份；不同服务的密钥互不继承。")
+        .addText((text) => {
+          text.inputEl.type = "password";
+          text.inputEl.autocomplete = "off";
+          text.inputEl.setAttribute("aria-label", keyLabel);
+          text.setPlaceholder("填写该服务的 API Key").setValue(apiKey).onChange(async (value) => {
+            if (provider === "deepseek") ai.deepseekApiKey = value;
+            else if (provider === "agnes") ai.agnesApiKey = value;
+            else ai.custom.apiKey = value;
+            await persistAiChange();
+          });
+        });
+      new Setting(aiContainer).setName("测试连接")
+        .setDesc("仅将章节正文、选文或回答发送到所选接口，用于三问生成、批注解释和回答反馈；不提供通用对话。连接测试只发送探针。")
+        .addButton((button) => button.setButtonText(this.testing ? "正在测试……" : "测试连接")
+          .setDisabled(this.testing).onClick(async () => {
+            if (this.testing) return;
+            const snapshot = { ...getAiConfig(ai) };
+            const revision = this.configRevision;
+            this.testing = true;
+            this.testStatus = "正在测试……";
+            renderAi();
+            try {
+              const result = await testConnection(snapshot);
+              const current = getAiConfig(s.ai);
+              if (this.configRevision !== revision || s.ai.provider !== provider || current.baseUrl !== snapshot.baseUrl || current.model !== snapshot.model || current.apiKey !== snapshot.apiKey) return;
+              this.testStatus = result.message;
+              new Notice(result.ok ? "连接成功" : "连接失败", 4000);
+            } catch {
+              if (this.configRevision === revision && s.ai.provider === provider) {
+                this.testStatus = "AI 连接失败，请检查网络和接口配置";
+                new Notice(this.testStatus);
+              }
+            } finally {
+              this.testing = false;
+              this.renderAi?.();
+            }
+          }));
+      const statusEl = aiContainer.createEl("p", { text: this.testStatus, cls: "qr-settings-status" });
+      statusEl.setAttribute("role", "status");
+      statusEl.setAttribute("aria-live", "polite");
+    };
+    this.renderAi = renderAi;
+    renderAi();
 
     containerEl.createEl("h3", { text: "阅读设置" });
-    new Setting(containerEl).setName("字号").addSlider((slider) =>
-      slider
+    containerEl.createEl("p", { text: "排版选项适用于可重排书籍；PDF、CBZ 与固定版式书籍保留原页面。", cls: "setting-item-description" });
+    new Setting(containerEl).setName("字号").addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", "字号");
+      return slider
         .setLimits(12, 28, 1)
         .setValue(s.reading.fontSize)
         .setDynamicTooltip()
@@ -116,35 +179,83 @@ export class QReaderSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
           this.plugin.notifySettingsChanged();
         })
-    );
-    new Setting(containerEl).setName("行距").addDropdown((dd) =>
-      dd
-        .addOptions({ "1.5": "1.5", "1.75": "1.75", "2": "2.0" })
-        .setValue(String(s.reading.lineHeight))
-        .onChange(async (v) => {
-          s.reading.lineHeight = Number(v);
+    });
+    new Setting(containerEl).setName("行距").addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", "行距");
+      return slider
+        .setLimits(1.4, 2.4, 0.05)
+        .setValue(s.reading.lineHeight)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          s.reading.lineHeight = value;
           await this.plugin.saveSettings();
           this.plugin.notifySettingsChanged();
         })
-    );
-    new Setting(containerEl).setName("主题").addDropdown((dd) =>
-      dd
-        .addOptions({ auto: "跟随 Obsidian", light: "明亮", dark: "深色" })
+    });
+    new Setting(containerEl).setName("页边距").setDesc("可重排书籍的左右留白，单位为像素。").addSlider((slider) => {
+      slider.sliderEl.setAttribute("aria-label", "页边距");
+      return slider
+        .setLimits(12, 48, 2)
+        .setValue(s.reading.pageMargin)
+        .setDynamicTooltip()
+        .onChange(async (value) => {
+          s.reading.pageMargin = value;
+          await this.plugin.saveSettings();
+          this.plugin.notifySettingsChanged();
+        })
+    });
+    new Setting(containerEl).setName("字体").addDropdown((dropdown) => {
+      dropdown.selectEl.setAttribute("aria-label", "字体");
+      return dropdown.addOptions({ original: "原书字体", sans: "系统黑体", serif: "系统宋体" })
+        .setValue(s.reading.fontFamily)
+        .onChange(async (value) => {
+          s.reading.fontFamily = value === "sans" || value === "serif" ? value : "original";
+          await this.plugin.saveSettings();
+          this.plugin.notifySettingsChanged();
+        })
+    });
+    new Setting(containerEl).setName("首行缩进").addToggle((toggle) => {
+      toggle.toggleEl.setAttribute("aria-label", "首行缩进");
+      toggle.toggleEl.setAttribute("role", "switch");
+      toggle.toggleEl.setAttribute("aria-checked", String(s.reading.paragraphIndent));
+      const input = toggle.toggleEl.querySelector("input");
+      if (input) {
+        input.setAttribute("aria-hidden", "true");
+        input.tabIndex = -1;
+      }
+      toggle.toggleEl.addEventListener("keydown", (event) => {
+        if (event.key !== " " && event.key !== "Enter") return;
+        event.preventDefault();
+        event.stopPropagation();
+        toggle.onClick();
+      });
+      return toggle.setValue(s.reading.paragraphIndent).onChange(async (value) => {
+        toggle.toggleEl.setAttribute("aria-checked", String(value));
+        s.reading.paragraphIndent = value;
+        await this.plugin.saveSettings();
+        this.plugin.notifySettingsChanged();
+      })
+    });
+    new Setting(containerEl).setName("主题").addDropdown((dd) => {
+      dd.selectEl.setAttribute("aria-label", "主题");
+      return dd
+        .addOptions({ auto: "跟随 Obsidian", light: "纸白", sepia: "暖纸", sage: "青绿", dark: "夜间" })
         .setValue(s.reading.theme)
         .onChange(async (v) => {
           s.reading.theme = v as typeof s.reading.theme;
           await this.plugin.saveSettings();
           this.plugin.notifySettingsChanged();
         })
-    );
-    new Setting(containerEl).setName("默认阅读模式").addDropdown((dd) =>
-      dd
+    });
+    new Setting(containerEl).setName("默认阅读模式").addDropdown((dd) => {
+      dd.selectEl.setAttribute("aria-label", "默认阅读模式");
+      return dd
         .addOptions({ paginated: "左右翻页", scrolled: "上下滚动" })
         .setValue(s.reading.defaultMode)
         .onChange(async (v) => {
           s.reading.defaultMode = v as typeof s.reading.defaultMode;
           await this.plugin.saveSettings();
         })
-    );
+    });
   }
 }

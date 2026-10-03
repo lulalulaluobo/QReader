@@ -5,6 +5,7 @@ import { isHealthyBook } from "../types";
 import { el, relTime } from "../util";
 import type { QReaderPlugin } from "../main";
 import { ANNOTATIONS_MD } from "../core/library";
+import { BOOK_FILE_ACCEPT } from "../core/book-formats";
 
 export const VIEW_TYPE_BOOKSHELF = "qreader-bookshelf";
 
@@ -182,7 +183,7 @@ export class BookshelfView extends ItemView {
       continueBox.append(el("h2", "qr-section-title", "继续阅读"), continuing);
     }
     if (cards.length) box.append(...cards);
-    else box.appendChild(el("div", "qr-muted qr-empty", this.entries.length ? "没有匹配的书" : "书架是空的。导入一本 EPUB 或 PDF，开始带着问题读书。"));
+    else box.appendChild(el("div", "qr-muted qr-empty", this.entries.length ? "没有匹配的书" : "书架是空的。支持 EPUB、PDF、FB2、MOBI、AZW3 与 CBZ，导入原书即可开始阅读。"));
   }
 
   private async coverEl(entry: HealthyBookEntry, cls: string): Promise<HTMLElement> {
@@ -327,7 +328,7 @@ export class BookshelfView extends ItemView {
     if (this.importing) return;
     const input = el("input");
     input.type = "file";
-    input.accept = ".epub,.pdf,application/epub+zip,application/pdf";
+    input.accept = BOOK_FILE_ACCEPT;
     input.onchange = async () => {
       const file = input.files?.[0];
       if (!file || this.importing) return;

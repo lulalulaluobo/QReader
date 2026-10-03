@@ -3,9 +3,10 @@
 import type { Book, Rendition, Location } from "epubjs";
 import { EpubCFI } from "epubjs";
 import type Section from "epubjs/types/section";
-import type { AnnotationRecord, ChapterState, ReadMode, ReadingLayout } from "../types";
+import type { AnnotationRecord, BookFormat, ChapterState, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
 import { epubChapterId } from "../types";
+import { READING_FONTS } from "../settings";
 
 const HL_CLASS = "qr-hl";
 const HL_STYLES = { fill: "#FDE68A", "fill-opacity": "0.55", "mix-blend-mode": "multiply" };
@@ -14,16 +15,20 @@ interface ContentsLike {
   window: Window;
   sectionIndex: number;
   cfiFromRange(range: Range): string;
+  addStylesheetCss(css: string, key?: string): boolean;
 }
 type RestorePoint = { cfi?: string | null; percent?: number; chapterId?: string | null };
 
 export class EpubEngine implements ReaderEngine {
-  readonly format = "epub" as const;
+  readonly format: Exclude<BookFormat, "pdf">;
+  readonly reflowable: boolean;
   private rendition: Rendition | null = null;
+  private contentHook: Book["spine"]["hooks"]["content"] | null = null;
   private container: HTMLElement | null = null;
   private mode: ReadMode;
   private layout: ReadingLayout;
-  private theme: "light" | "dark";
+  private theme: ReadingColors;
+  private readingCss = "";
   private marks = new Map<string, AnnotationRecord>();
   private attached = new Set<string>();
   private chapterIds = new Map<ChapterState, string>();
@@ -34,6 +39,7 @@ export class EpubEngine implements ReaderEngine {
   private destroyed = false;
   private restoring = false;
   private generation = 0;
+  private renderedMargin = 0;
   private spineLen = 1;
   private position: RestorePoint;
   private keyboard = (event: KeyboardEvent) => this.handleKey(event);
@@ -60,8 +66,10 @@ export class EpubEngine implements ReaderEngine {
     start: RestorePoint,
     private hooks: EngineHooks,
     annotations: AnnotationRecord[],
-    opts: { mode: ReadMode; layout: ReadingLayout; theme: "light" | "dark" }
+    opts: { mode: ReadMode; layout: ReadingLayout; theme: ReadingColors; format: Exclude<BookFormat, "pdf"> }
   ) {
+    this.format = opts.format;
+    this.reflowable = this.book.packaging.metadata.layout !== "pre-paginated";
     this.position = { ...start };
     this.mode = opts.mode;
     this.layout = opts.layout;
@@ -78,22 +86,28 @@ export class EpubEngine implements ReaderEngine {
   }
 
   async mount(container: HTMLElement): Promise<void> {
+    if (this.destroyed) return;
     this.container = container;
     container.tabIndex = 0;
     container.addEventListener("keydown", this.keyboard);
-    this.book.spine.hooks.content.register(this.sanitize);
+    this.contentHook = this.book.spine.hooks.content;
+    this.contentHook.register(this.sanitize);
     this.spineLen = Math.max(1, (await this.book.loaded.spine).length);
+    if (this.destroyed) return;
     this.book.spine.each((section: Section) => {
       if (section.document) this.sanitize(section.document);
     });
     // Phone-sized text segments keep percentage fallback near the saved page,
     // including books whose chapters are shorter than a conventional print page.
-    if (!this.book.locations.length()) await this.book.locations.generate(256);
+    if (this.book.packaging.metadata.layout !== "pre-paginated" && !this.book.locations.length()) {
+      await this.book.locations.generate(256);
+    }
     if (this.destroyed) return;
     const host = document.createElement("div");
     host.className = "qr-epub-host";
     container.appendChild(host);
     await this.buildRendition(host, this.position);
+    if (this.destroyed) return;
     this.ro = new ResizeObserver(() => {
       window.clearTimeout(this.resizeTimer);
       this.resizeTimer = window.setTimeout(() => this.resize(), 250);
@@ -119,12 +133,16 @@ export class EpubEngine implements ReaderEngine {
   private async buildRendition(host: HTMLElement, point: RestorePoint): Promise<void> {
     const generation = ++this.generation;
     this.restoring = true;
-    const rendition = this.book.renderTo(host, {
+    // epub.js 的分页左右 padding 来自 gap / 2，不能只用书内 CSS 覆盖。
+    this.renderedMargin = this.layout.pageMargin;
+    const options = {
       width: "100%", height: "100%", spread: "none",
       flow: this.mode === "scrolled" ? "scrolled-doc" : "paginated",
       manager: this.mode === "scrolled" ? "continuous" : "default",
+      gap: this.reflowable ? this.renderedMargin * 2 : undefined,
       allowScriptedContent: false,
-    });
+    };
+    const rendition = this.book.renderTo(host, options);
     this.rendition = rendition;
     this.attached.clear();
     this.applyTheme();
@@ -141,9 +159,16 @@ export class EpubEngine implements ReaderEngine {
         try { await rendition.display(point.cfi); displayed = true; } catch { /* Try the saved percentage next. */ }
       }
       if (!displayed && typeof point.percent === "number" && Number.isFinite(point.percent)) {
-        const cfi = this.book.locations.cfiFromPercentage(Math.max(0, Math.min(1, point.percent)));
-        if (cfi) {
-          try { await rendition.display(cfi); displayed = true; } catch { /* Fall through to the chapter start. */ }
+        if (this.book.packaging.metadata.layout === "pre-paginated") {
+          const index = Math.max(0, Math.min(this.spineLen - 1, Math.ceil(point.percent * this.spineLen) - 1));
+          await rendition.display(this.book.spine.get(index).href);
+          displayed = true;
+        }
+        if (!displayed) {
+          const cfi = this.book.locations.cfiFromPercentage(Math.max(0, Math.min(1, point.percent)));
+          if (cfi) {
+            try { await rendition.display(cfi); displayed = true; } catch { /* Fall through to the chapter start. */ }
+          }
         }
       }
       if (!displayed) {
@@ -165,6 +190,7 @@ export class EpubEngine implements ReaderEngine {
 
   private bindContents(contents: ContentsLike): void {
     const doc = contents.document;
+    contents.addStylesheetCss(this.readingCss, "qreader-reading");
     for (const chapter of this.chapters) {
       if (chapter.spineIndex !== contents.sectionIndex) continue;
       const fragment = chapter.href?.split("#")[1];
@@ -244,32 +270,74 @@ export class EpubEngine implements ReaderEngine {
   private handleKey(event: KeyboardEvent): void {
     const target = event.target as HTMLElement | null;
     if (target?.nodeType === Node.ELEMENT_NODE && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
     if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.navigate(true); }
     else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.navigate(false); }
   }
 
   private applyTheme(): void {
-    const background = this.theme === "dark" ? "#1e1e1e" : "#ffffff";
-    const color = this.theme === "dark" ? "#d4d4d4" : "#2f2f2f";
-    this.rendition?.themes.default({
-      "html, body": { background: `${background} !important`, color: `${color} !important` },
-      "body, p, div, li, blockquote, td, span": {
-        "font-size": `${this.layout.fontSize}px !important`,
-        "line-height": `${this.layout.lineHeight} !important`,
-        color: `${color} !important`,
-      },
-      "body": { "font-family": "var(--font-text, system-ui), sans-serif !important", padding: "0 12px !important" },
-      "img, svg": { "max-width": "100% !important", "height": "auto" },
-      "a": { color: this.theme === "dark" ? "#93c5fd !important" : "#2563eb !important" },
-    });
+    const { background, foreground, dark } = this.theme;
+    if (!this.reflowable) {
+      this.readingCss = `html, body { background: ${background} !important; }`;
+    } else {
+      const font = READING_FONTS[this.layout.fontFamily];
+      const family = font ? `font-family: ${font} !important;` : "";
+      this.readingCss = `
+        html, body { background: ${background} !important; color: ${foreground} !important; }
+        body, p, div, li, blockquote, td, span {
+          font-size: ${this.layout.fontSize}px !important;
+          line-height: ${this.layout.lineHeight} !important;
+          color: ${foreground} !important; ${family}
+        }
+        body { padding: 28px ${this.layout.pageMargin}px 48px !important; overflow-wrap: anywhere; }
+        p { text-indent: ${this.layout.paragraphIndent ? "2em" : "0"} !important; }
+        img, svg { max-width: 100% !important; height: auto; }
+        h1, h2, h3, h4, h5, h6, figcaption, dt { color: ${foreground} !important; ${family} }
+        a { color: ${dark ? "#93c5fd" : "#2563eb"} !important; }
+      `;
+    }
+    // addStylesheetRules 会累积旧规则；命名 CSS 整体替换才能真正恢复原书字体。
+    const contents = (this.rendition?.getContents() ?? []) as unknown as ContentsLike[];
+    for (const content of contents) content.addStylesheetCss(this.readingCss, "qreader-reading");
+  }
+
+  private visibleCfi(fallback: string): string {
+    const surface = this.container?.getBoundingClientRect();
+    if (!this.reflowable || !surface?.width || !surface.height) return fallback;
+    const contents = (this.rendition?.getContents() ?? []) as unknown as ContentsLike[];
+    for (const content of contents) {
+      const doc = content.document;
+      const frame = content.window.frameElement?.getBoundingClientRect();
+      if (!frame || !doc.body || !doc.caretRangeFromPoint ||
+          frame.right <= surface.left || frame.left >= surface.right ||
+          frame.bottom <= surface.top || frame.top >= surface.bottom) continue;
+      const padding = content.window.getComputedStyle(doc.body);
+      const rightToLeft = padding.direction === "rtl" || padding.writingMode === "vertical-rl";
+      const x = rightToLeft
+        ? Math.min(frame.right, surface.right) - frame.left - parseFloat(padding.paddingRight) - 1
+        : Math.max(frame.left, surface.left) - frame.left + parseFloat(padding.paddingLeft) + 1;
+      const y = Math.max(frame.top, surface.top) - frame.top + parseFloat(padding.paddingTop) + 1;
+      const range = doc.caretRangeFromPoint(x, y);
+      if (range?.startContainer.nodeType === Node.TEXT_NODE && doc.body.contains(range.startContainer)) {
+        return content.cfiFromRange(range);
+      }
+    }
+    return fallback;
   }
 
   private handleRelocated(location: Location): void {
     const start = location.start;
     if (!start || typeof start.index !== "number") return;
-    const measured = this.book.locations.percentageFromCfi(start.cfi);
-    const percent = Number.isFinite(measured) && measured >= 0 ? measured : start.index / this.spineLen;
-    const out: EngineLocation = { chapterId: this.chapterForCfi(start.cfi) ?? null, percent: Math.max(0, Math.min(1, percent)), cfi: start.cfi };
+    // EPUB.js 按空格拆词，长中文段落会把后续页报告成段首。用可见文字的
+    // 原生 caret 生成同一种 CFI，避免新增定位格式或改写旧批注。
+    const cfi = this.visibleCfi(start.cfi);
+    // Rendition 在 resize 时复用 start.cfi；也让其保留精确位置，不能退回段首。
+    start.cfi = cfi;
+    const measured = this.reflowable ? this.book.locations.percentageFromCfi(cfi) : -1;
+    const percent = !this.reflowable
+      ? (start.index + 1) / this.spineLen
+      : Number.isFinite(measured) && measured >= 0 ? measured : start.index / this.spineLen;
+    const out: EngineLocation = { chapterId: this.chapterForCfi(cfi) ?? null, percent: Math.max(0, Math.min(1, percent)), cfi };
     this.position = out;
     this.hooks.onLocation(out);
   }
@@ -332,6 +400,11 @@ export class EpubEngine implements ReaderEngine {
     await this.rendition.display(targetHref ?? chapter.href ?? this.book.spine.get(chapter.spineIndex).href);
   }
 
+  async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
+    if (!annotation.cfi || !this.rendition) throw new Error("这条批注没有可用的原文位置");
+    await this.rendition.display(annotation.cfi);
+  }
+
   async next(): Promise<void> {
     if (this.mode === "scrolled") this.scrollBy(0.85);
     else await this.rendition?.next();
@@ -348,22 +421,32 @@ export class EpubEngine implements ReaderEngine {
 
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || !this.rendition || !this.container) return;
-    const point = { ...this.position, cfi: this.rendition.location?.start?.cfi ?? this.position.cfi };
-    this.restoring = true;
     this.mode = mode;
+    await this.rebuildRendition();
+  }
+
+  private async rebuildRendition(): Promise<void> {
+    const cfi = this.position.cfi ?? this.rendition?.location?.start?.cfi;
+    const point = { ...this.position, cfi: cfi ? this.visibleCfi(cfi) : cfi };
+    this.restoring = true;
     this.generation++;
-    this.rendition.destroy();
+    this.rendition?.destroy();
     this.rendition = null;
-    const host = this.container.querySelector<HTMLElement>(".qr-epub-host");
+    const host = this.container?.querySelector<HTMLElement>(".qr-epub-host");
     if (!host) throw new Error("EPUB 阅读容器已移除");
     host.replaceChildren();
     await this.buildRendition(host, point);
   }
 
-  async applyLayout(layout: ReadingLayout, theme: "light" | "dark"): Promise<void> {
-    const cfi = this.rendition?.location?.start?.cfi ?? this.position.cfi;
+  async applyLayout(layout: ReadingLayout, theme: ReadingColors): Promise<void> {
+    const current = this.position.cfi ?? this.rendition?.location?.start?.cfi;
+    const cfi = current ? this.visibleCfi(current) : current;
     this.layout = layout;
     this.theme = theme;
+    if (this.reflowable && this.rendition && layout.pageMargin !== this.renderedMargin) {
+      await this.rebuildRendition();
+      return;
+    }
     this.restoring = true;
     try {
       this.applyTheme();
@@ -404,7 +487,8 @@ export class EpubEngine implements ReaderEngine {
     this.generation++;
     window.clearTimeout(this.resizeTimer);
     this.ro?.disconnect();
-    this.book.spine.hooks.content.deregister(this.sanitize);
+    this.contentHook?.deregister(this.sanitize);
+    this.contentHook = null;
     this.container?.removeEventListener("keydown", this.keyboard);
     this.rendition?.destroy();
     this.rendition = null;

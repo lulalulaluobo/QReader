@@ -3,7 +3,7 @@
 import { pdfjsLib } from "./pdfjs-setup";
 import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "pdfjs-dist";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
-import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout } from "../types";
+import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import { pdfChapterId } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
 
@@ -20,6 +20,7 @@ interface RenderState {
 
 export class PdfEngine implements ReaderEngine {
   readonly format = "pdf" as const;
+  readonly reflowable = false;
   private container: HTMLElement | null = null;
   private scroller: HTMLElement | null = null;
   private wrappers = new Map<number, HTMLElement>();
@@ -482,6 +483,7 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private handleKey(event: KeyboardEvent): void {
+    if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
     if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.navigate(true); }
     else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.navigate(false); }
   }
@@ -511,6 +513,11 @@ export class PdfEngine implements ReaderEngine {
     const chapter = this.chapters.find((item) => item.pdfStartPage && pdfChapterId(item.pdfStartPage) === chapterId);
     if (chapter?.pdfStartPage) await this.setPage(chapter.pdfStartPage);
   }
+  async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
+    if (!annotation.pdfPage) throw new Error("这条批注没有可用的原文页码");
+    const fraction = annotation.itemRanges?.[0]?.rects?.[0]?.y ?? 0;
+    await this.setPage(annotation.pdfPage, Math.max(0, Math.min(1, fraction)));
+  }
   async next(): Promise<void> {
     if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
     else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "smooth" });
@@ -526,9 +533,9 @@ export class PdfEngine implements ReaderEngine {
     this.mode = mode;
     await this.rebuild();
   }
-  async applyLayout(_layout: ReadingLayout, theme: "light" | "dark"): Promise<void> {
-    // PDF typography is fixed by the document; theme applies to its surround.
-    if (this.scroller) this.scroller.style.background = theme === "dark" ? "#181818" : "#f0f0f0";
+  async applyLayout(_layout: ReadingLayout, theme: ReadingColors): Promise<void> {
+    // PDF 保留原始文字和图表，只调整页面外的背景。
+    if (this.scroller) this.scroller.style.background = theme.background;
   }
   async getSelectionContext(selection: EngineSelection): Promise<{ before: string; after: string }> {
     const ranges = selection.itemRanges;

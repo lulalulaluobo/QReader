@@ -1,9 +1,10 @@
 // QReader shared types. Mirrors reading.json (PRD §27) and runtime objects.
 
-export type BookFormat = "epub" | "pdf";
+export type BookFormat = "epub" | "pdf" | "fb2" | "mobi" | "azw3" | "cbz";
 export type QuestionType = "core" | "logic" | "retell";
 export type ReadMode = "paginated" | "scrolled";
-export type ReadingTheme = "auto" | "light" | "dark";
+export type ReadingTheme = "auto" | "light" | "sepia" | "sage" | "dark";
+export type ReadingFont = "original" | "sans" | "serif";
 
 export interface Question {
   id: string; // q1 | q2 | q3
@@ -54,7 +55,7 @@ export interface AnnotationRecord {
   text: string; // quoted original text
   note?: string; // 我的理解 (may be empty)
   aiExplanation?: string; // included AI explanation (may be empty)
-  // locator — EPUB
+  // CFI locator — EPUB and memory-converted FB2/MOBI/AZW3/CBZ.
   cfi?: string;
   // locator — PDF
   pdfPage?: number;
@@ -65,10 +66,10 @@ export interface AnnotationRecord {
 export interface ChapterState {
   title: string;
   index: number; // reading order (0-based)
-  // EPUB
+  // EPUB spine, including memory-converted formats.
   spineIndex?: number;
   href?: string;
-  hrefEnd?: string; // exclusive next EPUB TOC boundary
+  hrefEnd?: string; // exclusive next TOC boundary in the EPUB spine
   // PDF
   pdfStartPage?: number; // 1-based
   pdfEndPage?: number;
@@ -94,8 +95,8 @@ export interface ReadingFile {
     title: string;
     author: string;
     format: BookFormat;
-    fileName: string; // original file name inside the book folder
-    spineLength?: number; // epub
+    fileName: string; // 原书在阅读库中的安全文件名；保留原始字节。
+    spineLength?: number; // EPUB and memory-converted formats
     numPages?: number; // pdf
   };
   progress: ReadingProgress;
@@ -146,6 +147,16 @@ export interface AiConfig {
 export interface ReadingLayout {
   fontSize: number; // px
   lineHeight: number;
+  pageMargin: number; // px
+  fontFamily: ReadingFont;
+  paragraphIndent: boolean;
+}
+
+export interface ReadingColors {
+  background: string;
+  foreground: string;
+  muted: string;
+  dark: boolean;
 }
 
 export interface TocNode {

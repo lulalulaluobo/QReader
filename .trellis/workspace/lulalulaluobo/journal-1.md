@@ -44,3 +44,18 @@
 - 版本统一为 1.0.1；BRAT 从 GitHub release 下载 main.js、manifest.json、styles.css。未验证 Android/iOS 真机；不提交验收 Vault、模拟原书或配置。
 - 发布结果：修复提交 b90bb29 已推送 main；[GitHub Release 1.0.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 已公开且为 latest。三个附件上传状态正常、服务器 SHA-256 与本地构建逐一相同，公开下载的 manifest 版本为 1.0.1。
 - 已关闭独立验收窗口，移除临时脚本、样书、Vault 和运行配置；保留根目录安装产物，生产 main.js 仍由 Git 忽略。BRAT 用户在插件设置检查更新至 1.0.1。
+
+## 2026-10-03：1.1.0 六格式阅读与 AI 预设
+
+- 借鉴研究记录指向 `references/qiaomu-reader` commit `cff28ba6`，许可 GPL-3.0-only；检查 `src/reader-engine.js` 多格式接口、`src/main.js` 扩展名路由、`src/status-bar.js` 和 `src/styles.css` 活动阅读视图 chrome 收尾、`src/epub-zip.js` ZIP 中文路径兼容点。未复制 GPL 插件代码；独立采用 MIT Foliate.js 1.0.1 与 fflate 0.8.2。
+- 版本升级到 1.1.0，生产构建通过。`dist/QReader-1.1.0.zip` 内含三个安装文件；SHA-256：`ac1970ece3ec32292c7defbbe8e1fe8db50072b0fb40f185e826e40548d5f0a6`。
+- 在隔离 macOS Obsidian 1.12.4 Vault 实际导入并阅读 EPUB、PDF、原始 FB2、FB2 ZIP（另验 `.fb2.zip` 别名）、MOBI6、KF8/AZW3 和 CBZ。各格式目录与正文正常，目录父章正文和子节分别保留；MOBI/KF8 取用 Gutenberg 真书，不以改扩展名模拟。8 个测试条目落盘的原书均与源字节逐字节一致。
+- FB2/MOBI/AZW3 选正文生成并保存精确 CFI 批注，跳回后提取引文与记录文本完全相符；三种格式的 chapterId 与批注目标章节一致。再次完整重载后，原书格式与 CFI 仍在。CBZ 三张图按 1、2、10 自然排序，触摸翻页、页码与重载均工作，无三问/批注/复习文字路径。
+- 损坏 XML/档案、无效标记、空 CBZ、误扩展 EPUB 与带加密位 MOBI 全部在创建阅读库目录前拒绝；基线阅读目录不变。未尝试绕过 DRM。
+- 旧 EPUB 与 PDF 的读取定位和批注返回正文有效；插件重载后旧 CFI/PDF 页码及页内比例、annotation IDs、题目版本/回答/复习/反馈对象序列均完全相等。
+- 纸白、暖纸、青绿、深色、跟随宿主配色，以及字体/字号/行距/边距/首行缩进/分页滚动模式均在真 EPUB 中验收，应用排版后保留 CFI 与已保存标记。笔记按章节展示、原文跳转和编辑工作；PDF 与 CBZ 固定页态不受排版误改。
+- 手机模拟 320/375 宽度和桌面 1440 宽度访问正文及字号、笔记、背景面板；页面、阅读容器和面板无横向溢出。按 Escape/空格、Tab 焦点陷阱和还焦、减少动态效果可用。无障碍快照为设置滑块/下拉框/首行缩进开关提供名称，开关支持空格及 Enter。
+- 验收期间发现仅隐藏面板也会因焦点导航引起 reader 根容器横向滚动；`overflow: clip` 后 reader scrollLeft 保持 0、面板全幅可见。关闭加载中的书阅读时曾触发 EPUB `hooks` 已销毁异常；持有 hook 对象进行清理、读取代次保护与关闭时先销毁 engine 后等待最终进度落盘后，重复卸载/加载回归错误列表为空。
+- DeepSeek `deepseek-flash` / `https://api.deepseek.com`、Agnes `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1` 在原生设置中只呈现本服务 password API Key；互切保留独立密钥，不丢未保存的阅读库输入和既有自定义 endpoint/model/key。本地兼容端点实际运行探针、问题生成、批注解释及回答—反馈保存闭环；provider/key/model 变更和设置关闭重开时旧探针结果被丢弃或按钮复原。离线协议脚本还验证旧 flat config 迁移、三个准确 endpoints/Authorization、DeepSeek thinking 条件、HTTP/网络/恶意 URL 错误脱敏，无外网请求。
+- 独立 Obsidian 1.13.7 中再次加载最终 1.1.0 构建，1440 桌面 reader 正文/面板正常且状态栏隐藏；导入解析、位置和跨格式 CFI 回归以 1.12.4 独立 Vault 为准。所有测试 Vault/源书/模拟 API 密钥与协议脚本均属 `tmp/redesign-smoke/` 临时验收数据，交付前移除。
+- 验收环境仅 macOS 的 Obsidian Electron 1.12.4/1.13.7 与模拟视口/触摸；未用 Android/iOS 真机、真实 DeepSeek/Agnes API Key 或 DRM 保护书籍。AI 协议通过不代表外部账号可用或模型输出质量；PRD 准确写明限制。GitHub latest 仍为 1.0.1，本地 1.1.0 ZIP 未发布。

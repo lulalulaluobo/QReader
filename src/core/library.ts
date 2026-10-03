@@ -10,6 +10,7 @@ import { renderAnnotationsMd } from "./md-notes";
 import { BookCache, buildEpubChapters, epubChapterText, pdfPagesText, tocNodesFromBook } from "./book-source";
 import { openPdf } from "../reader/pdfjs-setup";
 import { generateQuestions } from "../ai/tasks";
+import { BOOK_EXTENSION, bookAsEpub, detectBookFormat } from "./book-formats";
 
 export const ANNOTATIONS_MD = "批注.md";
 export const READING_JSON = "reading.json";
@@ -66,7 +67,7 @@ export class LibraryManager {
         const path = `${dir}/${READING_JSON}`;
         if (!(await this.fs.exists(path))) {
           const contents = await this.fs.list(dir);
-          if (contents.files.some((file) => /\.(epub|pdf)$/i.test(file))) {
+          if (contents.files.some((file) => BOOK_EXTENSION.test(file))) {
             const missing = await JsonStore.open(this.fs, path, validateReading);
             found.set(id, { id, dir, reading: null, store: missing.store, damaged: true });
           }
@@ -126,9 +127,9 @@ export class LibraryManager {
     await this.scan();
     const root = await this.ensureRoot();
     const generation = this.rootGeneration;
-    const format = detectFormat(fileName, bytes);
+    const format = await detectBookFormat(fileName, bytes);
     const baseName = fileName.split(/[\\/]/).pop() ?? "";
-    const safeName = `${sanitizeFolderName(baseName.replace(/\.(epub|pdf)$/i, "")) || "原书"}.${format}`;
+    const safeName = `${sanitizeFolderName(baseName.replace(BOOK_EXTENSION, "")) || "原书"}.${format}`;
     new Notice(`正在导入《${baseName}》……`);
     const { reading, cover } = await readBook(bytes, safeName, format);
     this.root();
@@ -166,12 +167,12 @@ export class LibraryManager {
     const entry = this.get(id);
     if (!entry) throw new Error("书籍不存在");
     const { files } = await this.fs.list(entry.dir);
-    const originals = files.filter((path) => /\.(epub|pdf)$/i.test(path));
-    if (originals.length !== 1) throw new Error("无法唯一确定原书文件，请保留一份 EPUB 或 PDF 后重试");
+    const originals = files.filter((path) => BOOK_EXTENSION.test(path));
+    if (originals.length !== 1) throw new Error("无法唯一确定原书文件，请保留一份 EPUB、PDF、FB2、MOBI、AZW3 或 CBZ 后重试");
     const path = originals[0];
     const fileName = path.slice(path.lastIndexOf("/") + 1);
     const bytes = await this.deps.app.vault.adapter.readBinary(path);
-    const { reading, cover } = await readBook(bytes, fileName, detectFormat(fileName, bytes));
+    const { reading, cover } = await readBook(bytes, fileName, await detectBookFormat(fileName, bytes));
     const mdPath = `${entry.dir}/${ANNOTATIONS_MD}`;
     if (await this.fs.exists(mdPath)) {
       let backup = `${mdPath}.before-reset`;
@@ -221,7 +222,7 @@ export class LibraryManager {
       this.coverMem.set(entry.dir, data); return data;
     }
     if (!isHealthyBook(entry)) return null;
-    const cover = entry.reading.book.format === "epub"
+    const cover = entry.reading.book.format !== "pdf"
       ? await this.cache.withEpub(entry, epubCover)
       : await this.cache.withPdf(entry, renderPdfCover);
     if (cover) await this.saveCover(entry, cover);
@@ -232,18 +233,19 @@ export class LibraryManager {
     const healthy = this.healthy(entry);
     const chapter = healthy.reading.chapters[chapterId];
     if (!chapter) throw new Error("章节不存在");
-    const text = healthy.reading.book.format === "epub"
+    if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不提供正文提取、问题生成或文字批注");
+    const text = healthy.reading.book.format !== "pdf"
       ? await this.cache.withEpub(healthy, (book) => epubChapterText(book, chapter.spineIndex ?? 0, chapter.href, chapter.hrefEnd))
       : await this.cache.withPdf(healthy, (doc) => {
         if (!chapter.pdfStartPage || !chapter.pdfEndPage) throw new Error("PDF 章节页码范围缺失");
         return pdfPagesText(doc, chapter.pdfStartPage, chapter.pdfEndPage);
       });
-    if (!text.trim()) throw new Error("本章无法提取正文；扫描版 PDF 需要文字层，V1 不提供 OCR");
+    if (!text.trim()) throw new Error("本章无法提取正文；图片章节及扫描版 PDF 需要文字层，QReader 不提供 OCR");
     return text;
   }
   async getToc(entry: BookEntry): Promise<TocNode[]> {
     const healthy = this.healthy(entry);
-    if (healthy.reading.book.format === "epub") return this.cache.withEpub(healthy, async (book) => tocNodesFromBook(book, healthy.reading.chapters));
+    if (healthy.reading.book.format !== "pdf") return this.cache.withEpub(healthy, async (book) => tocNodesFromBook(book, healthy.reading.chapters));
     const chapters = Object.entries(healthy.reading.chapters).sort((a, b) => a[1].index - b[1].index);
     return this.cache.withPdf(healthy, async (doc) => {
       const outline = await doc.getOutline();
@@ -267,6 +269,7 @@ export class LibraryManager {
   regenerateQuestions(entry: BookEntry, chapterId: string): Promise<void> { return this.questionJob(entry, chapterId, true); }
   private questionJob(entry: BookEntry, chapterId: string, regenerate: boolean): Promise<void> {
     const healthy = this.healthy(entry);
+    if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，无法生成正文问题");
     const key = `${entry.dir}/${chapterId}`;
     const running = this.questionJobs.get(key);
     if (running) return running;
@@ -346,6 +349,7 @@ export class LibraryManager {
   }
   async saveAnnotation(entry: BookEntry, draft: Omit<AnnotationRecord, "createdAt" | "updatedAt">): Promise<AnnotationRecord> {
     const healthy = this.healthy(entry);
+    if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不支持文字批注");
     const record: AnnotationRecord = { ...draft, createdAt: new Date().toISOString() };
     await healthy.store.mutate((value) => { value.annotations.push(record); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged();
@@ -402,28 +406,23 @@ export class LibraryManager {
   }
 }
 
-function detectFormat(fileName: string, bytes: ArrayBuffer): BookFormat {
-  const header = new Uint8Array(bytes, 0, Math.min(bytes.byteLength, 5));
-  if (header[0] === 0x25 && header[1] === 0x50 && header[2] === 0x44 && header[3] === 0x46) return "pdf";
-  if (header[0] === 0x50 && header[1] === 0x4b && !fileName.toLowerCase().endsWith(".pdf")) return "epub";
-  throw new Error("原书内容不是有效的 EPUB 或 PDF");
-}
 
 async function readBook(bytes: ArrayBuffer, fileName: string, format: BookFormat): Promise<{ reading: ReadingFile; cover: string | null }> {
-  let title = fileName.replace(/\.(epub|pdf)$/i, "");
+  let title = fileName.replace(BOOK_EXTENSION, "");
   let author = "";
   let chapters: Record<string, ChapterState>;
   let spineLength: number | undefined;
   let numPages: number | undefined;
   let cover: string | null;
-  if (format === "epub") {
+  if (format !== "pdf") {
     const book = new Book();
     try {
-      await book.open(bytes, "binary"); await book.ready; await book.loaded.navigation;
+      await book.open(await bookAsEpub(bytes, fileName, format), "binary"); await book.ready; await book.loaded.navigation;
       const meta = await book.loaded.metadata;
       title = meta.title.trim() || title; author = meta.creator.trim();
       spineLength = (await book.loaded.spine).length;
       chapters = await buildEpubChapters(book);
+      if (format === "cbz") for (const chapter of Object.values(chapters)) chapter.reviewExcluded = true;
       cover = await epubCover(book);
     } finally { book.destroy(); }
   } else {
