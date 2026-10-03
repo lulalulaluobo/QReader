@@ -1,0 +1,16 @@
+node_modules/
+main.js
+*.log
+.DS_Store
+data.json
+.cover-cache/
+tmp/
+dist/
+references/
+.env
+.env.*
+!.env.example
+.gemini/
+.obsidian/workspace.json
+*.db-shm
+*.db-wal

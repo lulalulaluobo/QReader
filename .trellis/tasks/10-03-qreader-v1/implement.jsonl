@@ -1,0 +1,4 @@
+{"file":"PRD.md","reason":"用户范围、边界和原型约束"}
+{"file":".trellis/spec/frontend/index.md","reason":"项目实现模式入口"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"持久化与回忆状态约束"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"共享类型和外部边界"}
