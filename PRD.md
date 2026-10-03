@@ -58,7 +58,8 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 - AI 预设使用官方核实的 `deepseek-flash` / `https://api.deepseek.com` 和 `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1`；本地 OpenAI-compatible 协议服务通过实际 UI 探针、三问、批注解释与回答反馈流程。无供应商密钥；未验证外部联网或模型效果。密钥仅保存在插件 `data.json`，未加密。
 - 克隆调研参考 `joeseesun/qiaomu-reader` commit `cff28ba6`（GPL-3.0-only），未复制其插件代码：`src/reader-engine.js` 说明 Foliate.js 的 EPUB/MOBI/AZW3/FB2（独立/压缩）/CBZ 与独立 PDF 路径；`src/main.js` 展示扩展名路由；`src/status-bar.js` 与 `src/styles.css` 展示跟随活动阅读视图、卸载清理的宿主导航控制；`src/epub-zip.js` 记录无 UTF-8 ZIP 标志时的中文路径兼容问题。QReader 自行采用 EPUB.js/PDF.js 双引擎和 MIT 格式适配；依赖 Foliate.js 1.0.1、fflate 0.8.2，保留上游许可证声明。
 - 验收用的独立 Obsidian 为 1.12.4 与 1.13.7；OS 为 macOS。Android/iOS 真机、加密/DRM 书籍、真实供应商密钥均未测试，不宣称受支持。
-- [GitHub Release 1.1.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2) 已正式发布并设为 latest，包含 BRAT 所需 main.js、manifest.json、styles.css 与 QReader-1.1.2.zip；四个无凭据公开下载与实测构建逐字节及 SHA-256 一致，源码标签指向 `3443459`。完整校验记录见 Trellis 任务。
+- [GitHub Release 1.1.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 已正式发布为 latest，包含 BRAT 所需 main.js、manifest.json、styles.css 与 QReader-1.1.3.zip；四个公开附件与实测构建逐字节、SHA-256 及 GitHub digest 一致，源码标签指向 `c08b115`。完整记录见 `.trellis/tasks/10-04-reader-113/verification.md`。
+- 历史 [GitHub Release 1.1.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2) 四个公开下载与实测构建逐字节及 SHA-256 一致，源码标签指向 `3443459`。完整校验记录见 Trellis 任务。
 - 历史 [GitHub Release 1.1.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1) 的四个公开附件已校验，标签指向源码提交 `b402b95`。
 - 1.1.1 长中文书名封面缓存使用 SHA-256 文件名，避免文件名过长；缓存仍位于插件目录，不改变原书文件。
 - 历史 GitHub Release 1.0.1 仍可通过 [GitHub 仓库](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 安装；生成的生产 `main.js` 不纳入源码分支。

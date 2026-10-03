@@ -128,3 +128,14 @@
 - macOS Obsidian 1.13.7 独立 Vault 验证 EPUB/PDF 及 FB2/MOBI6/KF8-AZW3/CBZ 阅读/重开，原书字节不变；三题提交、反馈 503 重试不重复保存、闭卷复习、键盘焦点/Escape 通过。生产构建和 diff 检查通过，无未处理运行错误。Android/iOS 真机和真实供应商输出质量未验证。
 - 源码提交 `3443459ec202979c6c039e47bb4350ca7533c772`、main 与注解标签 1.1.2 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2) 的四个附件 uploaded，公开下载与本地逐字节/SHA-256 一致。
 - ZIP SHA-256：`563a8ebff282f5a072d593ee85aaa2e2d468b16f59ae6576f821c0ef65823cdd`；仅含 qreader 下三个安装文件。详情见 `.trellis/tasks/10-04-reader-112/verification.md`。
+
+## Session 7: 修正封面书架、单行图标菜单和无边框高亮并发布 1.1.3
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 根据用户 Android 截图修正横向矮封面框：两列两行、每页四本、封面等比例且阴影只作用图片；翻页并入导航，搜索/分类重置页码、原生回退恢复页码，极窄容器保留 44px 点击区。
+- 用户进一步明确所有选文功能只要图案，使用 copy/sparkles/色圈/square-pen/x；已有标记更多操作的 trash-2/eraser/circle-check 也无按钮文字。主排固定五图标，长按色板单独浮层，方向下键/Escape 提供键盘入口。
+- 用户追加去掉高亮外框：EPUB stroke=none、PDF 去掉底边阴影，保持五色与 28% 透明度，旧数据无需迁移。
+- 生产构建、14 组书架/14 组菜单浅深色宽度、375×667 四卡、复制/解读/批注/删除确认、指针/键盘、EPUB/PDF 颜色重开、FB2/MOBI/AZW3 无描边高亮通过。16 本样书原书 SHA-256 不变，未处理错误为空。macOS 独立 Obsidian 1.13.7 移动 CSS 模拟，不宣称 Android/iOS 真机或真实模型质量。
+- 源码 `c08b1158702b0b809a89f104ae91ca47b22603f0`、main/注解标签 1.1.3 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 四个公开下载附件逐字节、SHA-256 和 digest 与实测产物一致。
+- ZIP SHA-256：`6b53573c16c526edcfb668afe8ec59bad07bb33f468cec5175d59add2977fd65`；详细证据见 `.trellis/tasks/10-04-reader-113/verification.md`。

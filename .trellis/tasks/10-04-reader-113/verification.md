@@ -39,4 +39,6 @@ package.json、package-lock.json 两处与 manifest.json 均为 1.1.3。ZIP 仅�
 
 ## 发布
 
-待推送 main/1.1.3 并发布正式 latest Release，随后验证公开下载与上述实测产物逐字节一致。
+- 源码提交 `c08b1158702b0b809a89f104ae91ca47b22603f0` 已推送 main；注解标签 1.1.3 的本地及远程剥离目标均为该提交。
+- [QReader 1.1.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 已发布为正式 latest，draft=false、prerelease=false，四个附件均 uploaded。
+- 四个附件已从无凭据公开地址下载，与实测构建逐字节、SHA-256 及 GitHub digest 一致；公开 manifest 为 1.1.3，公开 ZIP 解压后与三个单独附件一致。

@@ -2,13 +2,13 @@
   "id": "reader-113",
   "name": "reader-113",
   "title": "修正封面书卡与单行图标菜单并发布 1.1.3",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
-  "completedAt": null,
+  "completedAt": "2026-10-04",
   "branch": "main",
   "base_branch": "main",
-  "commit": null,
-  "notes": "按用户 Android 截图修正 1.1.2 的视觉布局；用户明确要求所有选文功能只有图案。"
+  "commit": "c08b1158702b0b809a89f104ae91ca47b22603f0",
+  "notes": "四卡封面、全图标单行菜单与无描边高亮已完成构建和隔离验收。main/1.1.3 已推送，正式 latest Release 四个公开附件与实测产物逐字节一致，详情见 verification.md。"
 }
