@@ -42,3 +42,5 @@
 - 触摸验收发现 PDF 横滑同时打开 Obsidian 侧栏；分页正文接管 touchstart 冒泡后，原生触摸模拟翻到目标页且仍停留在阅读视图。另按实际内容底部计算恢复留白，修复短 PDF 页的页内位置被截断；第 1 页保存并重新打开的页内比例均为 0.21402961557631398。
 - 最终 npm run build 通过。临时核心烟雾脚本通过 JSON/Markdown 部分写入回滚、对象/记录引用保留、失败后队列续写、问题/答案/复习保留、纯划线 schema、辅文匹配边界与结构语义优先级。
 - 版本统一为 1.0.1；BRAT 从 GitHub release 下载 main.js、manifest.json、styles.css。未验证 Android/iOS 真机；不提交验收 Vault、模拟原书或配置。
+- 发布结果：修复提交 b90bb29 已推送 main；[GitHub Release 1.0.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 已公开且为 latest。三个附件上传状态正常、服务器 SHA-256 与本地构建逐一相同，公开下载的 manifest 版本为 1.0.1。
+- 已关闭独立验收窗口，移除临时脚本、样书、Vault 和运行配置；保留根目录安装产物，生产 main.js 仍由 Git 忽略。BRAT 用户在插件设置检查更新至 1.0.1。
