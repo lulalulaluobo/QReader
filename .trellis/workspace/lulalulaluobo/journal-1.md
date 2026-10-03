@@ -65,3 +65,54 @@
 - `main` 以 fast-forward 推送到 `origin`，发布标签 `1.1.0` 指向源码提交 `c601791`；未强推。
 - GitHub Release 已设为 latest，上传 `main.js`、`manifest.json`、`styles.css` 与 `QReader-1.1.0.zip`；公开页面可访问：[QReader 1.1.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.0)。
 - 发布说明保留 CBZ 无 OCR、DRM 不支持、未做 Android/iOS 真机与真实 AI Key 验收等限制。
+
+
+## Session 5: 修复阅读交互并发布 1.1.1
+
+**Date**: 2026-10-03
+**Task**: 修复阅读交互并发布 1.1.1
+**Branch**: `main`
+
+### Summary
+
+完成选文偏移修复、删除/复制/独立 AI 解读、三问直达回答和封面网格；隔离验收通过，正式 latest 发布且四个附件下载校验一致。
+
+### Main Changes
+
+## 变更
+- 修复 EPUB 原生选区自动滚动留下的非整页偏移；隐藏阅读页后重建 rendition 并按保存 CFI 恢复，翻页、模式切换和重开位置一致。
+- 笔记面板增加可跨库重绘保留的删除确认；JSON、批注.md、高亮同步。
+- 选文菜单增加原文复制与独立 AI 解读底部弹窗；仅明确存入笔记才保存，关闭后忽略迟到结果。PDF 跨页复制完整，批注仍按单页定位。
+- 三问使用底部面板，可点任意题开始闭卷回答；第三题先答、版本切换保留草稿及旧答案，三题统一提交，反馈重试不重复保存。
+- 书架改为真实封面网格、两行书名、紧凑搜索与导入，保留原有菜单/底部导航；长中文书名封面缓存使用 SHA-256 文件名。
+
+## 验收
+- npm run build 通过；macOS Obsidian 1.12.4 独立 Vault 实测 EPUB/PDF 选文、复制、删除同步、AI 解读失败/重试/关闭及明确保存、任意题回答、版本历史、反馈重试和阅读位置恢复。
+- 320/375/414/768/1024/1280/1440px 浅深色书架、弹窗与回答页无横向溢出；三问键盘焦点循环通过。
+- Android/iOS 真机未复测；本地兼容协议端点不代表真实供应商模型效果。
+
+## 发布
+- main 与注解标签 1.1.1 已推送；标签源码为 b402b9551235b3eb375891090d19384f9b4cec92。
+- 正式 latest Release：https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1 。
+- main.js、manifest.json、styles.css、QReader-1.1.1.zip 已从公开链接下载，SHA-256 均与实测构建一致；下载 manifest 为 1.1.1。
+- ZIP 仅含 qreader/ 下三个安装文件，SHA-256：5ce396ed58bfeda473f5fdb3a92d15e5a6e7b06db0b465f44495b553535a6066。
+- 已更新 PRD 与 Trellis 的状态、组件、生命周期和消费者级验收契约。
+
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b402b9551235b3eb375891090d19384f9b4cec92` | (see git log) |
+
+### Testing
+
+- [OK] (Add test results)
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

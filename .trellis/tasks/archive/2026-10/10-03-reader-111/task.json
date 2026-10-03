@@ -3,7 +3,7 @@
   "name": "reader-111",
   "title": "修复选文偏移与阅读交互并发布 1.1.1",
   "description": "",
-  "status": "in_progress",
+  "status": "completed",
   "dev_type": "frontend",
   "scope": "reader",
   "package": null,
@@ -11,11 +11,11 @@
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-03",
-  "completedAt": null,
-  "branch": null,
+  "completedAt": "2026-10-03",
+  "branch": "main",
   "base_branch": "main",
   "worktree_path": null,
-  "commit": null,
+  "commit": "b402b9551235b3eb375891090d19384f9b4cec92",
   "pr_url": null,
   "subtasks": [],
   "children": [],
@@ -34,14 +34,37 @@
     "package.json",
     "package-lock.json"
   ],
-  "notes": "1.1.1 构建、macOS Obsidian 独立 Vault 与七种宽度浅深色验收通过，安装 ZIP 字节一致；Android/iOS 真机及外部模型未验证。待推送并发布正式 latest Release。",
+  "notes": "1.1.1 构建、macOS Obsidian 独立 Vault 与七种宽度浅深色验收通过；源码与标签已推送，正式 latest Release 已发布，四个公开下载附件与实测构建 SHA-256 一致。Android/iOS 真机及外部模型未验证。",
   "meta": {
     "version": "1.1.1",
+    "release": {
+      "url": "https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1",
+      "tag": "1.1.1",
+      "latest": true,
+      "sourceCommit": "b402b9551235b3eb375891090d19384f9b4cec92",
+      "downloadedAssetsVerified": [
+        "main.js",
+        "manifest.json",
+        "styles.css",
+        "QReader-1.1.1.zip"
+      ]
+    },
     "verification": {
       "build": "npm run build",
       "runtime": "macOS Obsidian 1.12.4 独立 Vault",
-      "viewportWidths": [320, 375, 414, 768, 1024, 1280, 1440],
-      "themes": ["light", "dark"],
+      "viewportWidths": [
+        320,
+        375,
+        414,
+        768,
+        1024,
+        1280,
+        1440
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
       "archive": "dist/QReader-1.1.1.zip",
       "archiveSha256": "5ce396ed58bfeda473f5fdb3a92d15e5a6e7b06db0b465f44495b553535a6066",
       "limits": "Android/iOS 真机未复测；真实供应商模型未验证"

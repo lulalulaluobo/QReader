@@ -20,7 +20,7 @@
 - [x] AI 解读真实走既有接口，加载/失败/重试/关闭迟到结果正确，仅显式存入笔记持久化。
 - [x] 任意三问题目直达正确题与版本，第三题先答仍可答其余两题，提交及反馈重试不重复保存。
 - [x] 320–1440px 的浅深色书架、弹窗、答案页可见可操作，无横向溢出。
-- [ ] 最终构建、安装包、远程标签、latest 和下载附件验证（构建与 ZIP 已通过，待远程发布）。
+- [x] 最终构建、安装包、远程标签、latest 和下载附件验证。
 
 ## 已执行验收
 - `npm run build` 通过；真实 macOS Obsidian 1.12.4 独立 Vault 载入 1.1.1，使用自建 EPUB 与双页 PDF。
@@ -32,4 +32,9 @@
 - 长中文书名使用原书 SVG 封面，SHA-256 缓存落盘并重新读取成功；PDF 首页作为真实封面。
 - `dist/QReader-1.1.1.zip` 仅含 `qreader/{main.js,manifest.json,styles.css}`；压缩完整性检查通过，解压字节与实测构建一致，SHA-256 为 `5ce396ed58bfeda473f5fdb3a92d15e5a6e7b06db0b465f44495b553535a6066`。
 - 未复测 Android/iOS 真机；没有真实供应商密钥，未验证外部模型质量。验收服务与样书不进入源码或安装包。
+
+## 发布证据
+- 源码提交 `b402b9551235b3eb375891090d19384f9b4cec92` 已推送 `main`；远程注解标签 `1.1.1` 精确指向同一提交。
+- [QReader 1.1.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1) 为正式 Release（非 draft、非 prerelease），公开 `/releases/latest` 返回该版本。
+- `main.js`、`manifest.json`、`styles.css`、`QReader-1.1.1.zip` 四个附件均已从公开下载地址读取，SHA-256 与本地实测构建一致；下载的 manifest 为 1.1.1。
 
