@@ -2,7 +2,7 @@ import { ItemView, Menu, Modal, Notice, TFile, TFolder, setIcon } from "obsidian
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { BookEntry, HealthyBookEntry } from "../types";
 import { isHealthyBook } from "../types";
-import { el, relTime } from "../util";
+import { el } from "../util";
 import type { QReaderPlugin } from "../main";
 import { ANNOTATIONS_MD } from "../core/library";
 import { BOOK_FILE_ACCEPT } from "../core/book-formats";
@@ -81,7 +81,6 @@ export class BookshelfView extends ItemView {
   private buildShell(): void {
     this.contentEl.empty();
     const root = el("div", "qr-bookshelf");
-    root.appendChild(el("h1", "qr-shelf-heading", "书架"));
     const top = el("div", "qr-shelf-top");
     const searchBox = el("div", "qr-search");
     const icon = el("span", "qr-search-icon");
@@ -98,19 +97,21 @@ export class BookshelfView extends ItemView {
       void this.renderCards();
     };
     searchBox.append(icon, input);
-    const importButton = el("button", "qr-btn qr-btn-primary", this.importing ? "正在导入……" : "导入书籍");
+    root.appendChild(searchBox);
+    top.appendChild(el("h1", "qr-shelf-heading", "书架"));
+    const importButton = el("button", "qr-btn qr-btn-primary", this.importing ? "正在导入……" : "导入");
+    importButton.setAttribute("aria-label", "导入书籍");
     importButton.disabled = this.importing;
     importButton.onclick = () => this.pickFile();
     this.importButton = importButton;
-    top.append(searchBox, importButton);
+    top.appendChild(importButton);
     root.appendChild(top);
     this.status = el("div", "qr-status qr-muted");
     this.status.setAttribute("role", "status");
     root.appendChild(this.status);
     this.continueBox = el("section", "qr-continue");
     root.appendChild(this.continueBox);
-    root.appendChild(el("h2", "qr-section-title", "我的书籍"));
-    this.listBox = el("div", "qr-grid qr-book-list");
+    this.listBox = el("div", "qr-book-list");
     root.appendChild(this.listBox);
     root.appendChild(this.bottomNav());
     this.contentEl.appendChild(root);
@@ -180,14 +181,14 @@ export class BookshelfView extends ItemView {
     box.empty();
     continueBox.empty();
     if (continuing) {
-      continueBox.append(el("h2", "qr-section-title", "继续阅读"), continuing);
+      continueBox.appendChild(continuing);
     }
     if (cards.length) box.append(...cards);
     else box.appendChild(el("div", "qr-muted qr-empty", this.entries.length ? "没有匹配的书" : "书架是空的。支持 EPUB、PDF、FB2、MOBI、AZW3 与 CBZ，导入原书即可开始阅读。"));
   }
 
   private async coverEl(entry: HealthyBookEntry, cls: string): Promise<HTMLElement> {
-    const box = el("div", `qr-cover ${cls}`);
+    const box = el("span", `qr-cover ${cls}`);
     const cover = await this.plugin.library.getCover(entry).catch(() => null);
     if (cover) {
       const image = el("img");
@@ -196,26 +197,30 @@ export class BookshelfView extends ItemView {
       image.onerror = () => {
         image.remove();
         box.addClass("qr-cover-empty");
-        box.appendChild(el("div", "qr-cover-title", entry.reading.book.title));
+        box.appendChild(el("span", "qr-cover-title", entry.reading.book.title));
       };
       box.appendChild(image);
     } else {
       box.addClass("qr-cover-empty");
-      box.appendChild(el("div", "qr-cover-title", entry.reading.book.title));
+      box.appendChild(el("span", "qr-cover-title", entry.reading.book.title));
     }
     return box;
   }
 
   private async buildContinue(entry: HealthyBookEntry): Promise<HTMLElement> {
-    const card = el("div", "qr-continue-card");
+    const card = el("button", "qr-continue-card");
     const progress = entry.reading.progress;
     const chapter = progress.chapterId ? entry.reading.chapters[progress.chapterId] : undefined;
-    const info = el("div", "qr-continue-info");
-    info.append(el("div", "qr-continue-book", entry.reading.book.title), el("div", "qr-muted", `${chapter?.title ?? "开始阅读"} · ${Math.round(progress.percent * 100)}%`));
-    const go = el("button", "qr-btn qr-btn-primary", "继续阅读");
-    go.onclick = () => void this.plugin.openReader(entry.id);
-    info.appendChild(go);
-    card.append(await this.coverEl(entry, "qr-continue-cover"), info);
+    const info = el("span", "qr-continue-info");
+    const title = el("span", "qr-continue-book", entry.reading.book.title);
+    title.title = entry.reading.book.title;
+    const position = `${chapter?.title ?? "开始阅读"} · ${Math.round(progress.percent * 100)}%`;
+    const meta = el("span", "qr-continue-meta qr-muted", position);
+    meta.title = position;
+    info.append(title, meta);
+    card.setAttribute("aria-label", `继续阅读《${entry.reading.book.title}》，${position}`);
+    card.onclick = () => void this.plugin.openReader(entry.id);
+    card.append(await this.coverEl(entry, "qr-continue-cover"), info, el("span", "qr-continue-action", "继续阅读"));
     return card;
   }
 
@@ -223,10 +228,7 @@ export class BookshelfView extends ItemView {
     const healthy = isHealthyBook(entry);
     const title = healthy ? entry.reading.book.title : entry.id;
     const card = el("div", `qr-card${healthy ? "" : " qr-card-damaged"}`);
-    const info = el("div", "qr-card-info");
-    const titleRow = el("div", "qr-card-title-row");
     const open = el("button", "qr-book-open");
-    open.appendChild(el("span", "qr-card-title", title));
     open.title = title;
     open.setAttribute("aria-label", healthy ? `阅读《${title}》` : `查看《${title}》的损坏文件夹`);
     open.onclick = (event) => {
@@ -239,21 +241,22 @@ export class BookshelfView extends ItemView {
     more.title = "更多操作";
     setIcon(more, "more-horizontal");
     more.onclick = (event) => { event.stopPropagation(); this.openCardMenu(event, entry); };
-    titleRow.append(open, more);
-    info.appendChild(titleRow);
     if (isHealthyBook(entry)) {
       const progress = entry.reading.progress;
-      const chapter = progress.chapterId ? entry.reading.chapters[progress.chapterId] : undefined;
-      const annotationCount = entry.reading.annotations.filter((record) => record.kind !== "highlight").length;
-      info.append(el("div", "qr-muted", entry.reading.book.author || "佚名"), el("div", "qr-muted qr-tiny", `${chapter?.title ?? "未开始"} · ${Math.round(progress.percent * 100)}% · 批注 ${annotationCount} · ${relTime(progress.lastReadAt)}`));
-      card.append(await this.coverEl(entry, ""), info);
-      card.onclick = () => void this.plugin.openReader(entry.id);
+      open.appendChild(await this.coverEl(entry, ""));
+      open.appendChild(el("span", "qr-card-title", title));
+      open.appendChild(el("span", "qr-card-meta qr-muted", progress.lastReadAt ? `已读 ${Math.round(progress.percent * 100)}%` : "未读"));
     } else {
-      info.appendChild(el("div", "qr-inline-error", "阅读记录损坏，尚未加载。请从更多操作恢复备份或重新建立记录。"));
-      const cover = el("div", "qr-cover qr-cover-empty");
+      const cover = el("span", "qr-cover qr-cover-empty");
+      cover.setAttribute("aria-hidden", "true");
       setIcon(cover, "file-warning");
-      card.append(cover, info);
+      open.append(cover, el("span", "qr-card-title", title), el("span", "qr-card-meta qr-inline-error", "记录损坏"));
+      const error = el("div", "qr-card-error qr-inline-error", "请从更多操作恢复备份或重新建立记录。");
+      card.appendChild(error);
     }
+    const main = el("div", "qr-card-main");
+    main.append(open, more);
+    card.prepend(main);
     return card;
   }
 
@@ -340,7 +343,7 @@ export class BookshelfView extends ItemView {
       } catch (error) { new Notice(`导入失败：${error instanceof Error ? error.message : String(error)}`); }
       finally {
         this.importing = false;
-        if (this.opened && this.importButton) { this.importButton.disabled = false; this.importButton.setText("导入书籍"); }
+        if (this.opened && this.importButton) { this.importButton.disabled = false; this.importButton.setText("导入"); }
       }
     };
     input.click();

@@ -28,6 +28,8 @@ export interface SelectionAnchor {
 
 export interface EngineSelection {
   text: string;
+  /** Raw browser selection for copying; PDF annotation quotes stay page-scoped. */
+  copyText?: string;
   chapterId?: string;
   cfi?: string; // epub
   pdfPage?: number; // pdf

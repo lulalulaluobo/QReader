@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"独立 Obsidian 消费者级运行验收与七种宽度浅深色检查"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"精确复制、显式存入笔记、三问统一提交及历史版本边界"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"定位和回答类型边界、无迁移破坏既有记录"}

@@ -244,14 +244,16 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   flex-direction: column;
   height: 100%;
   overflow-y: auto;
-  padding: 20px 16px 0;
-  max-width: 720px;
+  padding: 16px 16px 0;
+  max-width: 1120px;
   margin: 0 auto;
+  width: 100%;
+  min-width: 0;
 }
 
 .qr-shelf-heading {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.3;
@@ -301,6 +303,8 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-view button.qr-book-open {
   display: block;
+  width: 100%;
+  min-width: 0;
   padding: 0;
   min-height: 44px;
   height: auto;
@@ -312,17 +316,19 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   white-space: normal;
   font: inherit;
 }
-.qr-card-damaged {
-  background: var(--background-secondary);
+.qr-card-damaged .qr-cover {
+  color: var(--text-error);
 }
 .qr-shelf-top {
   display: flex;
-  gap: 10px;
-  margin-top: 16px;
-  margin-bottom: 20px;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 12px 0 16px;
 }
 .qr-search {
-  flex: 1;
+  flex: none;
   display: flex;
   min-width: 0;
   align-items: center;
@@ -330,7 +336,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   border: 1px solid var(--qr-border);
   border-radius: 8px;
   padding: 0 12px;
-  background: var(--qr-bg);
+  background: var(--background-secondary);
 }
 .qr-search-icon {
   color: var(--qr-muted);
@@ -348,100 +354,134 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   font-size: 14px;
   font-family: var(--qr-font);
 }
-.qr-search input:focus {
-  outline: none;
+.qr-search:focus-within {
+  outline: 2px solid var(--qr-accent);
+  outline-offset: 2px;
 }
 
-.qr-continue-card {
+.qr-view button.qr-continue-card {
   display: flex;
-  gap: 16px;
-  padding: 16px;
-  border: 1px solid var(--qr-border);
-  border-radius: 10px;
-  margin-bottom: 24px;
-  background: var(--background-secondary);
+  width: 100%;
+  height: auto;
+  min-height: 64px;
+  gap: 12px;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid var(--qr-border);
+  border-radius: 0;
+  margin-bottom: 20px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--qr-fg);
+  text-align: left;
+  white-space: normal;
   align-items: center;
 }
+.qr-view button.qr-continue-card:hover {
+  background: var(--qr-hover);
+}
+.qr-continue {
+  flex: none;
+  min-width: 0;
+}
+.qr-bookshelf > .qr-status:empty,
+.qr-continue:empty {
+  display: none;
+}
 .qr-continue-cover {
-  width: 72px;
+  width: 36px;
   flex: none;
 }
 .qr-continue-info {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  align-items: flex-start;
+  gap: 4px;
+  flex: 1;
+}
+.qr-continue-book,
+.qr-continue-meta {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .qr-continue-book {
-  font-size: 17px;
+  font-size: 14px;
   font-weight: 600;
+}
+.qr-continue-meta {
+  font-size: 12px;
+}
+.qr-continue-action {
+  flex: none;
+  font-size: 13px;
+  color: var(--qr-accent);
 }
 
 .qr-book-list {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, clamp(96px, 15%, 152px)), 1fr));
+  gap: 20px 12px;
+  align-content: start;
+  flex: 1 0 auto;
+  min-width: 0;
+}
+.qr-book-list > .qr-empty {
+  grid-column: 1 / -1;
 }
 .qr-card {
-  display: flex;
-  gap: 12px;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 0;
-  cursor: pointer;
-  background: var(--qr-bg);
-  transition: background 120ms ease;
-  min-height: 100px;
+  min-width: 0;
+  align-self: start;
 }
-.qr-card:hover {
-  background: var(--qr-hover);
+.qr-card-main {
+  position: relative;
+  min-width: 0;
 }
 .qr-card .qr-cover {
-  width: 58px;
-  flex: none;
+  width: 100%;
+  margin-bottom: 8px;
 }
-.qr-card-info {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.qr-card-title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 4px;
-}
-.qr-card-title-row .qr-book-open {
-  flex: 1;
-  min-width: 0;
-  line-height: 1.5;
+.qr-card .qr-book-open:hover .qr-card-title {
+  color: var(--qr-accent);
 }
 .qr-card-title {
-  font-weight: 600;
-  font-size: 14.5px;
-  display: block;
+  font-weight: 500;
+  font-size: 14px;
+  line-height: 1.5;
+  min-height: 3em;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   overflow-wrap: anywhere;
+  text-align: start;
 }
-.qr-card-more {
+.qr-view button.qr-card-more {
+  position: absolute;
+  right: 0;
+  bottom: 0;
   width: 44px;
+  min-width: 44px;
   height: 44px;
-  flex: none;
+  color: var(--qr-muted);
 }
 .qr-card-meta {
   display: flex;
-  flex-direction: column;
-  gap: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  align-items: center;
+  min-height: 44px;
+  padding-right: 44px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.qr-card-error {
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .qr-cover {
   aspect-ratio: 3 / 4;
-  border-radius: 6px;
+  border-radius: 3px;
   overflow: hidden;
   background: var(--background-secondary);
   display: flex;
@@ -452,7 +492,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 .qr-cover img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
   display: block;
 }
 .qr-cover-empty .qr-cover-title {
@@ -731,7 +771,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   background: rgba(250, 204, 21, 0.32);
 }
 
-/* drawer + question panel */
+/* 目录保留侧栏；三问复用阅读底部面板。 */
 .qr-drawer {
   position: absolute;
   top: 0;
@@ -748,25 +788,6 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   flex-direction: column;
 }
 .qr-drawer.qr-open {
-  transform: none;
-  visibility: visible;
-}
-.qr-panel {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: min(380px, 92%);
-  background: var(--qr-bg);
-  border-left: 1px solid var(--qr-border);
-  z-index: 30;
-  transform: translateX(102%);
-  visibility: hidden;
-  transition: transform 200ms ease;
-  display: flex;
-  flex-direction: column;
-}
-.qr-panel.qr-open {
   transform: none;
   visibility: visible;
 }
@@ -862,6 +883,8 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   overflow-y: auto;
   overscroll-behavior: contain;
   min-height: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .qr-reading-help {
   color: var(--qr-muted);
@@ -964,9 +987,47 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-note-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
   margin-top: 12px;
+}
+.qr-note-delete-warning {
+  color: var(--qr-muted);
+  font-size: 13px;
+  line-height: 1.8;
+}
+.qr-reader .qr-question-link {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  width: 100%;
+  min-height: 44px;
+  height: auto;
+  padding: 16px 0;
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  border: 0;
+  border-bottom: 1px solid var(--qr-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--qr-fg);
+  box-shadow: none;
+}
+.qr-reader .qr-question-link:hover {
+  background: var(--qr-hover);
+}
+.qr-explanation-quote {
+  max-height: 24vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.qr-explanation-result {
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 .qr-settings-row {
   display: flex;
@@ -1091,6 +1152,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-ai-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
@@ -1143,8 +1205,11 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   gap: 8px;
 }
 .qr-step-dot {
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  box-shadow: none;
   border-radius: 50%;
   border: 1px solid var(--qr-border);
   display: inline-flex;
@@ -1168,6 +1233,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-answer-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   gap: 10px;
   margin-top: 6px;

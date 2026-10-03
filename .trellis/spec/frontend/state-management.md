@@ -71,3 +71,51 @@ if (entry.reading.book.format !== "cbz") {
 ```
 
 只有内存转换的格式共享 EPUB 引擎，不改变磁盘格式、原文件字节或历史定位格式。
+
+## 1.1.1 选文、底部弹窗与闭卷回答契约
+
+### 1. 作用域与签名
+- `EngineSelection` 新增可选 `copyText`：浏览器完整原始选区，只用于复制；`text` 仍为批注引用，EPUB 去首尾空白，PDF 限当前页。
+- `QReaderPlugin.openAnswer(bookId, chapterId, mode, scheduledFor?, question?)` 的 `question` 为 `{ id: string; version: number }`，与 `AnswerView.openFor` 一起定位题目及版本；未提供时保留从第一题开始的流程。
+- `LibraryManager.coverPath(entry): Promise<string>` 使用目录名的 SHA-256 十六进制值命名插件 `.cover-cache/<hash>.txt`，不改变原书目录或记录格式。
+
+### 2. 状态与载荷
+- 选区菜单可复制、划线、批注或 AI 解读；AI 解读弹窗持有选区和一次性结果，显式存入笔记前没有 `AnnotationRecord`。
+- `generation` 标识阅读书代次，`panelSession` 标识弹窗代次；`confirmingNoteId` 持有待确认删除的笔记，不以临时 DOM 代替状态。
+- 回答草稿、题目版本、当前题目分别保存；三题全部有回答才提交，答案和反馈继续绑定 `questionVersion`。
+- EPUB `suspended` 表示隐藏/零尺寸 renderer；`position.cfi` 是恢复事实源，不从隐藏或失效 iframe 反推新位置。
+
+### 3. 数据流与持久化
+- 复制使用 `copyText ?? text`，不写磁盘；PDF 跨页完整复制与单页批注定位分别处理。
+- AI 解读经现有 `explainSelection` 接口请求，按需重试；仅用户确认存入时调用 `saveAnnotation`，再更新高亮及 Markdown。
+- 删除确认后调用现有 `deleteAnnotation`，沿用串行 JSON 写入与 `批注.md` 重建；取消只清确认状态。
+- 点击任意三问传递题目 ID/版本，先保存阅读位置再打开闭卷回答；反馈失败后重试复用已保存答案，不重复创建记录。
+
+### 4. 错误与边界
+- 弹窗关闭、切换、书籍变化后，迟到 AI 结果不更新 DOM、不新增笔记；错误可见且可重试。
+- JSON/Markdown 删除失败不伪装成功；待删除确认在题目生成等库通知后继续显示。
+- 原生选区滚动不能写入错误阅读进度；清空选区、重排、resize、模式切换或销毁时释放选区锁。
+- EPUB 零尺寸时不 resize；恢复可见后重建 rendition 并精确恢复已保存 CFI，禁止读隐藏 DOM 将进度改为章首。
+- 长书名封面缓存不得直接使用 `encodeURIComponent(entry.dir)` 作为文件名；旧缓存不需要迁移，未命中时从原书重新生成。
+
+### 5. Good / Base / Bad
+- Good：原始选区精确复制，批注引用保持既有规范；独立 AI 解读在明确存入后持久化；任意题先答仍统一提交三问。
+- Base：没有 `copyText` 的引擎调用可复制 `text`；既有阅读、批注及问题版本无需 schema 迁移。
+- Bad：打开解读即保存、关闭后迟到结果覆盖新弹窗、库重绘吞掉删除确认、用零尺寸 iframe 定位覆盖保存 CFI。
+
+### 6. 必需消费者级检查
+- 隔离 Vault 中原生选区扰动前后整页偏移/CFI 一致；复制精确，删除取消无变化，确认后的 JSON/Markdown/高亮一致。
+- EPUB 隐藏阅读页返回、退出重开、滚动/分页切换仍在同一原文；PDF 跨页复制与单页批注各自正确。
+- 本地兼容端点覆盖解读失败/重试/关闭迟到结果及单次明确保存；第三题先答、问题版本切换、反馈重试后历史完整且无重复记录。
+- 320/375/414/768/1024/1280/1440px 浅深色书架、弹窗、回答页无横向溢出；真实封面与长书名磁盘缓存可用。macOS 模拟不作为 Android 真机证据。
+
+### 7. 错误与正确
+```ts
+// 错误：一打开解读便将暂存结果变成笔记。
+await saveAnnotation(entry, draft);
+// 正确：只有显式保存动作才持久化；复制保持原始选区。
+const copiedText = selection.copyText ?? selection.text;
+// 正确：隐藏 leaf 不上报章首；恢复时使用 position.cfi 重建定位。
+if (!container.clientWidth || !container.clientHeight) return;
+```
+

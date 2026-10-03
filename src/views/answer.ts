@@ -1,4 +1,4 @@
-import { ItemView, setIcon } from "obsidian";
+import { ItemView, Modal, setIcon } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { AnswerRecord, ChapterState, Feedback, HealthyBookEntry, Question, QuestionType, ReviewRecord } from "../types";
 import { QUESTION_LABELS, isHealthyBook } from "../types";
@@ -38,6 +38,8 @@ export class AnswerView extends ItemView {
   private session = 0;
   private lifetime = 0;
   private unsub: (() => void) | null = null;
+  private requestedQuestionId: string | undefined;
+  private versionModal: Modal | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) { super(leaf); }
   getViewType(): string { return VIEW_TYPE_ANSWER; }
@@ -60,6 +62,7 @@ export class AnswerView extends ItemView {
       await super.setState(state, result);
       return;
     }
+    this.versionModal?.close();
     this.session++;
     const session = this.session;
     this.bookId = state.bookId;
@@ -76,6 +79,7 @@ export class AnswerView extends ItemView {
     }
     this.questionVersion = "questionVersion" in state && typeof state.questionVersion === "number" ? state.questionVersion : 0;
     this.questions = [];
+    this.requestedQuestionId = undefined;
     this.questionsLoading = false;
     this.saved = null;
     this.phase = "questions";
@@ -113,6 +117,7 @@ export class AnswerView extends ItemView {
   }
   async onClose(): Promise<void> {
     this.opened = false;
+    this.versionModal?.close();
     this.lifetime++;
     this.questionsLoading = false;
     if (this.phase === "feedback-loading") {
@@ -123,11 +128,27 @@ export class AnswerView extends ItemView {
     this.unsub = null;
   }
 
-  async openFor(bookId: string, chapterId: string, mode: AnswerMode, scheduledFor?: string): Promise<void> {
-    if (mode === "answer" && this.bookId === bookId && this.chapterId === chapterId && this.mode === mode && this.phase !== "done") {
-      this.renderStep();
-      if (!this.questions.length && !this.questionsLoading) await this.loadQuestions();
-      return;
+  async openFor(bookId: string, chapterId: string, mode: AnswerMode, scheduledFor?: string, question?: { id: string; version: number }): Promise<void> {
+    this.versionModal?.close();
+    const sameAnswer = mode === "answer" && this.bookId === bookId && this.chapterId === chapterId && this.mode === mode;
+    if (sameAnswer && this.phase !== "done") {
+      if (!question || !this.questionVersion || question.version === this.questionVersion) {
+        this.requestedQuestionId = question?.id;
+        this.focusRequestedQuestion();
+        this.renderStep();
+        if (!this.questions.length && !this.questionsLoading) await this.loadQuestions();
+        return;
+      }
+      if (this.phase !== "questions") return;
+      if (this.answers.some((answer) => answer.trim())) {
+        const session = this.session;
+        this.confirmQuestionVersion(() => {
+          if (!this.opened || session !== this.session) return;
+          this.answers = ["", "", ""];
+          void this.openFor(bookId, chapterId, mode, scheduledFor, question);
+        });
+        return;
+      }
     }
     this.session++;
     this.bookId = bookId;
@@ -137,7 +158,8 @@ export class AnswerView extends ItemView {
     this.step = 0;
     this.answers = ["", "", ""];
     this.questions = [];
-    this.questionVersion = 0;
+    this.questionVersion = question?.version ?? 0;
+    this.requestedQuestionId = question?.id;
     this.phase = "questions";
     this.saved = null;
     this.feedbackError = "";
@@ -149,10 +171,36 @@ export class AnswerView extends ItemView {
     await this.loadQuestions();
   }
 
+  private confirmQuestionVersion(onConfirm: () => void): void {
+    this.versionModal?.close();
+    const modal = new Modal(this.app);
+    this.versionModal = modal;
+    modal.titleEl.setText("切换问题版本？");
+    modal.contentEl.appendChild(el("p", undefined, "当前三问尚未提交。切换后会清除本次草稿，并使用刚刚选中的问题版本。已保存的历史回答不受影响。"));
+    const actions = el("div", "qr-answer-actions");
+    const cancel = el("button", "qr-btn", "继续当前回答");
+    const confirm = el("button", "qr-btn qr-btn-primary", "切换版本");
+    cancel.onclick = () => modal.close();
+    confirm.onclick = () => { modal.close(); onConfirm(); };
+    modal.onClose = () => { if (this.versionModal === modal) this.versionModal = null; };
+    actions.append(cancel, confirm);
+    modal.contentEl.appendChild(actions);
+    modal.open();
+    cancel.focus({ preventScroll: true });
+  }
+
+  private focusRequestedQuestion(): void {
+    if (!this.requestedQuestionId || !this.questions.length) return;
+    const index = this.questions.findIndex((question) => question.id === this.requestedQuestionId);
+    if (index >= 0) this.step = index;
+    this.requestedQuestionId = undefined;
+  }
+
   private async loadQuestions(): Promise<void> {
     if (!this.opened || this.questionsLoading || this.questions.length) return;
     const entry = this.plugin.library.get(this.bookId);
     if (!entry || !isHealthyBook(entry)) { this.renderStep(); return; }
+    if (entry.reading.book.format === "cbz") { this.renderStep(); return; }
     const chapter = entry.reading.chapters[this.chapterId];
     if (!chapter) { this.renderStep(); return; }
     const session = this.session;
@@ -171,6 +219,8 @@ export class AnswerView extends ItemView {
       if (!latest || questions.some((question) => !question)) throw new Error("本章三问不完整，请重新生成");
       this.questions = questions.filter((question): question is Question => question !== undefined).map((question) => ({ ...question }));
       this.questionVersion = latest.version;
+      this.focusRequestedQuestion();
+      this.app.workspace.requestSaveLayout();
     } catch (error) {
       if (session === this.session && lifetime === this.lifetime) this.questionError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -192,6 +242,13 @@ export class AnswerView extends ItemView {
       root.appendChild(el("div", "qr-muted qr-empty", this.bookId ? "章节不可用，请返回书架检查书籍。" : "请从阅读页或复习页选择章节。"));
       const back = el("button", "qr-btn", "返回书架");
       back.onclick = () => void this.plugin.openBookshelf();
+      root.appendChild(back);
+      return;
+    }
+    if (entry.reading.book.format === "cbz") {
+      root.appendChild(el("div", "qr-muted qr-empty", "图片书没有文字层，不能进行闭卷回答。"));
+      const back = el("button", "qr-btn", "返回阅读");
+      back.onclick = () => this.back();
       root.appendChild(back);
       return;
     }
@@ -228,7 +285,9 @@ export class AnswerView extends ItemView {
     const steps = el("div", "qr-answer-steps");
     steps.setAttribute("aria-label", `第 ${this.step + 1} 题，共 3 题`);
     for (let index = 0; index < 3; index++) {
-      const dot = el("span", `qr-step-dot${index === this.step ? " qr-step-active" : ""}`, String(index + 1));
+      const dot = el("button", `qr-step-dot${index === this.step ? " qr-step-active" : ""}`, String(index + 1));
+      dot.setAttribute("aria-label", `第 ${index + 1} 题，${QUESTION_LABELS[this.questions[index].type]}${this.answers[index].trim() ? "，已填写" : "，未填写"}`);
+      dot.onclick = () => { this.step = index; this.app.workspace.requestSaveLayout(); this.renderStep(); };
       if (index === this.step) dot.setAttribute("aria-current", "step");
       steps.appendChild(dot);
     }
@@ -249,23 +308,30 @@ export class AnswerView extends ItemView {
     const previous = el("button", "qr-btn", this.step ? "上一题" : this.mode === "review" ? "返回复习" : "返回阅读");
     previous.onclick = () => {
       if (!this.step) this.back();
-      else { this.step--; this.renderStep(); }
+      else { this.step--; this.app.workspace.requestSaveLayout(); this.renderStep(); }
     };
-    const next = el("button", "qr-btn qr-btn-primary", this.step === 2 ? "提交三题回答" : "下一题");
-    next.disabled = this.step === 2 ? this.answers.some((answer) => !answer.trim()) : !this.answers[this.step].trim();
+    const next = el("button", "qr-btn qr-btn-primary");
+    const updateNext = (): void => {
+      next.setText(this.step < 2 ? "下一题" : this.answers.some((answer) => !answer.trim()) ? "下一道未答题" : "提交三题回答");
+      next.disabled = !this.answers[this.step].trim();
+    };
+    updateNext();
     textarea.oninput = () => {
       this.answers[this.step] = textarea.value;
       this.app.workspace.requestSaveLayout();
-      next.disabled = this.step === 2 ? this.answers.some((answer) => !answer.trim()) : !textarea.value.trim();
+      updateNext();
     };
     next.onclick = () => void this.submitStep();
     actions.append(previous, next);
     body.appendChild(actions);
+    if (this.app.workspace.getActiveViewOfType(AnswerView) === this) textarea.focus({ preventScroll: true });
   }
 
   private async submitStep(): Promise<void> {
     if (this.phase !== "questions" || this.saved || !this.answers[this.step].trim()) return;
-    if (this.step < 2) { this.step++; this.renderStep(); return; }
+    if (this.step < 2) { this.step++; this.app.workspace.requestSaveLayout(); this.renderStep(); return; }
+    const unanswered = this.answers.findIndex((answer) => !answer.trim());
+    if (unanswered >= 0) { this.step = unanswered; this.app.workspace.requestSaveLayout(); this.renderStep(); return; }
     if (this.questions.length !== 3 || this.answers.some((answer) => !answer.trim())) {
       this.submissionError = "请先完成全部三题，再提交回答。";
       this.renderStep();

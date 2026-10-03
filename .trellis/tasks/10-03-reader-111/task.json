@@ -1,0 +1,50 @@
+{
+  "id": "reader-111",
+  "name": "reader-111",
+  "title": "修复选文偏移与阅读交互并发布 1.1.1",
+  "description": "",
+  "status": "in_progress",
+  "dev_type": "frontend",
+  "scope": "reader",
+  "package": null,
+  "priority": "P2",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-03",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "src/reader/engine.ts",
+    "src/reader/epub-engine.ts",
+    "src/reader/pdf-engine.ts",
+    "src/views/reader.ts",
+    "src/views/answer.ts",
+    "src/views/bookshelf.ts",
+    "src/core/library.ts",
+    "src/main.ts",
+    "styles.css",
+    "manifest.json",
+    "package.json",
+    "package-lock.json"
+  ],
+  "notes": "1.1.1 构建、macOS Obsidian 独立 Vault 与七种宽度浅深色验收通过，安装 ZIP 字节一致；Android/iOS 真机及外部模型未验证。待推送并发布正式 latest Release。",
+  "meta": {
+    "version": "1.1.1",
+    "verification": {
+      "build": "npm run build",
+      "runtime": "macOS Obsidian 1.12.4 独立 Vault",
+      "viewportWidths": [320, 375, 414, 768, 1024, 1280, 1440],
+      "themes": ["light", "dark"],
+      "archive": "dist/QReader-1.1.1.zip",
+      "archiveSha256": "5ce396ed58bfeda473f5fdb3a92d15e5a6e7b06db0b465f44495b553535a6066",
+      "limits": "Android/iOS 真机未复测；真实供应商模型未验证"
+    }
+  }
+}

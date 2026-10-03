@@ -57,6 +57,9 @@ export class ReaderView extends ItemView {
   private progressTimer: number | null = null;
   private annotationSaving = false;
   private opened = false;
+  private panelSession = 0;
+  private deletingNoteId: string | null = null;
+  private confirmingNoteId: string | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -97,6 +100,8 @@ export class ReaderView extends ItemView {
   async onClose(): Promise<void> {
     this.opened = false;
     ++this.generation;
+    this.closePanels();
+    this.draft = null;
     this.unsub?.();
     this.unsubSettings?.();
     this.unsub = this.unsubSettings = null;
@@ -238,17 +243,6 @@ export class ReaderView extends ItemView {
     toc.append(tocTitle, this.tocBody);
     this.tocPanel = toc;
 
-    const qp = el("div", "qr-panel qr-questions-panel");
-    const qpTitle = el("div", "qr-drawer-title", "本章三问");
-    const qpClose = el("button", "qr-icon-btn");
-    setIcon(qpClose, "x");
-    qpClose.setAttribute("aria-label", "关闭本章三问");
-    qpClose.onclick = () => this.closePanels();
-    qpTitle.appendChild(qpClose);
-    this.questionsBody = el("div", "qr-drawer-body");
-    qp.append(qpTitle, this.questionsBody);
-    this.questionsPanel = qp;
-
     const card = el("div", "qr-annot-card qr-hidden");
     this.annotCard = card;
     const markMenu = el("div", "qr-mark-menu qr-hidden");
@@ -257,7 +251,7 @@ export class ReaderView extends ItemView {
     markMenu.onmousedown = (event) => event.preventDefault();
     this.markMenu = markMenu;
 
-    root.append(mask, toc, qp, markMenu, card);
+    root.append(mask, toc, markMenu, card);
   }
 
   // ------------------------------------------------------------ open book
@@ -270,10 +264,11 @@ export class ReaderView extends ItemView {
       return;
     }
     if (this.entry?.id === entry.id && this.engine) {
-      this.applyThemeClass();
+      await this.applyThemeClass();
       return;
     }
     const generation = ++this.generation;
+    this.closePanels();
     await this.persistProgress(true);
     if (generation !== this.generation) return;
     const previous = this.entry;
@@ -378,7 +373,7 @@ export class ReaderView extends ItemView {
         .ensureQuestions(entry, loc.chapterId)
         .then(() => this.renderQuestions())
         .catch(() => this.renderQuestions());
-      if (!this.questionsPanel.hasClass("qr-open")) this.renderQuestions();
+      this.renderQuestions();
     }
   }
 
@@ -434,7 +429,7 @@ export class ReaderView extends ItemView {
       this.closeMarkMenu();
       return;
     }
-    if (this.tocPanel.hasClass("qr-open") || this.questionsPanel.hasClass("qr-open") ||
+    if (this.tocPanel.hasClass("qr-open") ||
         this.root.querySelector(".qr-reader-settings, .qr-modal-form")) {
       this.closePanels();
       return;
@@ -451,7 +446,7 @@ export class ReaderView extends ItemView {
       : theme];
   }
 
-  private applyThemeClass(): void {
+  private applyThemeClass(): Promise<void> | undefined {
     const colors = this.resolvedTheme();
     this.root.toggleClass("qr-theme-dark", colors.dark);
     this.root.toggleClass("qr-theme-light", !colors.dark);
@@ -459,8 +454,8 @@ export class ReaderView extends ItemView {
     this.root.style.setProperty("--qr-reading-fg", colors.foreground);
     this.root.style.setProperty("--qr-reading-muted", colors.muted);
     if (this.engine) {
-      void this.engine.applyLayout(this.plugin.settings.reading, colors)
-        .catch((error: unknown) => new Notice(`布局更新失败：${error instanceof Error ? error.message : String(error)}`));
+      return this.engine.applyLayout(this.plugin.settings.reading, colors)
+        .catch((error: unknown) => { new Notice(`布局更新失败：${error instanceof Error ? error.message : String(error)}`); });
     }
   }
 
@@ -600,15 +595,16 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ questions
 
   private toggleQuestions(): void {
-    const panel = this.questionsPanel;
-    this.closePanels();
-    panel.addClass("qr-open");
-    this.root.querySelector(".qr-mask")?.addClass("qr-show");
+    if (this.entry?.reading.book.format === "cbz") return;
+    if (this.questionsPanel?.isConnected) { this.closePanels(); return; }
+    this.questionsPanel = this.createReadingSheet("本章三问", "qr-questions-panel");
+    this.questionsBody = el("div", "qr-reading-sheet-body");
+    this.questionsPanel.appendChild(this.questionsBody);
     this.renderQuestions();
   }
 
   private renderQuestions(): void {
-    if (!this.questionsPanel.hasClass("qr-open")) return;
+    if (!this.opened || !this.questionsPanel?.isConnected) return;
     const entry = this.entry;
     const body = this.questionsBody;
     body.empty();
@@ -635,27 +631,55 @@ export class ReaderView extends ItemView {
       return;
     }
     const latest = versions[versions.length - 1];
-    for (const q of latest.questions) {
-      const item = el("div", "qr-question-item");
-      item.appendChild(el("div", "qr-question-type", QUESTION_LABELS[q.type]));
-      item.appendChild(el("div", "qr-question-text", q.text));
+    const chapterId = this.currentChapterId;
+    for (const type of ["core", "logic", "retell"] as const) {
+      const q = latest.questions.find((question) => question.type === type);
+      if (!q) continue;
+      const item = el("button", "qr-question-item qr-question-link");
+      item.appendChild(el("span", "qr-question-type", QUESTION_LABELS[q.type]));
+      item.appendChild(el("span", "qr-question-text", q.text));
+      item.setAttribute("aria-label", `${QUESTION_LABELS[q.type]}：${q.text}，进入闭卷回答`);
+      item.onclick = () => { if (chapterId) void this.answerQuestion(chapterId, q.id, latest.version, item); };
       body.appendChild(item);
     }
+    body.appendChild(el("p", "qr-reading-help", "点击任一问题开始闭卷回答；三题全部完成后一起提交。"));
     if (versions.length > 1) {
       body.appendChild(el("div", "qr-muted", `第 ${latest.version} 版 · 共 ${versions.length} 个版本`));
     }
+  }
+
+  private async answerQuestion(chapterId: string, id: string, version: number, button: HTMLButtonElement): Promise<void> {
+    const entry = this.entry;
+    const generation = this.generation;
+    const panelSession = this.panelSession;
+    if (!entry || button.disabled) return;
+    button.disabled = true;
+    try {
+      await this.persistProgress(true);
+      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
+      this.closePanels();
+      await this.plugin.openAnswer(entry.id, chapterId, "answer", undefined, { id, version });
+    } catch (error) {
+      if (this.opened && generation === this.generation) new Notice(`打开回答失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally { button.disabled = false; }
   }
 
   private async regenerate(): Promise<void> {
     const entry = this.entry;
     const chapterId = this.currentChapterId;
     if (!entry || !chapterId) return;
-    this.questionsBody.empty();
-    this.questionsBody.appendChild(el("div", "qr-muted qr-pulse", "正在生成本章问题……"));
+    const generation = this.generation;
+    const panelSession = this.panelSession;
+    if (this.questionsPanel?.isConnected) {
+      this.questionsBody.empty();
+      this.questionsBody.appendChild(el("div", "qr-muted qr-pulse", "正在生成本章问题……"));
+    }
     try {
       await this.plugin.library.regenerateQuestions(entry, chapterId);
+      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
       this.renderQuestions();
     } catch (e) {
+      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
       new Notice(`生成失败: ${e instanceof Error ? e.message : String(e)}`);
       this.renderQuestions();
     }
@@ -790,6 +814,7 @@ export class ReaderView extends ItemView {
     this.closePanels();
     this.panelTrigger = active instanceof HTMLElement ? active : null;
     this.contentHost.inert = true;
+    this.header.inert = this.bottomBar.inert = true;
     this.root.querySelector(".qr-mask")?.addClass("qr-show");
     const sheet = el("section", `qr-reader-settings qr-reading-sheet ${extraClass}`);
     sheet.setAttribute("role", "dialog");
@@ -808,8 +833,8 @@ export class ReaderView extends ItemView {
       const first = controls[0];
       const last = controls[controls.length - 1];
       const focused = sheet.ownerDocument.activeElement;
-      if (event.shiftKey && focused === first) { event.preventDefault(); last?.focus(); }
-      else if (!event.shiftKey && focused === last) { event.preventDefault(); first?.focus(); }
+      if (event.shiftKey && (focused === first || !sheet.contains(focused))) { event.preventDefault(); last?.focus({ preventScroll: true }); }
+      else if (!event.shiftKey && (focused === last || !sheet.contains(focused))) { event.preventDefault(); first?.focus({ preventScroll: true }); }
     };
     this.root.appendChild(sheet);
     close.focus({ preventScroll: true });
@@ -897,10 +922,58 @@ export class ReaderView extends ItemView {
       };
       const edit = el("button", "qr-btn qr-btn-sm", record.kind === "highlight" ? "写批注" : "编辑批注");
       edit.onclick = () => { this.closePanels(); this.openAnnotationEdit(record.id); };
-      actions.append(jump, edit);
+      const remove = el("button", "qr-btn qr-btn-sm", "删除笔记");
+      remove.disabled = this.deletingNoteId !== null;
+      remove.onclick = () => this.confirmDeleteNote(record, note, actions);
+      actions.append(jump, edit, remove);
       note.appendChild(actions);
       body.appendChild(note);
+      if (this.confirmingNoteId === record.id && !this.deletingNoteId) this.confirmDeleteNote(record, note, actions, false);
     }
+  }
+
+  private confirmDeleteNote(record: AnnotationRecord, note: HTMLElement, actions: HTMLElement, focus = true): void {
+    if (this.deletingNoteId) return;
+    this.confirmingNoteId = record.id;
+    actions.empty();
+    const warning = el("p", "qr-note-delete-warning", "删除后将同时移除划线、批注和已收录的 AI 解读，无法撤销。");
+    warning.setAttribute("role", "alert");
+    note.insertBefore(warning, actions);
+    const cancel = el("button", "qr-btn qr-btn-sm", "取消");
+    cancel.onclick = () => {
+      this.confirmingNoteId = null;
+      this.renderNotes();
+      this.root.querySelector<HTMLButtonElement>(".qr-notes-sheet .qr-icon-btn")?.focus({ preventScroll: true });
+    };
+    const confirm = el("button", "qr-btn qr-btn-sm qr-btn-danger", "确认删除笔记");
+    confirm.onclick = async () => {
+      const entry = this.entry;
+      const engine = this.engine;
+      const generation = this.generation;
+      const panelSession = this.panelSession;
+      if (!entry || this.deletingNoteId) return;
+      this.deletingNoteId = record.id;
+      this.confirmingNoteId = null;
+      confirm.disabled = cancel.disabled = true;
+      try {
+        await this.plugin.library.deleteAnnotation(entry, record.id);
+        if (!this.opened || generation !== this.generation) return;
+        if (this.engine === engine) engine?.removeHighlight(record);
+        if (panelSession === this.panelSession) new Notice("笔记已删除");
+      } catch (error) {
+        if (this.opened && generation === this.generation && panelSession === this.panelSession) {
+          new Notice(`删除笔记失败：${error instanceof Error ? error.message : String(error)}`);
+        }
+      } finally {
+        this.deletingNoteId = null;
+        if (this.opened && generation === this.generation && panelSession === this.panelSession) {
+          this.renderNotes();
+          this.root.querySelector<HTMLButtonElement>(".qr-notes-sheet .qr-icon-btn")?.focus({ preventScroll: true });
+        }
+      }
+    };
+    actions.append(cancel, confirm);
+    if (focus) cancel.focus({ preventScroll: true });
   }
 
   // ------------------------------------------------------------ navigation
@@ -942,7 +1015,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ annotations
 
   private openSelectionMenu(selection: EngineSelection): void {
-    if (!this.entry || this.draft || this.annotationSaving) return;
+    if (!this.entry || this.entry.reading.book.format === "cbz" || this.draft || this.annotationSaving || this.contentHost.inert) return;
     const record = this.entry.reading.annotations.find((record) =>
       selection.cfi ? record.cfi === selection.cfi :
         record.pdfPage === selection.pdfPage && record.itemRanges?.length === selection.itemRanges?.length &&
@@ -952,12 +1025,12 @@ export class ReaderView extends ItemView {
         })
     );
     this.closePanels();
-    this.markTarget = record ? { record, anchor: selection.anchor } : { selection, anchor: selection.anchor };
+    this.markTarget = { record, selection, anchor: selection.anchor };
     this.renderMarkMenu();
   }
 
   private openMarkMenu(id: string, anchor?: SelectionAnchor): void {
-    if (!this.entry || this.draft || this.annotationSaving) return;
+    if (!this.entry || this.entry.reading.book.format === "cbz" || this.draft || this.annotationSaving || this.contentHost.inert) return;
     const record = this.entry.reading.annotations.find((record) => record.id === id);
     if (!record) return;
     this.closePanels();
@@ -988,6 +1061,14 @@ export class ReaderView extends ItemView {
       menu.appendChild(button);
     };
     const record = target.record;
+    const selection = target.selection ?? (record ? {
+      text: record.text, chapterId: record.chapterId, cfi: record.cfi,
+      pdfPage: record.pdfPage, itemRanges: record.itemRanges, sortKey: record.sortKey,
+    } : undefined);
+    if (selection) {
+      addAction("复制", () => void this.copySelection(selection, target));
+      addAction("AI 解读", () => this.openSelectionExplanation(selection, record));
+    }
     if (record) {
       addAction(target.confirmDelete ? "确认取消画线及批注" : "取消画线", () => {
         if (record.kind !== "highlight" && (record.note || record.aiExplanation) && !target.confirmDelete) {
@@ -1018,6 +1099,102 @@ export class ReaderView extends ItemView {
     const top = above >= 8 ? above : (anchor?.bottom ?? root.top) - root.top + 8;
     menu.style.left = `${Math.max(8, Math.min(left, root.width - box.width - 8))}px`;
     menu.style.top = `${Math.max(8, Math.min(top, root.height - box.height - 8))}px`;
+  }
+
+  private async copySelection(selection: EngineSelection, target: MarkTarget): Promise<void> {
+    const generation = this.generation;
+    try {
+      const clipboard = this.contentEl.ownerDocument.defaultView?.navigator.clipboard;
+      if (!clipboard?.writeText) throw new Error("当前环境不支持剪贴板，请使用系统复制操作");
+      await clipboard.writeText(selection.copyText ?? selection.text);
+      if (this.opened && generation === this.generation && this.markTarget === target) new Notice("已复制选文");
+    } catch (error) {
+      if (this.opened && generation === this.generation && this.markTarget === target) {
+        new Notice(`复制失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+
+  private openSelectionExplanation(selection: EngineSelection, record?: AnnotationRecord): void {
+    const entry = this.entry;
+    const engine = this.engine;
+    if (!entry || !engine || entry.reading.book.format === "cbz") return;
+    const chapterId = selection.chapterId ?? this.currentChapterId ?? "";
+    const generation = this.generation;
+    const sheet = this.createReadingSheet("AI 解读", "qr-explanation-sheet");
+    const panelSession = this.panelSession;
+    const current = (): boolean => this.opened && this.generation === generation &&
+      this.panelSession === panelSession && sheet.isConnected;
+    const body = el("div", "qr-reading-sheet-body");
+    const quote = el("blockquote", "qr-note-quote qr-explanation-quote", selection.text);
+    const result = el("div", "qr-explanation-result");
+    result.setAttribute("aria-live", "polite");
+    const actions = el("div", "qr-ai-actions");
+    const retry = el("button", "qr-btn", "重试解读");
+    const save = el("button", "qr-btn qr-btn-primary", "存入笔记");
+    let text = "";
+    let loading = false;
+    let saving = false;
+    let saved = false;
+    save.disabled = true;
+    body.append(quote, result, actions, el("p", "qr-reading-help", "AI 解读仅供参考。只有点击「存入笔记」才会保存。"));
+    actions.append(retry, save);
+    sheet.appendChild(body);
+    const request = async (): Promise<void> => {
+      if (loading || saving || !current()) return;
+      loading = true;
+      retry.disabled = save.disabled = true;
+      result.setText("正在结合上下文解读……");
+      result.setAttribute("aria-busy", "true");
+      try {
+        let context = { before: "", after: "" };
+        try { context = await engine.getSelectionContext(selection); } catch { /* 上下文为尽力读取，选文始终保留。 */ }
+        if (!current()) return;
+        const explanation = await explainSelection(getAiConfig(this.plugin.settings.ai),
+          entry.reading.book.title, entry.reading.chapters[chapterId]?.title ?? "", selection.text, context);
+        if (!current()) return;
+        text = explanation;
+        result.setText(text);
+        retry.setText("重新解读");
+        save.disabled = saved || !chapterId;
+      } catch (error) {
+        if (!current()) return;
+        text = "";
+        result.setText(`解读失败：${error instanceof Error ? error.message : String(error)}`);
+        retry.setText("重试解读");
+      } finally {
+        if (current()) {
+          loading = false;
+          retry.disabled = false;
+          result.setAttribute("aria-busy", "false");
+        }
+      }
+    };
+    retry.onclick = () => void request();
+    save.onclick = async () => {
+      if (!text || saved || saving || loading || !current()) return;
+      saving = true;
+      save.disabled = retry.disabled = true;
+      try {
+        if (record) {
+          if (!entry.reading.annotations.some((annotation) => annotation.id === record.id)) throw new Error("原笔记已删除，请重新选择原文");
+          await this.plugin.library.updateAnnotation(entry, record.id, { kind: "annotation", aiExplanation: text });
+        } else await this.saveSelection(selection, "annotation", undefined, text);
+        if (!current()) return;
+        saved = true;
+        save.setText("已存入笔记");
+        new Notice("AI 解读已存入笔记");
+      } catch (error) {
+        if (current()) new Notice(`保存失败：${error instanceof Error ? error.message : String(error)}`);
+      } finally {
+        if (current()) {
+          saving = false;
+          save.disabled = saved;
+          retry.disabled = saved;
+        }
+      }
+    };
+    void request();
   }
 
   private async highlightSelection(target: MarkTarget): Promise<void> {
@@ -1209,7 +1386,9 @@ export class ReaderView extends ItemView {
   private async requestAiExplanation(): Promise<void> {
     const draft = this.draft;
     const entry = this.entry;
-    if (!draft || !entry) return;
+    const generation = this.generation;
+    const engine = this.engine;
+    if (!draft || !entry || entry.reading.book.format === "cbz") return;
     const sel =
       draft.mode === "create"
         ? draft.selection
@@ -1227,10 +1406,11 @@ export class ReaderView extends ItemView {
     try {
       let context = { before: "", after: "" };
       try {
-        context = await this.engine?.getSelectionContext(sel) ?? { before: "", after: "" };
+        context = await engine?.getSelectionContext(sel) ?? { before: "", after: "" };
       } catch {
         /* context is best-effort */
       }
+      if (!this.opened || generation !== this.generation || this.draft !== draft) return;
       const ch = entry.reading.chapters[draft.chapterId];
       const text = await explainSelection(
         getAiConfig(this.plugin.settings.ai),
@@ -1239,24 +1419,25 @@ export class ReaderView extends ItemView {
         sel.text,
         context
       );
-      if (this.draft === draft) {
+      if (this.opened && generation === this.generation && this.draft === draft) {
         draft.aiText = text;
         draft.aiIncluded = draft.mode === "edit" ? draft.aiIncluded : true;
         draft.aiLoading = false;
         this.renderAnnotationCard();
       }
     } catch (e) {
-      if (this.draft === draft) {
+      if (this.opened && generation === this.generation && this.draft === draft) {
         draft.aiLoading = false;
         this.renderAnnotationCard();
+        new Notice(`AI 解释失败: ${e instanceof Error ? e.message : String(e)}`);
       }
-      new Notice(`AI 解释失败: ${e instanceof Error ? e.message : String(e)}`);
     }
   }
 
   private async saveAnnotation(): Promise<void> {
     const draft = this.draft;
     const entry = this.entry;
+    const generation = this.generation;
     if (!draft || !entry) return;
     const note = draft.note.trim();
     const ai = draft.aiIncluded && draft.aiText ? draft.aiText : undefined;
@@ -1269,6 +1450,7 @@ export class ReaderView extends ItemView {
     } else if (draft.selection) {
       await this.saveSelection(draft.selection, "annotation", note, ai);
     }
+    if (!this.opened || generation !== this.generation || this.draft !== draft) return;
     this.draft = null;
     this.renderAnnotationCard();
   }
@@ -1276,16 +1458,22 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ panels
 
   private closePanels(): void {
+    ++this.panelSession;
+    this.confirmingNoteId = null;
     this.closeMarkMenu(false);
     this.tocPanel.removeClass("qr-open");
-    this.questionsPanel.removeClass("qr-open");
     this.root.querySelector(".qr-mask")?.removeClass("qr-show");
     this.contentHost.inert = false;
+    this.header.inert = this.bottomBar.inert = this.chromeHidden;
     const trigger = this.panelTrigger;
     this.panelTrigger = null;
-    trigger?.focus({ preventScroll: true });
     this.root.querySelectorAll(".qr-reader-settings").forEach((n) => n.remove());
     this.root.querySelectorAll(".qr-modal-form").forEach((n) => n.remove());
+    if (this.opened) {
+      const focusTarget = trigger?.isConnected && !trigger.closest("[inert]") && !this.markMenu.contains(trigger)
+        ? trigger : this.contentHost;
+      if (trigger) focusTarget.focus({ preventScroll: true });
+    }
   }
 
   private onLibraryDataChanged(): void {
@@ -1294,6 +1482,9 @@ export class ReaderView extends ItemView {
     const fresh = this.plugin.library.get(entry.id);
     if (!fresh || !isHealthyBook(fresh) || fresh.dir !== entry.dir) {
       ++this.generation;
+      this.closePanels();
+      this.draft = null;
+      this.renderAnnotationCard();
       this.engine?.destroy();
       this.engine = null;
       this.entry = null;

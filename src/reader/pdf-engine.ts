@@ -370,7 +370,7 @@ export class PdfEngine implements ReaderEngine {
         top: pageRect.top + first.y * pageRect.height,
         bottom: pageRect.top + (first.y + first.height) * pageRect.height,
       } : undefined;
-      this.hooks.onSelect({ text, chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start, anchor });
+      this.hooks.onSelect({ text, copyText: selection.toString(), chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start, anchor });
       return;
     }
   }

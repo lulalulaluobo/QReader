@@ -197,17 +197,19 @@ export class LibraryManager {
     await this.deps.app.vault.adapter.rmdir(entry.dir, true);
     this.entriesById.delete(entry.id);
     this.coverMem.delete(entry.dir);
-    const cover = this.coverPath(entry);
+    const cover = await this.coverPath(entry);
     if (await this.fs.exists(cover)) await this.fs.remove(cover);
     this.deps.notifyChanged();
   }
 
-  private coverPath(entry: BookEntry): string {
-    const key = encodeURIComponent(entry.dir);
+  private async coverPath(entry: BookEntry): Promise<string> {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(entry.dir));
+    let key = "";
+    for (const byte of new Uint8Array(digest)) key += byte.toString(16).padStart(2, "0");
     return normalizePath(`${this.deps.configDir}/plugins/${this.deps.pluginId}/cover-cache/${key}.txt`);
   }
-  private async saveCover(entry: BookEntry, data: string): Promise<void> {
-    const path = this.coverPath(entry);
+  private async saveCover(entry: BookEntry, data: string, cachedPath?: string): Promise<void> {
+    const path = cachedPath ?? await this.coverPath(entry);
     await this.fs.mkdir(path.slice(0, path.lastIndexOf("/")));
     await this.fs.write(path, data);
     this.coverMem.set(entry.dir, data);
@@ -215,7 +217,7 @@ export class LibraryManager {
   async getCover(entry: BookEntry): Promise<string | null> {
     const cached = this.coverMem.get(entry.dir);
     if (cached) return cached;
-    const path = this.coverPath(entry);
+    const path = await this.coverPath(entry);
     if (await this.fs.exists(path)) {
       const data = await this.fs.read(path);
       if (!data.startsWith("data:image/")) throw new Error("封面缓存已损坏");
@@ -225,7 +227,7 @@ export class LibraryManager {
     const cover = entry.reading.book.format !== "pdf"
       ? await this.cache.withEpub(entry, epubCover)
       : await this.cache.withPdf(entry, renderPdfCover);
-    if (cover) await this.saveCover(entry, cover);
+    if (cover) await this.saveCover(entry, cover, path);
     return cover;
   }
 

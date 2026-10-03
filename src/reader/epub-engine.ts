@@ -38,10 +38,22 @@ export class EpubEngine implements ReaderEngine {
   private resizeTimer: number | undefined;
   private destroyed = false;
   private restoring = false;
+  private suspended = false;
   private generation = 0;
   private renderedMargin = 0;
   private spineLen = 1;
   private position: RestorePoint;
+  // Only the rendition owns paginated scrolling. Native selection/focus scrolling
+  // can otherwise leave a fractional-page offset that next/prev never removes.
+  private selectionScroll: { left: number; top: number } | null = null;
+  private pageScroll = { left: 0, top: 0 };
+  private selectionScroller: HTMLElement | null = null;
+  private guardSelectionScroll = () => {
+    if (this.restoring || !this.selectionScroll || !this.selectionScroller) return;
+    const { left, top } = this.selectionScroll;
+    if (this.selectionScroller.scrollLeft !== left) this.selectionScroller.scrollLeft = left;
+    if (this.selectionScroller.scrollTop !== top) this.selectionScroller.scrollTop = top;
+  };
   private keyboard = (event: KeyboardEvent) => this.handleKey(event);
   private sanitize = (doc: Document) => {
     for (const element of doc.querySelectorAll("script, iframe, object, embed, form, meta[http-equiv='refresh']")) element.remove();
@@ -110,6 +122,10 @@ export class EpubEngine implements ReaderEngine {
     if (this.destroyed) return;
     this.ro = new ResizeObserver(() => {
       window.clearTimeout(this.resizeTimer);
+      if (!container.clientWidth || !container.clientHeight) {
+        this.suspended = true;
+        return;
+      }
       this.resizeTimer = window.setTimeout(() => this.resize(), 250);
     });
     this.ro.observe(container);
@@ -145,6 +161,9 @@ export class EpubEngine implements ReaderEngine {
     const rendition = this.book.renderTo(host, options);
     this.rendition = rendition;
     this.attached.clear();
+    this.selectionScroller?.removeEventListener("scroll", this.guardSelectionScroll);
+    this.selectionScroller = null;
+    this.selectionScroll = null;
     this.applyTheme();
     rendition.on("relocated", (location: Location) => {
       if (generation === this.generation && !this.destroyed && !this.restoring) this.handleRelocated(location);
@@ -177,6 +196,10 @@ export class EpubEngine implements ReaderEngine {
         await rendition.display(item?.href);
       }
       if (this.destroyed || generation !== this.generation) return;
+      if (this.mode === "paginated") {
+        this.selectionScroller = host.querySelector<HTMLElement>(".epub-container");
+        this.selectionScroller?.addEventListener("scroll", this.guardSelectionScroll);
+      }
       for (const annotation of this.marks.values()) this.attachHighlight(annotation);
       // reportLocation resolves on epub.js's animation-frame relocation. Keep the
       // intermediate default chapter suppressed throughout that frame.
@@ -202,6 +225,23 @@ export class EpubEngine implements ReaderEngine {
       boundary.collapse(true);
       this.boundaries.set(chapter, contents.cfiFromRange(boundary));
     }
+    const rememberPage = () => {
+      if (this.mode !== "paginated" || !this.selectionScroller || this.selectionScroll) return;
+      this.pageScroll = { left: this.selectionScroller.scrollLeft, top: this.selectionScroller.scrollTop };
+    };
+    doc.addEventListener("pointerdown", rememberPage, { passive: true });
+    doc.addEventListener("touchstart", rememberPage, { passive: true });
+    doc.addEventListener("selectionchange", () => {
+      if (this.mode !== "paginated" || this.restoring || this.destroyed) return;
+      const selected = contents.window.getSelection();
+      if (selected && !selected.isCollapsed) {
+        this.selectionScroll ??= { ...this.pageScroll };
+        this.guardSelectionScroll();
+      } else {
+        this.guardSelectionScroll();
+        this.selectionScroll = null;
+      }
+    });
     let touch: { x: number; y: number; time: number } | null = null;
     let swiped = false;
     doc.addEventListener("keydown", this.keyboard);
@@ -327,7 +367,16 @@ export class EpubEngine implements ReaderEngine {
 
   private handleRelocated(location: Location): void {
     const start = location.start;
+    if (!this.container?.clientWidth || !this.container.clientHeight) this.suspended = true;
+    if (this.suspended) return;
     if (!start || typeof start.index !== "number") return;
+    if (this.selectionScroll) {
+      this.guardSelectionScroll();
+      return;
+    }
+    if (this.selectionScroller) {
+      this.pageScroll = { left: this.selectionScroller.scrollLeft, top: this.selectionScroller.scrollTop };
+    }
     // EPUB.js 按空格拆词，长中文段落会把后续页报告成段首。用可见文字的
     // 原生 caret 生成同一种 CFI，避免新增定位格式或改写旧批注。
     const cfi = this.visibleCfi(start.cfi);
@@ -364,7 +413,7 @@ export class EpubEngine implements ReaderEngine {
       top: Math.max(surface.top, frame.top + rect.top),
       bottom: Math.min(surface.bottom, frame.top + rect.bottom),
     } : undefined;
-    this.hooks.onSelect({ text: selection.toString().trim(), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length, anchor });
+    this.hooks.onSelect({ text: selection.toString().trim(), copyText: selection.toString(), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length, anchor });
   }
 
   private attachHighlight(annotation: AnnotationRecord): void {
@@ -397,19 +446,23 @@ export class EpubEngine implements ReaderEngine {
   async goToChapter(chapterId: string, targetHref?: string): Promise<void> {
     const chapter = this.chapterById(chapterId);
     if (!chapter || chapter.spineIndex === undefined || !this.rendition) return;
+    this.clearSelection();
     await this.rendition.display(targetHref ?? chapter.href ?? this.book.spine.get(chapter.spineIndex).href);
   }
 
   async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
     if (!annotation.cfi || !this.rendition) throw new Error("这条批注没有可用的原文位置");
+    this.clearSelection();
     await this.rendition.display(annotation.cfi);
   }
 
   async next(): Promise<void> {
+    this.clearSelection();
     if (this.mode === "scrolled") this.scrollBy(0.85);
     else await this.rendition?.next();
   }
   async prev(): Promise<void> {
+    this.clearSelection();
     if (this.mode === "scrolled") this.scrollBy(-0.85);
     else await this.rendition?.prev();
   }
@@ -421,13 +474,15 @@ export class EpubEngine implements ReaderEngine {
 
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || !this.rendition || !this.container) return;
+    this.clearSelection();
     this.mode = mode;
     await this.rebuildRendition();
   }
 
   private async rebuildRendition(): Promise<void> {
     const cfi = this.position.cfi ?? this.rendition?.location?.start?.cfi;
-    const point = { ...this.position, cfi: cfi ? this.visibleCfi(cfi) : cfi };
+    const point = { ...this.position, cfi };
+    this.suspended = false;
     this.restoring = true;
     this.generation++;
     this.rendition?.destroy();
@@ -439,11 +494,17 @@ export class EpubEngine implements ReaderEngine {
   }
 
   async applyLayout(layout: ReadingLayout, theme: ReadingColors): Promise<void> {
-    const current = this.position.cfi ?? this.rendition?.location?.start?.cfi;
-    const cfi = current ? this.visibleCfi(current) : current;
+    this.clearSelection();
+    // 隐藏再显示后浏览器可能已把 scrollLeft 归零；已记录的 CFI 才是恢复依据。
+    const cfi = this.position.cfi ?? this.rendition?.location?.start?.cfi;
     this.layout = layout;
     this.theme = theme;
-    if (this.reflowable && this.rendition && layout.pageMargin !== this.renderedMargin) {
+    if (this.container && (!this.container.clientWidth || !this.container.clientHeight)) {
+      this.suspended = true;
+      return;
+    }
+    // 隐藏时 EPUB.js 会把 iframe 暂时缩成一页；恢复后重建，不能在未重排的 DOM 上定位。
+    if (this.suspended || this.reflowable && this.rendition && layout.pageMargin !== this.renderedMargin) {
       await this.rebuildRendition();
       return;
     }
@@ -470,6 +531,8 @@ export class EpubEngine implements ReaderEngine {
     return { before: before.toString().slice(-300), after: after.toString().slice(0, 300) };
   }
   clearSelection(): void {
+    this.guardSelectionScroll();
+    this.selectionScroll = null;
     // EPUB.js returns an array; its Rendition declaration incorrectly says Contents.
     const contents = (this.rendition?.getContents() ?? []) as unknown as ContentsLike[];
     for (const content of contents) content.window.getSelection()?.removeAllRanges();
@@ -478,7 +541,19 @@ export class EpubEngine implements ReaderEngine {
   resize(): void {
     const container = this.container;
     if (!container || this.destroyed) return;
-    this.rendition?.resize(container.clientWidth, container.clientHeight);
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+    if (!width || !height) {
+      this.suspended = true;
+      return;
+    }
+    if (this.restoring) return;
+    if (this.suspended) {
+      void this.rebuildRendition().catch((error: unknown) => this.reportError(error));
+      return;
+    }
+    this.clearSelection();
+    this.rendition?.resize(width, height);
   }
   private reportError(error: unknown): void { this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))); }
   destroy(): void {
@@ -486,6 +561,8 @@ export class EpubEngine implements ReaderEngine {
     this.destroyed = true;
     this.generation++;
     window.clearTimeout(this.resizeTimer);
+    this.selectionScroller?.removeEventListener("scroll", this.guardSelectionScroll);
+    this.selectionScroller = null;
     this.ro?.disconnect();
     this.contentHook?.deregister(this.sanitize);
     this.contentHook = null;

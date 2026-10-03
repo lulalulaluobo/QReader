@@ -171,10 +171,10 @@ export class QReaderPlugin extends Plugin {
     if (view instanceof ReaderView) await view.openBook(bookId);
   }
 
-  async openAnswer(bookId: string, chapterId: string, mode: "answer" | "review", scheduledFor?: string): Promise<void> {
+  async openAnswer(bookId: string, chapterId: string, mode: "answer" | "review", scheduledFor?: string, question?: { id: string; version: number }): Promise<void> {
     const leaf = await this.activateLeaf(VIEW_TYPE_ANSWER);
     const view = leaf?.view;
-    if (view instanceof AnswerView) await view.openFor(bookId, chapterId, mode, scheduledFor);
+    if (view instanceof AnswerView) await view.openFor(bookId, chapterId, mode, scheduledFor, question);
   }
 
   async openReview(bookId?: string): Promise<void> {

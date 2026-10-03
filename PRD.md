@@ -13,11 +13,11 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 
 
 ## 3. 功能范围
-- 书架：继续阅读、我的书籍、搜索、六种格式导入、封面、阅读进度、批注数量和书籍管理；长书名完整换行。
+- 书架：真实封面卡片网格与两行书名，紧凑搜索、六格式导入、继续阅读及书籍管理；保留原有菜单和底部导航。
 - 阅读：默认仅显示正文，轻点屏幕中央显示/隐藏上下工具栏；左右翻页/上下滚动、目录、章节导航、主题与字号、位置恢复、本章三问。
-- 选文：先在选文旁显示「划线 / 批注」小菜单；纯划线与有批注标记分别保存，只有选择批注才打开编辑卡片。
-- 批注：精确原文位置、浅黄划线、我的理解、按需 AI 解释、编辑及 Markdown 导出；「取消批注」只清除个人理解和收录的 AI 解释，保留同一划线及定位；「取消画线」删除整条标记及其批注。
-- 回答：隐藏原文，按核心/逻辑/复述三问逐题作答，完成后给极简反馈。
+- 选文：显示「划线 / 批注 / 复制 / AI 解读」菜单；复制原始选区文字，独立 AI 解读使用底部弹窗，仅明确「存入笔记」后持久化。
+- 批注：精确原文位置、浅黄划线、我的理解、按需 AI 解释、编辑及 Markdown 导出；笔记面板删除需确认并同步 JSON、Markdown 和高亮；「取消批注」保留同一划线及定位，「取消画线」删除整条标记。
+- 回答：本章三问使用底部面板，点任意题直接进入该题与对应版本的闭卷回答；允许先答第三题，三题全部完成后统一提交并给极简反馈，保留旧题目与答案历史。
 - 复习：待复习与全部章节只列正文，过滤封面、扉页、目录、序及其他前后辅文，但不删除这些章节的旧问题、回答、复习与批注；作答前不显示原文、旧答案或反馈，完成后比较完整历史答案。
 - AI 仅三场景：章节三问、所选文本解释、三问回答反馈；自定义 OpenAI 兼容接口，另有 DeepSeek/Agnes 只填各自 API Key 的预设。
 
@@ -43,15 +43,17 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 1. 初始化入口、Git 与中文 Trellis 规范。
 2. 完成阅读引擎、可靠存储和四页面交互。
 3. 构建并通过实际 Obsidian 六格式阅读、阅读记录与回忆闭环验收。
-4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.0 与 BRAT 安装文件。
+4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.1 与 BRAT 安装文件。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.0.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.1.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
 - 1.1.0 将阅读扩展为 EPUB、PDF、FB2、MOBI、AZW3、CBZ。未加密 MOBI/AZW3、独立 FB2 与 ZIP FB2 在内存组装为 EPUB 视图，阅读库仍保存原始文件字节和实际格式；CBZ 自然页序只提供图片阅读与页码位置。
 - 独立 Obsidian 1.12.4 Vault 实测六类原书导入/读取/重开，额外覆盖 `.fb2.zip` 导入别名；FB2/MOBI/AZW3 精确 CFI 批注可跳回原文。既有 EPUB/PDF 的 CFI、页内比例、划线、批注、题目版本、回答、复习与反馈保存重启后保持不变。
-- 320/375px 移动与 1440px 桌面视口实测纸感正文、三个阅读面板无横向溢出；明/暗配色、阅读 Escape、设置开关键盘操作和减少动态效果均检查。桌面与移动模拟均为 macOS Obsidian，不代表 Android/iOS 真机。
+- 1.1.1 在 macOS Obsidian 1.12.4 独立 Vault 验证原生选文滚动扰动恢复、复制、笔记删除同步、AI 解读失败重试与关闭迟到结果、任意题直达、问题版本切换和反馈重试。隐藏阅读页返回、退出重开及阅读模式切换保持 CFI。
+- 320/375/414/768/1024/1280/1440px 的浅深色书架、三问/AI 底部弹窗和回答页零横向溢出；三问焦点循环可用。视口模拟均为 macOS Obsidian，不代表 Android/iOS 真机。
 - AI 预设使用官方核实的 `deepseek-flash` / `https://api.deepseek.com` 和 `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1`；本地 OpenAI-compatible 协议服务通过实际 UI 探针、三问、批注解释与回答反馈流程。无供应商密钥；未验证外部联网或模型效果。密钥仅保存在插件 `data.json`，未加密。
 - 克隆调研参考 `joeseesun/qiaomu-reader` commit `cff28ba6`（GPL-3.0-only），未复制其插件代码：`src/reader-engine.js` 说明 Foliate.js 的 EPUB/MOBI/AZW3/FB2（独立/压缩）/CBZ 与独立 PDF 路径；`src/main.js` 展示扩展名路由；`src/status-bar.js` 与 `src/styles.css` 展示跟随活动阅读视图、卸载清理的宿主导航控制；`src/epub-zip.js` 记录无 UTF-8 ZIP 标志时的中文路径兼容问题。QReader 自行采用 EPUB.js/PDF.js 双引擎和 MIT 格式适配；依赖 Foliate.js 1.0.1、fflate 0.8.2，保留上游许可证声明。
 - 验收用的独立 Obsidian 为 1.12.4 与 1.13.7；OS 为 macOS。Android/iOS 真机、加密/DRM 书籍、真实供应商密钥均未测试，不宣称受支持。
 - GitHub Release 1.1.0 已发布并设为 latest，包含 BRAT 所需 `main.js`、`manifest.json`、`styles.css` 与手动安装包 `QReader-1.1.0.zip`。
+- 1.1.1 已完成构建、隔离验收与 ZIP 打包，远程发布待完成；长中文书名的封面缓存已改为 SHA-256 文件名，避免文件名过长。
 - 历史 GitHub Release 1.0.1 仍可通过 [GitHub 仓库](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 安装；生成的生产 `main.js` 不纳入源码分支。
