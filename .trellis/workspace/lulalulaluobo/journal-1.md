@@ -103,16 +103,16 @@
 
 | Hash | Message |
 |------|---------|
-| `b402b9551235b3eb375891090d19384f9b4cec92` | (see git log) |
+| `b402b9551235b3eb375891090d19384f9b4cec92` | 修复选文偏移与阅读交互，升级至 1.1.1 |
 
 ### Testing
 
-- [OK] (Add test results)
+- 已通过：`npm run build`、独立 Obsidian EPUB/PDF 行为验收、七种宽度的浅深色布局与四个公开 Release 附件下载校验；具体证据见上方「验收」和「发布」。
 
 ### Status
 
-[OK] **Completed**
+[OK] **已完成**
 
 ### Next Steps
 
-- None - task complete
+- 无，任务已完成。
