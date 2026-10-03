@@ -49,6 +49,7 @@ export interface AnnotationRecord {
   id: string;
   chapterId: string;
   createdAt: string; // ISO
+  kind?: "highlight" | "annotation"; // Missing on V1 records means annotation.
   updatedAt?: string;
   text: string; // quoted original text
   note?: string; // 我的理解 (may be empty)
@@ -72,6 +73,7 @@ export interface ChapterState {
   pdfStartPage?: number; // 1-based
   pdfEndPage?: number;
   custom?: boolean; // user-created PDF chapter
+  reviewExcluded?: boolean; // Auxiliary book sections remain readable, not reviewable.
   questionVersions: QuestionVersion[];
   answers: AnswerRecord[];
   reviews: ReviewRecord[];

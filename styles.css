@@ -289,6 +289,7 @@
   display: block;
   padding: 0;
   min-height: 44px;
+  height: auto;
   border: none;
   background: transparent;
   box-shadow: none;
@@ -400,18 +401,21 @@
   justify-content: space-between;
   gap: 4px;
 }
+.qr-card-title-row .qr-book-open {
+  flex: 1;
+  min-width: 0;
+  line-height: 1.5;
+}
 .qr-card-title {
   font-weight: 600;
   font-size: 14.5px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  display: block;
+  overflow-wrap: anywhere;
 }
 .qr-card-more {
   width: 44px;
   height: 44px;
+  flex: none;
 }
 .qr-card-meta {
   display: flex;
@@ -458,6 +462,12 @@
   overflow: hidden;
   overflow: clip;
 }
+.qr-reader-header {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 10;
+  transition: transform 200ms ease, opacity 200ms ease;
+}
 .qr-reader-top {
   display: flex;
   align-items: center;
@@ -465,8 +475,6 @@
   padding: 8px 10px;
   border-bottom: 1px solid var(--qr-border);
   background: var(--qr-bg);
-  z-index: 10;
-  transition: transform 200ms ease, opacity 200ms ease;
   flex: none;
 }
 .qr-reader-title {
@@ -494,6 +502,8 @@
   background: var(--qr-surface, #ffffff);
 }
 .qr-reader-bottom {
+  position: absolute;
+  inset: auto 0 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -551,22 +561,21 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.qr-reader.qr-chrome-hidden .qr-reader-meter {
-  visibility: hidden;
-}
 .qr-reader-bottom .qr-btn {
   padding-inline: 10px;
   flex: 1;
 }
-.qr-reader.qr-chrome-hidden .qr-reader-top {
+.qr-reader.qr-chrome-hidden .qr-reader-header {
   transform: translateY(-100%);
   opacity: 0;
+  visibility: hidden;
   pointer-events: none;
 }
 .qr-reader.qr-chrome-hidden .qr-reader-bottom {
   transform: translateY(100%);
   opacity: 0;
   pointer-events: none;
+  visibility: hidden;
 }
 
 .qr-reader.qr-theme-light {
@@ -822,6 +831,30 @@
   justify-content: flex-end;
   gap: 8px;
   margin-top: 14px;
+}
+
+/* Selection actions stay beside the text until the user chooses to annotate. */
+.qr-mark-menu {
+  position: absolute;
+  z-index: 40;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+  width: max-content;
+  max-width: calc(100% - 16px);
+  padding: 4px;
+  border: 1px solid var(--qr-border);
+  border-radius: 8px;
+  background: var(--qr-bg);
+  color: var(--qr-fg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  user-select: none;
+}
+.qr-mark-menu .qr-btn {
+  min-height: 44px;
+  padding: 8px 10px;
+  white-space: normal;
 }
 
 /* annotation card (bottom sheet) */

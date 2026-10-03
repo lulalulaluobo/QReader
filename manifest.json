@@ -1,7 +1,7 @@
 {
   "id": "qreader",
   "name": "QReader",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.5.0",
   "description": "Read with Questions. 带着问题读书：每章三问、批注、合上原文回答与复习。",
   "author": "QReader",

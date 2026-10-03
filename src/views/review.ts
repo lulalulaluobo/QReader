@@ -5,6 +5,7 @@ import { isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
 import { el, relTime, todayStr } from "../util";
 import { pendingReviewsOf } from "./answer";
+import { isReviewableChapter } from "../core/review-chapters";
 
 export const VIEW_TYPE_REVIEW = "qreader-review";
 
@@ -12,6 +13,8 @@ export class ReviewView extends ItemView {
   private tab: "due" | "all" = "due";
   private selectedBook: string | null = null;
   private entries: HealthyBookEntry[] = [];
+  private reviewExclusions = new Map<string, ReadonlyMap<string, boolean>>();
+  private classificationError = "";
   private opened = false;
   private revision = 0;
   private loading = false;
@@ -62,9 +65,19 @@ export class ReviewView extends ItemView {
     this.error = "";
     if (!this.entries.length) this.render();
     try {
-      const entries = await this.plugin.library.scan();
+      const entries = (await this.plugin.library.scan()).filter(isHealthyBook);
+      const failures: string[] = [];
+      const classifications = await Promise.all(entries.map(async (entry): Promise<[string, ReadonlyMap<string, boolean>]> => {
+        try { return [entry.id, await this.plugin.cache.getReviewExclusions(entry)]; }
+        catch (error) {
+          failures.push(`《${entry.reading.book.title}》：${error instanceof Error ? error.message : String(error)}`);
+          return [entry.id, new Map()];
+        }
+      }));
       if (!this.opened || revision !== this.revision) return;
-      this.entries = entries.filter(isHealthyBook);
+      this.entries = entries;
+      this.reviewExclusions = new Map(classifications);
+      this.classificationError = failures.length ? `部分书籍的结构信息读取失败，暂按章节标题和路径筛选。${failures.join("；")}` : "";
       if (!this.entries.some((entry) => entry.id === this.selectedBook)) this.selectedBook = this.entries[0]?.id ?? null;
     } catch (error) {
       if (!this.opened || revision !== this.revision) return;
@@ -97,6 +110,13 @@ export class ReviewView extends ItemView {
     }
     header.appendChild(tabs);
     root.appendChild(header);
+    if (this.classificationError) {
+      const warning = el("div", "qr-inline-error", this.classificationError);
+      warning.setAttribute("role", "status");
+      const retry = el("button", "qr-btn", "重试读取结构");
+      retry.onclick = () => void this.refresh();
+      root.append(warning, retry);
+    }
     if (this.error) {
       const error = el("div", "qr-inline-error", this.error);
       error.setAttribute("role", "alert");
@@ -118,11 +138,16 @@ export class ReviewView extends ItemView {
     root.appendChild(body);
     const today = todayStr();
     const rows = this.entries.flatMap((entry) => pendingReviewsOf(entry)
-      .filter(({ r }) => Boolean(r.scheduledFor && r.scheduledFor <= today))
+      .filter(({ r, ch, chapterId }) => isReviewableChapter(ch, this.reviewExclusions.get(entry.id)?.get(chapterId)) && Boolean(r.scheduledFor && r.scheduledFor <= today))
       .map((pending) => ({ entry, ...pending })));
     rows.sort((a, b) => (a.r.scheduledFor ?? "").localeCompare(b.r.scheduledFor ?? ""));
     if (!rows.length) {
-      body.appendChild(el("div", "qr-muted qr-empty", "没有到期的复习。\n你可以自由设置未来的复习日期，也可以从“全部章节”随时重新回答。"));
+      const hasChapters = this.entries.some((entry) => Object.entries(entry.reading.chapters)
+        .some(([id, chapter]) => isReviewableChapter(chapter, this.reviewExclusions.get(entry.id)?.get(id))));
+      const copy = this.entries.length && !hasChapters
+        ? "还没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看；PDF 可在阅读页的目录中新建章节。"
+        : "没有到期的复习。\n你可以自由设置未来的复习日期，也可以从“全部章节”随时重新回答。";
+      body.appendChild(el("div", "qr-muted qr-empty", copy));
       return;
     }
     for (const { entry, chapterId, ch, r } of rows) {
@@ -156,9 +181,14 @@ export class ReviewView extends ItemView {
     body.appendChild(chips);
     const target = this.entries.find((entry) => entry.id === this.selectedBook);
     if (!target) return;
-    const chapters = Object.entries(target.reading.chapters).sort((a, b) => a[1].index - b[1].index);
+    const chapters = Object.entries(target.reading.chapters)
+      .filter(([id, chapter]) => isReviewableChapter(chapter, this.reviewExclusions.get(target.id)?.get(id)))
+      .sort((a, b) => a[1].index - b[1].index);
     if (!chapters.length) {
-      body.appendChild(el("div", "qr-muted qr-empty", "这本书还没有章节。PDF 可在阅读页的目录中新建章节。"));
+      const copy = Object.keys(target.reading.chapters).length
+        ? "这本书没有可复习的正文章节。封面、序言等辅助内容仍可在阅读页查看。"
+        : "这本书还没有章节。PDF 可在阅读页的目录中新建章节。";
+      body.appendChild(el("div", "qr-muted qr-empty", copy));
       return;
     }
     body.appendChild(el("p", "qr-muted qr-tiny", "每次选择章节都会开始新的回忆；三题提交之后才能查看历次回答。"));

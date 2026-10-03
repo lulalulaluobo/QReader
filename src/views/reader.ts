@@ -12,10 +12,10 @@ import type {
 } from "../types";
 import { QUESTION_LABELS, chaptersOrdered, isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
-import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine } from "../reader/engine";
+import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, SelectionAnchor } from "../reader/engine";
 import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
-import { el } from "../util";
+import { el, genId } from "../util";
 import { explainSelection } from "../ai/tasks";
 
 export const VIEW_TYPE_READER = "qreader-reader";
@@ -29,7 +29,13 @@ interface AnnotDraft {
   aiText: string;
   aiIncluded: boolean;
   aiLoading: boolean;
-  confirmDelete: boolean;
+}
+
+interface MarkTarget {
+  selection?: EngineSelection;
+  record?: AnnotationRecord;
+  anchor?: SelectionAnchor;
+  confirmDelete?: boolean;
 }
 
 export class ReaderView extends ItemView {
@@ -37,10 +43,11 @@ export class ReaderView extends ItemView {
   private engine: ReaderEngine | null = null;
   private mode: ReadMode = "paginated";
   private currentChapterId: string | null = null;
-  private chromeHidden = false;
+  private chromeHidden = true;
   private tocNodes: TocNode[] | null = null;
   private lastProgressSave = 0;
   private draft: AnnotDraft | null = null;
+  private markTarget: MarkTarget | null = null;
   private unsub: (() => void) | null = null;
   private unsubSettings: (() => void) | null = null;
   private generation = 0;
@@ -74,6 +81,7 @@ export class ReaderView extends ItemView {
     this.registerDomEvent(this.contentEl, "keydown", (event) => {
       if (event.key === "Escape") {
         this.closePanels();
+        this.engine?.clearSelection();
         this.draft = null;
         this.renderAnnotationCard();
       }
@@ -114,7 +122,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ skeleton
 
   private root!: HTMLElement;
-  private topBar!: HTMLElement;
+  private header!: HTMLElement;
   private bottomBar!: HTMLElement;
   private contentHost!: HTMLElement;
   private readerTitleEl!: HTMLElement;
@@ -125,11 +133,13 @@ export class ReaderView extends ItemView {
   private questionsPanel!: HTMLElement;
   private questionsBody!: HTMLElement;
   private annotCard!: HTMLElement;
+  private markMenu!: HTMLElement;
 
   private buildSkeleton(): void {
     this.contentEl.empty();
     this.contentEl.addClass("qr-view");
     const root = el("div", "qr-reader");
+    root.toggleClass("qr-chrome-hidden", this.chromeHidden);
     this.contentEl.appendChild(root);
     this.root = root;
 
@@ -177,9 +187,12 @@ export class ReaderView extends ItemView {
     meter.append(this.progressBar, prog);
     bottom.append(prevCh, done, nextCh);
 
-    root.append(top, meter, host, bottom);
-    this.topBar = top;
+    const header = el("div", "qr-reader-header");
+    header.append(top, meter);
+    root.append(header, host, bottom);
+    this.header = header;
     this.bottomBar = bottom;
+    header.inert = bottom.inert = this.chromeHidden;
 
     // drawer + panels
     const mask = el("div", "qr-mask");
@@ -203,8 +216,13 @@ export class ReaderView extends ItemView {
 
     const card = el("div", "qr-annot-card qr-hidden");
     this.annotCard = card;
+    const markMenu = el("div", "qr-mark-menu qr-hidden");
+    markMenu.setAttribute("role", "group");
+    markMenu.setAttribute("aria-label", "选文操作");
+    markMenu.onmousedown = (event) => event.preventDefault();
+    this.markMenu = markMenu;
 
-    root.append(mask, toc, qp, card);
+    root.append(mask, toc, qp, markMenu, card);
   }
 
   // ------------------------------------------------------------ open book
@@ -232,7 +250,8 @@ export class ReaderView extends ItemView {
     this.lastLoc = null;
     this.lastProgressSave = 0;
     this.draft = null;
-    this.chromeHidden = false;
+    this.markTarget = null;
+    this.chromeHidden = true;
     this.mode = this.plugin.settings.reading.defaultMode;
     this.currentChapterId = entry.reading.progress.chapterId ?? null;
     this.tocNodes = null;
@@ -281,8 +300,8 @@ export class ReaderView extends ItemView {
     const generation = this.generation;
     const hooks: EngineHooks = {
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
-      onSelect: (sel) => { if (generation === this.generation) this.openAnnotationCreate(sel); },
-      onAnnotationClick: (id) => { if (generation === this.generation) this.openAnnotationEdit(id); },
+      onSelect: (sel) => { if (generation === this.generation) this.openSelectionMenu(sel); },
+      onAnnotationClick: (id, anchor) => { if (generation === this.generation) this.openMarkMenu(id, anchor); },
       onZoneTap: () => this.toggleChrome(),
       onSurfaceClick: () => this.closePanels(),
       onError: (error) => new Notice(`阅读失败：${error.message}`),
@@ -310,6 +329,8 @@ export class ReaderView extends ItemView {
   private onEngineLocation(loc: EngineLocation): void {
     const entry = this.entry;
     if (!entry) return;
+    if (this.markTarget && this.lastLoc && (loc.cfi !== this.lastLoc.cfi ||
+        loc.pdfPage !== this.lastLoc.pdfPage || loc.pageFraction !== this.lastLoc.pageFraction)) this.closeMarkMenu();
     this.lastLoc = loc;
     const chapterChanged = loc.chapterId !== this.currentChapterId;
     this.currentChapterId = loc.chapterId;
@@ -368,8 +389,19 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ chrome
 
   private toggleChrome(): void {
+    if (this.draft) return;
+    if (this.markTarget) {
+      this.closeMarkMenu();
+      return;
+    }
+    if (this.tocPanel.hasClass("qr-open") || this.questionsPanel.hasClass("qr-open") ||
+        this.root.querySelector(".qr-reader-settings, .qr-modal-form")) {
+      this.closePanels();
+      return;
+    }
     this.chromeHidden = !this.chromeHidden;
     this.root.toggleClass("qr-chrome-hidden", this.chromeHidden);
+    this.header.inert = this.bottomBar.inert = this.chromeHidden;
   }
 
   private resolvedTheme(): "light" | "dark" {
@@ -718,6 +750,133 @@ export class ReaderView extends ItemView {
 
   // ------------------------------------------------------------ annotations
 
+  private openSelectionMenu(selection: EngineSelection): void {
+    if (!this.entry || this.draft || this.annotationSaving) return;
+    const record = this.entry.reading.annotations.find((record) =>
+      selection.cfi ? record.cfi === selection.cfi :
+        record.pdfPage === selection.pdfPage && record.itemRanges?.length === selection.itemRanges?.length &&
+        record.itemRanges?.every((range, index) => {
+          const selected = selection.itemRanges?.[index];
+          return selected?.item === range.item && selected.start === range.start && selected.end === range.end;
+        })
+    );
+    this.closePanels();
+    this.markTarget = record ? { record, anchor: selection.anchor } : { selection, anchor: selection.anchor };
+    this.renderMarkMenu();
+  }
+
+  private openMarkMenu(id: string, anchor?: SelectionAnchor): void {
+    if (!this.entry || this.draft || this.annotationSaving) return;
+    const record = this.entry.reading.annotations.find((record) => record.id === id);
+    if (!record) return;
+    this.closePanels();
+    this.markTarget = { record, anchor };
+    this.renderMarkMenu();
+  }
+
+  private closeMarkMenu(clearSelection = true): void {
+    this.markTarget = null;
+    this.markMenu.empty();
+    this.markMenu.addClass("qr-hidden");
+    if (clearSelection) this.engine?.clearSelection();
+  }
+
+  private renderMarkMenu(): void {
+    const target = this.markTarget;
+    const menu = this.markMenu;
+    menu.empty();
+    if (!target) {
+      menu.addClass("qr-hidden");
+      return;
+    }
+    menu.removeClass("qr-hidden");
+    const addAction = (label: string, action: () => void): void => {
+      const button = el("button", "qr-btn qr-btn-ghost", label);
+      button.disabled = this.annotationSaving;
+      button.onclick = action;
+      menu.appendChild(button);
+    };
+    const record = target.record;
+    if (record) {
+      addAction(target.confirmDelete ? "确认取消画线及批注" : "取消画线", () => {
+        if (record.kind !== "highlight" && (record.note || record.aiExplanation) && !target.confirmDelete) {
+          target.confirmDelete = true;
+          this.renderMarkMenu();
+        } else {
+          void this.removeMark(target, false);
+        }
+      });
+      addAction(record.kind === "highlight" ? "批注" : "编辑批注", () => this.openAnnotationEdit(record.id));
+      if (record.kind !== "highlight") addAction("取消批注", () => void this.removeMark(target, true));
+    } else if (target.selection) {
+      const selection = target.selection;
+      addAction("划线", () => void this.highlightSelection(target));
+      addAction("批注", () => this.openAnnotationCreate(selection));
+    }
+    const close = el("button", "qr-icon-btn");
+    setIcon(close, "x");
+    close.setAttribute("aria-label", "关闭选文菜单");
+    close.disabled = this.annotationSaving;
+    close.onclick = () => this.closeMarkMenu();
+    menu.appendChild(close);
+    const root = this.root.getBoundingClientRect();
+    const box = menu.getBoundingClientRect();
+    const anchor = target.anchor;
+    const left = anchor ? (anchor.left + anchor.right) / 2 - root.left - box.width / 2 : (root.width - box.width) / 2;
+    const above = anchor ? anchor.top - root.top - box.height - 8 : root.height / 2 - box.height;
+    const top = above >= 8 ? above : (anchor?.bottom ?? root.top) - root.top + 8;
+    menu.style.left = `${Math.max(8, Math.min(left, root.width - box.width - 8))}px`;
+    menu.style.top = `${Math.max(8, Math.min(top, root.height - box.height - 8))}px`;
+  }
+
+  private async highlightSelection(target: MarkTarget): Promise<void> {
+    if (!target.selection || this.annotationSaving) return;
+    this.annotationSaving = true;
+    this.renderMarkMenu();
+    try {
+      await this.saveSelection(target.selection, "highlight");
+      if (this.markTarget === target) this.closeMarkMenu();
+    } catch (error) {
+      new Notice(`划线保存失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.annotationSaving = false;
+      this.renderMarkMenu();
+    }
+  }
+
+  private async removeMark(target: MarkTarget, commentOnly: boolean): Promise<void> {
+    const entry = this.entry;
+    const record = target.record;
+    const engine = this.engine;
+    if (!entry || !record || this.annotationSaving) return;
+    this.annotationSaving = true;
+    this.renderMarkMenu();
+    try {
+      if (commentOnly) await this.plugin.library.clearAnnotation(entry, record.id);
+      else await this.plugin.library.deleteAnnotation(entry, record.id);
+      if (!commentOnly && this.engine === engine) engine?.removeHighlight(record);
+      if (this.markTarget === target) this.closeMarkMenu();
+    } catch (error) {
+      new Notice(`${commentOnly ? "取消批注" : "取消画线"}失败：${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      this.annotationSaving = false;
+      this.renderMarkMenu();
+    }
+  }
+
+  private async saveSelection(selection: EngineSelection, kind: "highlight" | "annotation", note?: string, aiExplanation?: string): Promise<void> {
+    const entry = this.entry;
+    const engine = this.engine;
+    const chapterId = selection.chapterId ?? this.currentChapterId;
+    if (!entry || !chapterId) throw new Error("当前不在章节中，请先从目录创建或选择章节");
+    const record = await this.plugin.library.saveAnnotation(entry, {
+      id: genId("a"), chapterId, kind, text: selection.text, note, aiExplanation,
+      cfi: selection.cfi, pdfPage: selection.pdfPage, itemRanges: selection.itemRanges,
+      sortKey: selection.sortKey ?? 0,
+    });
+    if (this.engine === engine) engine?.addHighlight(record);
+  }
+
   private openAnnotationCreate(sel: EngineSelection): void {
     const entry = this.entry;
     if (!entry) return;
@@ -726,6 +885,7 @@ export class ReaderView extends ItemView {
       new Notice("当前不在章节中，无法批注");
       return;
     }
+    this.closeMarkMenu();
     this.draft = {
       mode: "create",
       chapterId,
@@ -734,7 +894,6 @@ export class ReaderView extends ItemView {
       aiText: "",
       aiIncluded: false,
       aiLoading: false,
-      confirmDelete: false,
     };
     this.renderAnnotationCard();
   }
@@ -744,6 +903,7 @@ export class ReaderView extends ItemView {
     if (!entry) return;
     const record = entry.reading.annotations.find((a) => a.id === id);
     if (!record) return;
+    this.closeMarkMenu();
     this.draft = {
       mode: "edit",
       chapterId: record.chapterId,
@@ -752,7 +912,6 @@ export class ReaderView extends ItemView {
       aiText: record.aiExplanation ?? "",
       aiIncluded: Boolean(record.aiExplanation),
       aiLoading: false,
-      confirmDelete: false,
     };
     this.renderAnnotationCard();
   }
@@ -794,30 +953,6 @@ export class ReaderView extends ItemView {
     this.renderAiArea(aiArea);
 
     const actions = el("div", "qr-annot-actions");
-    if (draft.mode === "edit") {
-      const del = el("button", "qr-btn qr-btn-danger", draft.confirmDelete ? "确认撤销划线？" : "撤销划线");
-      del.onclick = async () => {
-        if (!this.draft) return;
-        if (!this.draft.confirmDelete) {
-          this.draft.confirmDelete = true;
-          this.renderAnnotationCard();
-          return;
-        }
-        const rec = this.draft.record;
-        if (rec) {
-          try {
-            await this.plugin.library.deleteAnnotation(entry, rec.id);
-            this.engine?.removeHighlight(rec);
-          } catch (error) {
-            new Notice(`撤销失败：${error instanceof Error ? error.message : String(error)}`);
-            return;
-          }
-        }
-        this.draft = null;
-        this.renderAnnotationCard();
-      };
-      actions.appendChild(del);
-    }
     const cancel = el("button", "qr-btn", "取消");
     cancel.onclick = () => {
       this.draft = null;
@@ -936,22 +1071,12 @@ export class ReaderView extends ItemView {
     const ai = draft.aiIncluded && draft.aiText ? draft.aiText : undefined;
     if (draft.mode === "edit" && draft.record) {
       await this.plugin.library.updateAnnotation(entry, draft.record.id, {
+        kind: "annotation",
         note,
         aiExplanation: ai,
       });
     } else if (draft.selection) {
-      const record = await this.plugin.library.saveAnnotation(entry, {
-        id: `a-${Date.now().toString(36)}-${Math.floor(Math.random() * 1e6).toString(36)}`,
-        chapterId: draft.chapterId,
-        text: draft.selection.text,
-        note,
-        aiExplanation: ai,
-        cfi: draft.selection.cfi,
-        pdfPage: draft.selection.pdfPage,
-        itemRanges: draft.selection.itemRanges,
-        sortKey: draft.selection.sortKey ?? 0,
-      });
-      this.engine?.addHighlight(record);
+      await this.saveSelection(draft.selection, "annotation", note, ai);
     }
     this.draft = null;
     this.renderAnnotationCard();
@@ -960,6 +1085,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ panels
 
   private closePanels(): void {
+    this.closeMarkMenu(false);
     this.tocPanel.removeClass("qr-open");
     this.questionsPanel.removeClass("qr-open");
     this.root.querySelector(".qr-mask")?.removeClass("qr-show");

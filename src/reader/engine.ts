@@ -17,6 +17,14 @@ export interface EngineLocation {
   pageFraction?: number | null; // scroll position inside the page
 }
 
+/** A transient anchor in the host window's viewport, never persisted. */
+export interface SelectionAnchor {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+}
+
 export interface EngineSelection {
   text: string;
   chapterId?: string;
@@ -24,12 +32,13 @@ export interface EngineSelection {
   pdfPage?: number; // pdf
   itemRanges?: PdfItemRange[]; // pdf
   sortKey?: number;
+  anchor?: SelectionAnchor;
 }
 
 export interface EngineHooks {
   onLocation(loc: EngineLocation): void;
   onSelect(sel: EngineSelection): void;
-  onAnnotationClick(id: string): void;
+  onAnnotationClick(id: string, anchor?: SelectionAnchor): void;
   /** Tap in the central zone of the reading surface (toggle chrome). */
   onZoneTap(): void;
   /** Reading surface was clicked outside central zone / annotations. */
@@ -50,6 +59,7 @@ export interface ReaderEngine {
   applyLayout(layout: ReadingLayout, theme: "light" | "dark"): Promise<void>;
   addHighlight(a: AnnotationRecord): void;
   removeHighlight(a: AnnotationRecord): void;
+  clearSelection(): void;
   getSelectionContext(sel: EngineSelection): Promise<{ before: string; after: string }>;
   resize(): void;
   updateChapters?(chapters: ChapterState[]): void;

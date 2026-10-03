@@ -35,6 +35,7 @@ export function renderAnnotationEntry(a: AnnotationRecord): string {
 export function renderAnnotationsMd(reading: ReadingFile): string {
   const byChapter = new Map<string, AnnotationRecord[]>();
   for (const a of reading.annotations) {
+    if (a.kind === "highlight") continue;
     const list = byChapter.get(a.chapterId);
     if (list) list.push(a);
     else byChapter.set(a.chapterId, [a]);

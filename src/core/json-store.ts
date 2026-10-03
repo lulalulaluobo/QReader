@@ -99,7 +99,25 @@ export class JsonStore {
         restoreObject(this.live, before);
         throw error;
       }
-      if (afterCommit) await afterCommit(this.live);
+      if (afterCommit) {
+        try {
+          await afterCommit(this.live);
+        } catch (error) {
+          restoreObject(this.live, before);
+          try {
+            await this.flush();
+          } catch (rollbackError) {
+            this.damaged = true;
+            throw new Error("附属文件写入及 reading.json 回滚失败，写入已暂停；恢复副本已保留", { cause: rollbackError });
+          }
+          try {
+            await afterCommit(this.live);
+          } catch (rollbackError) {
+            throw new Error("reading.json 变更已撤销，但附属文件恢复失败；请检查目录写入权限后重新同步批注", { cause: rollbackError });
+          }
+          throw error;
+        }
+      }
     });
   }
 
@@ -220,6 +238,7 @@ export function validateReading(raw: unknown): ReadingFile {
     if (ch.spineIndex !== undefined) integer(ch.spineIndex, "spineIndex");
     optionalString(ch.href, "href"); optionalString(ch.hrefEnd, "hrefEnd");
     if (ch.custom !== undefined && typeof ch.custom !== "boolean") throw new Error("reading.json custom 无效");
+    if (ch.reviewExcluded !== undefined && typeof ch.reviewExcluded !== "boolean") throw new Error("reading.json reviewExcluded 无效");
     if (ch.pdfStartPage !== undefined) integer(ch.pdfStartPage, "pdfStartPage", 1);
     if (ch.pdfEndPage !== undefined) integer(ch.pdfEndPage, "pdfEndPage", typeof ch.pdfStartPage === "number" ? ch.pdfStartPage : 1);
     const versions = new Set<number>();
@@ -264,6 +283,8 @@ export function validateReading(raw: unknown): ReadingFile {
     string(a.id, "annotation.id"); string(a.chapterId, "annotation.chapterId"); string(a.text, "annotation.text"); string(a.createdAt, "annotation.createdAt");
     if (!(a.chapterId in chapters) || annotationIds.has(a.id)) throw new Error("reading.json 批注章节无效或编号重复");
     annotationIds.add(a.id); number(a.sortKey, "sortKey");
+    if (a.kind !== undefined && a.kind !== "highlight" && a.kind !== "annotation") throw new Error("reading.json 标记类型无效");
+    if (a.kind === "highlight" && (a.note || a.aiExplanation)) throw new Error("reading.json 纯划线不能包含批注内容");
     optionalString(a.updatedAt, "updatedAt"); optionalString(a.note, "note"); optionalString(a.aiExplanation, "aiExplanation"); optionalString(a.cfi, "annotation.cfi");
     if (a.pdfPage !== undefined) integer(a.pdfPage, "annotation.pdfPage", 1);
     if (a.itemRanges !== undefined) for (const rawRange of list(a.itemRanges, "itemRanges")) {

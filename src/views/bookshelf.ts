@@ -224,7 +224,9 @@ export class BookshelfView extends ItemView {
     const card = el("div", `qr-card${healthy ? "" : " qr-card-damaged"}`);
     const info = el("div", "qr-card-info");
     const titleRow = el("div", "qr-card-title-row");
-    const open = el("button", "qr-book-open qr-card-title", title);
+    const open = el("button", "qr-book-open");
+    open.appendChild(el("span", "qr-card-title", title));
+    open.title = title;
     open.setAttribute("aria-label", healthy ? `阅读《${title}》` : `查看《${title}》的损坏文件夹`);
     open.onclick = (event) => {
       event.stopPropagation();
@@ -241,7 +243,8 @@ export class BookshelfView extends ItemView {
     if (isHealthyBook(entry)) {
       const progress = entry.reading.progress;
       const chapter = progress.chapterId ? entry.reading.chapters[progress.chapterId] : undefined;
-      info.append(el("div", "qr-muted", entry.reading.book.author || "佚名"), el("div", "qr-muted qr-tiny", `${chapter?.title ?? "未开始"} · ${Math.round(progress.percent * 100)}% · 批注 ${entry.reading.annotations.length} · ${relTime(progress.lastReadAt)}`));
+      const annotationCount = entry.reading.annotations.filter((record) => record.kind !== "highlight").length;
+      info.append(el("div", "qr-muted", entry.reading.book.author || "佚名"), el("div", "qr-muted qr-tiny", `${chapter?.title ?? "未开始"} · ${Math.round(progress.percent * 100)}% · 批注 ${annotationCount} · ${relTime(progress.lastReadAt)}`));
       card.append(await this.coverEl(entry, ""), info);
       card.onclick = () => void this.plugin.openReader(entry.id);
     } else {

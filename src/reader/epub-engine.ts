@@ -207,15 +207,34 @@ export class EpubEngine implements ReaderEngine {
           event.stopImmediatePropagation();
           return;
         }
+        return;
       }
       if (swiped || element?.closest(`.${HL_CLASS}`)) { swiped = false; return; }
       const selection = contents.window.getSelection();
       if (selection && !selection.isCollapsed) return;
-      const width = contents.window.innerWidth;
-      const height = contents.window.innerHeight;
-      if (event.clientX > width / 3 && event.clientX < width * 2 / 3 && event.clientY > height / 4 && event.clientY < height * 3 / 4) this.hooks.onZoneTap();
+      const surface = this.container?.getBoundingClientRect();
+      const frame = contents.window.frameElement?.getBoundingClientRect();
+      if (!surface || !frame) return;
+      const hostX = frame.left + event.clientX;
+      const hostY = frame.top + event.clientY;
+      // EPUB.js proxies SVG mark events through the iframe. Hit-test before the
+      // centre-tap handler so opening a highlight never also reveals the chrome.
+      for (const mark of this.container!.querySelectorAll(`.${HL_CLASS} rect`)) {
+        const rect = mark.getBoundingClientRect();
+        const id = mark.parentElement?.getAttribute("data-id");
+        if (id && hostX >= rect.left && hostX <= rect.right && hostY >= rect.top && hostY <= rect.bottom) {
+          this.hooks.onAnnotationClick(id, rect);
+          return;
+        }
+      }
+      const x = (hostX - surface.left) / surface.width;
+      const y = (hostY - surface.top) / surface.height;
+      if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
       else this.hooks.onSurfaceClick();
     }, true);
+    doc.addEventListener("contextmenu", (event) => {
+      if (!contents.window.getSelection()?.isCollapsed) event.preventDefault();
+    });
   }
 
   private navigate(forward: boolean): void {
@@ -264,14 +283,30 @@ export class EpubEngine implements ReaderEngine {
     prefix.setEnd(range.startContainer, range.startOffset);
     const match = /epubcfi\(\/6\/(\d+)/.exec(cfi);
     const spine = match ? (Number(match[1]) - 2) / 2 : 0;
-    this.hooks.onSelect({ text: selection.toString().trim(), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length });
+    const frame = contents.window.frameElement?.getBoundingClientRect();
+    const surface = this.container?.getBoundingClientRect();
+    const rect = frame && surface ? Array.from(range.getClientRects()).find((rect) =>
+      rect.width > 0 && rect.height > 0 && frame.left + rect.right > surface.left &&
+      frame.left + rect.left < surface.right && frame.top + rect.bottom > surface.top &&
+      frame.top + rect.top < surface.bottom
+    ) : undefined;
+    const anchor = frame && surface && rect ? {
+      left: Math.max(surface.left, frame.left + rect.left),
+      right: Math.min(surface.right, frame.left + rect.right),
+      top: Math.max(surface.top, frame.top + rect.top),
+      bottom: Math.min(surface.bottom, frame.top + rect.bottom),
+    } : undefined;
+    this.hooks.onSelect({ text: selection.toString().trim(), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length, anchor });
   }
 
   private attachHighlight(annotation: AnnotationRecord): void {
     if (!annotation.cfi || !this.rendition || this.attached.has(annotation.id)) return;
     const id = annotation.id;
-    this.rendition.annotations.add("highlight", annotation.cfi, { id }, () => {
-      if (this.marks.has(id)) this.hooks.onAnnotationClick(id);
+    this.rendition.annotations.add("highlight", annotation.cfi, { id }, (event: Event) => {
+      event.stopPropagation();
+      const target = event.currentTarget as Element | null;
+      const anchor = target?.getBoundingClientRect();
+      if (this.marks.has(id)) this.hooks.onAnnotationClick(id, anchor);
     }, HL_CLASS, HL_STYLES);
     this.attached.add(id);
   }
@@ -350,6 +385,11 @@ export class EpubEngine implements ReaderEngine {
     after.selectNodeContents(doc.body);
     after.setStart(range.endContainer, range.endOffset);
     return { before: before.toString().slice(-300), after: after.toString().slice(0, 300) };
+  }
+  clearSelection(): void {
+    // EPUB.js returns an array; its Rendition declaration incorrectly says Contents.
+    const contents = (this.rendition?.getContents() ?? []) as unknown as ContentsLike[];
+    for (const content of contents) content.window.getSelection()?.removeAllRanges();
   }
 
   resize(): void {

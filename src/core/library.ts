@@ -348,19 +348,34 @@ export class LibraryManager {
     const healthy = this.healthy(entry);
     const record: AnnotationRecord = { ...draft, createdAt: new Date().toISOString() };
     await healthy.store.mutate((value) => { value.annotations.push(record); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
     return record;
   }
-  async updateAnnotation(entry: BookEntry, id: string, patch: Partial<Pick<AnnotationRecord, "note" | "aiExplanation">>): Promise<void> {
+  async updateAnnotation(entry: BookEntry, id: string, patch: Partial<Pick<AnnotationRecord, "kind" | "note" | "aiExplanation">>): Promise<void> {
     const healthy = this.healthy(entry);
     await healthy.store.mutate((value) => {
       const record = value.annotations.find((annotation) => annotation.id === id);
       if (!record) throw new Error("批注不存在");
       Object.assign(record, patch, { updatedAt: new Date().toISOString() });
     }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
+  }
+  async clearAnnotation(entry: BookEntry, id: string): Promise<void> {
+    const healthy = this.healthy(entry);
+    await healthy.store.mutate((value) => {
+      const record = value.annotations.find((annotation) => annotation.id === id);
+      if (!record) throw new Error("批注不存在");
+      delete record.note;
+      delete record.aiExplanation;
+      record.kind = "highlight";
+      record.updatedAt = new Date().toISOString();
+    }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
   }
   async deleteAnnotation(entry: BookEntry, id: string): Promise<void> {
     const healthy = this.healthy(entry);
     await healthy.store.mutate((value) => { value.annotations = value.annotations.filter((annotation) => annotation.id !== id); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
   }
   async syncAnnotationsMd(entry: BookEntry): Promise<void> {
     const healthy = this.healthy(entry);

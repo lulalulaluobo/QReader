@@ -82,7 +82,12 @@ export class PdfEngine implements ReaderEngine {
     scroller.addEventListener("click", (event) => this.handleClick(event));
     scroller.addEventListener("keydown", (event) => this.handleKey(event));
     scroller.addEventListener("mouseup", this.selectionListener);
+    scroller.addEventListener("contextmenu", (event) => {
+      if (!window.getSelection()?.isCollapsed) event.preventDefault();
+    });
     scroller.addEventListener("touchstart", (event) => {
+      // Pagination owns body swipes; do not also open Obsidian's sidebars.
+      if (this.mode === "paginated") event.stopPropagation();
       const first = event.touches[0];
       this.touchStart = first && event.touches.length === 1 ? { x: first.clientX, y: first.clientY, time: Date.now() } : null;
       this.swiped = false;
@@ -171,14 +176,15 @@ export class PdfEngine implements ReaderEngine {
     if (!wrapper || !this.scroller) return;
     const rect = wrapper.getBoundingClientRect();
     const scroller = this.scroller;
-    const target = scroller.scrollTop + rect.top - scroller.getBoundingClientRect().top + fraction * rect.height;
-    const missingSpace = target - Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-    if (missingSpace > 0) {
-      // A lone page (or the last page) needs trailing space to keep its saved
-      // text at the same viewport edge instead of clamping back to the top.
-      const padding = Number.parseFloat(getComputedStyle(scroller).paddingBottom) || 0;
-      scroller.style.paddingBottom = `${padding + Math.ceil(missingSpace)}px`;
-    }
+    const viewportTop = scroller.getBoundingClientRect().top;
+    const target = scroller.scrollTop + rect.top - viewportTop + fraction * rect.height;
+    const last = scroller.lastElementChild;
+    if (!last) return;
+    // scrollHeight is at least clientHeight, hiding the unused space below a
+    // short page. Use the actual content bottom to avoid clamping saved offsets.
+    const contentBottom = scroller.scrollTop + last.getBoundingClientRect().bottom - viewportTop +
+      (Number.parseFloat(getComputedStyle(last).marginBottom) || 0);
+    scroller.style.paddingBottom = `${Math.max(0, Math.ceil(target + scroller.clientHeight - contentBottom))}px`;
     scroller.scrollTop = target;
   }
 
@@ -356,10 +362,23 @@ export class PdfEngine implements ReaderEngine {
       const signature = `${page}:${ranges.map((range) => `${range.item}:${range.start}:${range.end}`).join(";")}`;
       if (!text || signature === this.selectionSignature) return;
       this.selectionSignature = signature;
-      this.hooks.onSelect({ text, chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start });
+      const first = ranges[0].rects?.[0];
+      const anchor = first ? {
+        left: pageRect.left + first.x * pageRect.width,
+        right: pageRect.left + (first.x + first.width) * pageRect.width,
+        top: pageRect.top + first.y * pageRect.height,
+        bottom: pageRect.top + (first.y + first.height) * pageRect.height,
+      } : undefined;
+      this.hooks.onSelect({ text, chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start, anchor });
       return;
     }
   }
+  clearSelection(): void {
+    const selection = window.getSelection();
+    if (selection?.rangeCount && this.scroller?.contains(selection.getRangeAt(0).commonAncestorContainer)) selection.removeAllRanges();
+    this.selectionSignature = "";
+  }
+
 
   private paintHighlights(page: number): void {
     const wrapper = this.wrappers.get(page);
@@ -449,7 +468,7 @@ export class PdfEngine implements ReaderEngine {
       for (const highlight of wrapper.querySelectorAll<HTMLElement>(".qr-pdf-hl")) {
         const rect = highlight.getBoundingClientRect();
         if (event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom && highlight.dataset.ann) {
-          this.hooks.onAnnotationClick(highlight.dataset.ann);
+          this.hooks.onAnnotationClick(highlight.dataset.ann, rect);
           return;
         }
       }

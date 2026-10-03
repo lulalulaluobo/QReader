@@ -14,11 +14,12 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 
 
 ## 3. 功能范围
-- 书架：继续阅读、我的书籍、搜索、EPUB/PDF 导入、封面、阅读进度、批注数量和书籍管理。
-- 阅读：左右翻页/上下滚动、目录、章节导航、主题与字号、位置恢复、本章三问。
-- 批注：精确原文位置、浅黄划线、我的理解、按需 AI 解释、编辑/撤销、Markdown 导出。
+- 书架：继续阅读、我的书籍、搜索、EPUB/PDF 导入、封面、阅读进度、批注数量和书籍管理；长书名完整换行，不裁切首字。
+- 阅读：默认仅显示正文，轻点屏幕中央显示/隐藏上下工具栏；左右翻页/上下滚动、目录、章节导航、主题与字号、位置恢复、本章三问。
+- 选文：先在选文旁显示「划线 / 批注」小菜单；纯划线与有批注标记分别保存，只有选择批注才打开编辑卡片。
+- 批注：精确原文位置、浅黄划线、我的理解、按需 AI 解释、编辑及 Markdown 导出；「取消批注」只清除个人理解和收录的 AI 解释，保留同一划线及定位；「取消画线」删除整条标记及其批注。
 - 回答：隐藏原文，按核心/逻辑/复述三问逐题作答，完成后给极简反馈。
-- 复习：待复习与全部章节，作答前不显示原文、旧答案或反馈；完成后比较完整历史答案。
+- 复习：待复习与全部章节只列正文，过滤封面、扉页、目录、序及其他前后辅文，但不删除这些章节的旧问题、回答、复习与批注；作答前不显示原文、旧答案或反馈，完成后比较完整历史答案。
 - AI 仅三场景：章节三问、所选文本解释、三问回答反馈；兼容 OpenAI 接口。
 - PDF：识别目录；无目录时可按页建立自定义章节，不损失已有记录。
 - Obsidian 原生设置：阅读库相对路径、AI 地址/密钥/模型、阅读布局。
@@ -36,6 +37,7 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 - 重新生成三问不得破坏已作答问题版本；反馈须绑定具体提交。
 - EPUB 保存 CFI；PDF 保存页码及页内位置。切换模式与重新打开必须保持位置。
 - 引用按章节及原文顺序输出；不按批注创建时间伪装阅读顺序。
+- 纯划线仅保存于 reading.json，不计入批注数量或导出批注.md；旧记录缺少标记类型时仍视为批注，保留原 ID、定位与历史。
 - 所有界面适配窄 Obsidian 面板与移动端，复用宿主字体、主题及无障碍导航。
 - AI 发往用户配置的兼容接口：首次进入章节后台生成三问，按操作解释选段或反馈回答；仅发送相关章节/选段/答案。密钥保存在插件 data.json 中，未加密，不进入 Git。
 
@@ -47,8 +49,9 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 4. 提交中文 Git 记录，推送 main 到指定 GitHub 仓库。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；也可在 BRAT 中添加仓库 `lulalulaluobo/QReader`，安装 GitHub `1.0.0` release。release 提供 BRAT 所需的 main.js、manifest.json、styles.css。源码手动安装时将三个产物放入 Vault 的 `.obsidian/plugins/qreader/`，再启用 QReader。
+- 从源码执行 `npm ci`、`npm run build`；也可在 BRAT 中添加仓库 `lulalulaluobo/QReader`，选择最新 release（`1.0.1`）。release 提供 BRAT 所需的 main.js、manifest.json、styles.css。源码手动安装时将三个产物放入 Vault 的 `.obsidian/plugins/qreader/`，再启用 QReader。
 - 通过「QReader：打开书架」命令或书架图标进入；原生设置中配置阅读库路径、Base URL、API Key、Model，并测试连接。
 - 已在 Obsidian 1.13.7 验证 EPUB/PDF、批注、三问回答、预约/即时复习及位置恢复；四页面在 320–1440px 的 28 组布局检查无横向溢出。
+- `1.0.1` 在独立 Obsidian 1.12.4 验证长书名换行、仅正文复习、默认沉浸阅读、EPUB/PDF 划线与批注分离、旧记录兼容、取消批注保留划线、写入失败回滚；另修复 PDF 触摸翻页拉出宿主侧栏、短页位置恢复被截断。验收使用模拟书籍与窄视口/触摸事件，未覆盖 Android/iOS 真机。
 - AI 使用临时本地兼容协议服务验收请求、解析与失败重试，不代表真实供应商效果；Android/iOS 真机及其他 Obsidian 版本未验收。具体证据及限制保存在 Trellis 工作日志。
-- 源码已用中文提交推送至 [GitHub 仓库](https://github.com/lulalulaluobo/QReader) 的 main；v1.0.0 已作为含插件产物的 [GitHub Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.0) 发布。BRAT 从 release 下载安装文件，生产 main.js 不纳入源码分支。
+- 源码已用中文提交推送至 [GitHub 仓库](https://github.com/lulalulaluobo/QReader) 的 main；当前插件产物见 [GitHub Release 1.0.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1)。BRAT 从 release 下载安装文件，生产 main.js 不纳入源码分支。
