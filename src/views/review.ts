@@ -21,41 +21,40 @@ export class ReviewView extends ItemView {
   private error = "";
   private unsub: (() => void) | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
+    super(leaf);
+    this.navigation = true;
+  }
   getViewType(): string { return VIEW_TYPE_REVIEW; }
   getDisplayText(): string { return "QReader 复习"; }
   getIcon(): string { return "repeat"; }
 
   getState(): Record<string, unknown> { return { tab: this.tab, selectedBook: this.selectedBook }; }
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    const previousTab = this.tab;
+    const previousBook = this.selectedBook;
     if (state && typeof state === "object") {
       if ("tab" in state && (state.tab === "due" || state.tab === "all")) this.tab = state.tab;
-      if ("selectedBook" in state && typeof state.selectedBook === "string") this.selectedBook = state.selectedBook;
+      if ("selectedBook" in state && (typeof state.selectedBook === "string" || state.selectedBook === null)) this.selectedBook = state.selectedBook;
     }
+    result.history ||= previousTab !== this.tab || previousBook !== this.selectedBook;
     await super.setState(state, result);
     this.render();
   }
 
   async onOpen(): Promise<void> {
     this.opened = true;
+    this.plugin.syncReadingChrome();
     this.contentEl.addClass("qr-view");
     this.unsub = this.plugin.onLibraryChanged(() => void this.refresh());
     await this.refresh();
   }
   async onClose(): Promise<void> {
+    this.plugin.rememberPageState(this.getViewType(), this.getState());
     this.opened = false;
     this.revision++;
     this.unsub?.();
     this.unsub = null;
-  }
-  async openFor(bookId: string | null): Promise<void> {
-    if (bookId) {
-      this.selectedBook = bookId;
-      this.tab = "all";
-    }
-    this.app.workspace.requestSaveLayout();
-    this.render();
-    await this.refresh();
   }
 
   private async refresh(): Promise<void> {

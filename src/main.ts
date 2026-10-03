@@ -25,6 +25,7 @@ export class QReaderPlugin extends Plugin {
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<() => void>();
   private immersiveDocuments = new Set<Document>();
+  private pageStates = new Map<string, Record<string, unknown>>();
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -34,6 +35,7 @@ export class QReaderPlugin extends Plugin {
         app: this.app,
         libraryPath: () => this.settings.libraryPath,
         aiConfig: () => getAiConfig(this.settings.ai),
+        questionPrompt: () => this.settings.questionPrompt,
         configDir: this.app.vault.configDir,
         pluginId: this.manifest.id,
         notifyChanged: () => this.notifyChanged(),
@@ -87,6 +89,7 @@ export class QReaderPlugin extends Plugin {
     void this.cache.dispose();
     this.libraryListeners.clear();
     this.settingsListeners.clear();
+    this.pageStates.clear();
     for (const doc of this.immersiveDocuments) doc.body.removeClass("qr-reading-active");
     this.immersiveDocuments.clear();
   }
@@ -100,6 +103,11 @@ export class QReaderPlugin extends Plugin {
     this.settings = {
       libraryPath: libraryPath?.ok ? libraryPath.path : DEFAULT_SETTINGS.libraryPath,
       ai,
+      questionPrompt: typeof data.questionPrompt === "string" ? data.questionPrompt : "",
+      categories: Array.isArray(data.categories)
+        ? [...new Set(data.categories.filter((category): category is string => typeof category === "string").map((category) => category.trim()).filter((category) => category && category !== "全部" && category !== "未读" && category !== "已读"))]
+        : [],
+      highlightColor: data.highlightColor === "green" || data.highlightColor === "blue" || data.highlightColor === "pink" || data.highlightColor === "purple" ? data.highlightColor : "yellow",
       reading: {
         fontSize: typeof reading.fontSize === "number" && Number.isFinite(reading.fontSize)
           ? Math.max(12, Math.min(28, reading.fontSize)) : DEFAULT_SETTINGS.reading.fontSize,
@@ -140,7 +148,7 @@ export class QReaderPlugin extends Plugin {
     for (const cb of this.settingsListeners) cb();
   }
 
-  private syncReadingChrome(): void {
+  syncReadingChrome(): void {
     const active = this.app.workspace.getActiveViewOfType(ReaderView);
     const doc = active?.contentEl.ownerDocument;
     for (const previous of this.immersiveDocuments) {
@@ -158,29 +166,40 @@ export class QReaderPlugin extends Plugin {
   // ------------------------------------------------------------- navigation
 
   async openBookshelf(triggerImport = false): Promise<void> {
-    const leaf = await this.activateLeaf(VIEW_TYPE_BOOKSHELF);
-    if (leaf && triggerImport) {
-      const view = leaf.view;
-      if (view instanceof BookshelfView) view.pickFile();
-    }
+    const current = this.app.workspace.getActiveViewOfType(BookshelfView);
+    const view = current ?? (await this.activateLeaf(VIEW_TYPE_BOOKSHELF, this.pageStates.get(this.pageStateKey(VIEW_TYPE_BOOKSHELF, {})) ?? {})).view;
+    if (triggerImport && view instanceof BookshelfView) view.pickFile();
   }
 
   async openReader(bookId: string): Promise<void> {
-    const leaf = await this.activateLeaf(VIEW_TYPE_READER);
-    const view = leaf?.view;
-    if (view instanceof ReaderView) await view.openBook(bookId);
+    await this.activateLeaf(VIEW_TYPE_READER, { bookId });
   }
 
   async openAnswer(bookId: string, chapterId: string, mode: "answer" | "review", scheduledFor?: string, question?: { id: string; version: number }): Promise<void> {
-    const leaf = await this.activateLeaf(VIEW_TYPE_ANSWER);
-    const view = leaf?.view;
-    if (view instanceof AnswerView) await view.openFor(bookId, chapterId, mode, scheduledFor, question);
+    const target = { bookId, chapterId, mode, scheduledFor };
+    const state = this.pageStates.get(this.pageStateKey(VIEW_TYPE_ANSWER, target))
+      ?? { ...target, questionVersion: question?.version ?? 0, requestedQuestionId: question?.id };
+    const leaf = await this.activateLeaf(VIEW_TYPE_ANSWER, state);
+    if (question && leaf.view instanceof AnswerView) await leaf.view.openFor(bookId, chapterId, mode, scheduledFor, question);
   }
 
   async openReview(bookId?: string): Promise<void> {
-    const leaf = await this.activateLeaf(VIEW_TYPE_REVIEW);
-    const view = leaf?.view;
-    if (view instanceof ReviewView) await view.openFor(bookId ?? null);
+    if (!bookId && this.app.workspace.getActiveViewOfType(ReviewView)) return;
+    const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_REVIEW, {})) ?? {};
+    await this.activateLeaf(VIEW_TYPE_REVIEW, bookId ? { ...previous, tab: "all", selectedBook: bookId } : previous);
+  }
+
+  rememberPageState(viewType: string, state: Record<string, unknown>): void {
+    const key = this.pageStateKey(viewType, state);
+    if (viewType === VIEW_TYPE_ANSWER && state.savedKind !== undefined) this.pageStates.delete(key);
+    else this.pageStates.set(key, state);
+  }
+
+  private pageStateKey(viewType: string, state: Record<string, unknown>): string {
+    const page = `${this.settings.libraryPath}/${viewType}`;
+    return viewType === VIEW_TYPE_ANSWER
+      ? `${page}/${state.bookId}/${state.chapterId}/${state.mode}/${state.scheduledFor ?? ""}`
+      : page;
   }
 
   openSettings(): void {
@@ -189,19 +208,10 @@ export class QReaderPlugin extends Plugin {
     app.setting.openTabById(this.manifest.id);
   }
 
-  /** Reuse an existing leaf of this type or open a fresh one. */
-  private async activateLeaf(viewType: string): Promise<WorkspaceLeaf | null> {
-    const existing = this.app.workspace.getLeavesOfType(viewType);
-    let leaf: WorkspaceLeaf;
-    if (existing.length > 0) {
-      leaf = existing[0];
-      if (leaf.view.getViewType() !== viewType) {
-        await leaf.setViewState({ type: viewType, active: true });
-      }
-    } else {
-      leaf = this.app.workspace.getLeaf(true);
-      await leaf.setViewState({ type: viewType, active: true });
-    }
+  /** Navigate in the current tab; closing the old view releases its renderer. */
+  private async activateLeaf(viewType: string, state: Record<string, unknown>): Promise<WorkspaceLeaf> {
+    const leaf = this.app.workspace.getMostRecentLeaf() ?? this.app.workspace.getLeaf(false);
+    await leaf.setViewState({ type: viewType, state, active: true });
     await this.app.workspace.revealLeaf(leaf);
     this.app.workspace.setActiveLeaf(leaf, { focus: true });
     return leaf;

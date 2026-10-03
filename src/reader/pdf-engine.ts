@@ -6,6 +6,7 @@ import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import { pdfChapterId } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
+import { HIGHLIGHT_COLORS } from "../settings";
 
 interface PageDims { width: number; height: number; }
 interface RenderState {
@@ -58,7 +59,7 @@ export class PdfEngine implements ReaderEngine {
     this.mode = opts.mode;
     this.currentPage = Math.max(1, Math.min(start.pdfPage ?? 1, doc.numPages));
     this.currentPageFraction = Math.max(0, Math.min(start.fraction ?? 0, 1));
-    for (const annotation of annotations) this.marks.set(annotation.id, annotation);
+    for (const annotation of annotations) this.marks.set(annotation.id, { ...annotation });
   }
 
   async mount(container: HTMLElement): Promise<void> {
@@ -392,6 +393,7 @@ export class PdfEngine implements ReaderEngine {
     const wrapperRect = wrapper.getBoundingClientRect();
     for (const annotation of this.marks.values()) {
       if (annotation.pdfPage !== page) continue;
+      const color = HIGHLIGHT_COLORS[annotation.color ?? "yellow"];
       for (const item of annotation.itemRanges ?? []) {
         const span = wrapper.querySelector<HTMLElement>(`.qr-pdf-text [data-i="${item.item}"]`);
         let rectangles = item.rects ?? [];
@@ -406,6 +408,9 @@ export class PdfEngine implements ReaderEngine {
           const highlight = document.createElement("div");
           highlight.className = "qr-pdf-hl";
           highlight.dataset.ann = annotation.id;
+          highlight.style.background = `${color.fill}47`;
+          highlight.style.boxShadow = `inset 0 -1px 0 ${color.edge}`;
+          highlight.style.mixBlendMode = "normal";
           highlight.style.left = `${rect.x * 100}%`;
           highlight.style.top = `${rect.y * 100}%`;
           highlight.style.width = `${rect.width * 100}%`;
@@ -416,7 +421,7 @@ export class PdfEngine implements ReaderEngine {
     }
   }
 
-  addHighlight(annotation: AnnotationRecord): void { this.marks.set(annotation.id, annotation); if (annotation.pdfPage) this.paintHighlights(annotation.pdfPage); }
+  addHighlight(annotation: AnnotationRecord): void { this.marks.set(annotation.id, { ...annotation }); if (annotation.pdfPage) this.paintHighlights(annotation.pdfPage); }
   removeHighlight(annotation: AnnotationRecord): void { this.marks.delete(annotation.id); if (annotation.pdfPage) this.paintHighlights(annotation.pdfPage); }
   updateChapters(chapters: ChapterState[]): void { this.chapters = chapters; this.reportLocation(); }
 

@@ -1,0 +1,4 @@
+{"file":".trellis/spec/frontend/state-management.md","reason":"提示词、单页回退、分类和高亮的跨层持久化契约"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"移动书架与选文颜色交互，沿用既有普通 DOM 与 CSS"}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"当前 leaf 导航释放 renderer，异步结果与订阅不得跨页面污染"}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"旧记录可选字段和外部响应需在边界校验"}

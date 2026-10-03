@@ -1,7 +1,7 @@
 import { App, Notice, normalizePath } from "obsidian";
 import { Book } from "epubjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import type { AiConfig, AnnotationRecord, AnswerRecord, BookEntry, BookFormat, ChapterState, Feedback, HealthyBookEntry, ReadingFile, ReviewRecord, TocNode } from "../types";
+import type { AiConfig, AnnotationRecord, AnswerRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, Feedback, HealthyBookEntry, ReadingFile, ReviewRecord, TocNode } from "../types";
 import { isHealthyBook, pdfChapterId } from "../types";
 import { sanitizeFolderName, todayStr } from "../util";
 import { JsonStore, validateReading } from "./json-store";
@@ -18,6 +18,7 @@ export interface LibraryDeps {
   app: App;
   libraryPath(): string;
   aiConfig(): AiConfig;
+  questionPrompt(): string;
   configDir: string;
   pluginId: string;
   notifyChanged(): void;
@@ -280,17 +281,17 @@ export class LibraryManager {
       if (!chapter) throw new Error("章节不存在");
       if (!regenerate && chapter.questionVersions.length) return;
       const text = await this.getChapterText(healthy, chapterId);
-      const questions = await generateQuestions(this.deps.aiConfig(), healthy.reading.book.title, chapter.title, text);
+      const questions = await generateQuestions(this.deps.aiConfig(), healthy.reading.book.title, chapter.title, text, this.deps.questionPrompt());
       this.healthy(healthy);
       await healthy.store.mutate((value) => {
         const target = value.chapters[chapterId];
         if (!target) throw new Error("章节不存在");
         if (!regenerate && target.questionVersions.length) return;
-        const retain = target.answers.length > 0 || target.reviews.some((review) => !!review.completedAt);
-        const version = retain ? Math.max(0, ...target.questionVersions.map((item) => item.version)) + 1 : 1;
+        // A draft restored through navigation can still reference an unanswered
+        // version. Keep it stable when the reader regenerates chapter questions.
+        const version = Math.max(0, ...target.questionVersions.map((item) => item.version)) + 1;
         const next = { version, createdAt: new Date().toISOString(), questions };
-        if (retain) target.questionVersions.push(next);
-        else target.questionVersions = [next];
+        target.questionVersions.push(next);
       });
       this.deps.notifyChanged();
     })().finally(() => this.questionJobs.delete(key));
@@ -349,6 +350,19 @@ export class LibraryManager {
     const healthy = this.healthy(entry);
     await healthy.store.mutate((value) => { Object.assign(value.progress, progress, { lastReadAt: new Date().toISOString() }); });
   }
+
+  async updateBookOrganization(entry: BookEntry, patch: { readStatus?: BookReadStatus; category?: string | null }): Promise<void> {
+    const healthy = this.healthy(entry);
+    await healthy.store.mutate((value) => {
+      if (patch.readStatus !== undefined) value.book.readStatus = patch.readStatus;
+      if (patch.category !== undefined) {
+        const category = patch.category?.trim();
+        if (category) value.book.category = category;
+        else delete value.book.category;
+      }
+    });
+    this.deps.notifyChanged();
+  }
   async saveAnnotation(entry: BookEntry, draft: Omit<AnnotationRecord, "createdAt" | "updatedAt">): Promise<AnnotationRecord> {
     const healthy = this.healthy(entry);
     if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不支持文字批注");
@@ -357,7 +371,7 @@ export class LibraryManager {
     this.deps.notifyChanged();
     return record;
   }
-  async updateAnnotation(entry: BookEntry, id: string, patch: Partial<Pick<AnnotationRecord, "kind" | "note" | "aiExplanation">>): Promise<void> {
+  async updateAnnotation(entry: BookEntry, id: string, patch: Partial<Pick<AnnotationRecord, "kind" | "color" | "note" | "aiExplanation">>): Promise<void> {
     const healthy = this.healthy(entry);
     await healthy.store.mutate((value) => {
       const record = value.annotations.find((annotation) => annotation.id === id);

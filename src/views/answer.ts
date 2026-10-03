@@ -41,7 +41,10 @@ export class AnswerView extends ItemView {
   private requestedQuestionId: string | undefined;
   private versionModal: Modal | null = null;
 
-  constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) { super(leaf); }
+  constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
+    super(leaf);
+    this.navigation = true;
+  }
   getViewType(): string { return VIEW_TYPE_ANSWER; }
   getDisplayText(): string { return this.mode === "review" ? "QReader · 复习" : "QReader · 回答"; }
   getIcon(): string { return "message-square-quote"; }
@@ -63,6 +66,8 @@ export class AnswerView extends ItemView {
       return;
     }
     this.versionModal?.close();
+    result.history ||= this.bookId !== state.bookId || this.chapterId !== state.chapterId
+      || this.mode !== ("mode" in state && state.mode === "review" ? "review" : "answer");
     this.session++;
     const session = this.session;
     this.bookId = state.bookId;
@@ -79,10 +84,13 @@ export class AnswerView extends ItemView {
     }
     this.questionVersion = "questionVersion" in state && typeof state.questionVersion === "number" ? state.questionVersion : 0;
     this.questions = [];
-    this.requestedQuestionId = undefined;
+    this.requestedQuestionId = "requestedQuestionId" in state && typeof state.requestedQuestionId === "string" ? state.requestedQuestionId : undefined;
     this.questionsLoading = false;
     this.saved = null;
     this.phase = "questions";
+    this.feedbackError = "";
+    this.questionError = "";
+    this.submissionError = "";
     this.renderStep();
     await this.plugin.library.scan();
     if (session !== this.session) return;
@@ -105,6 +113,7 @@ export class AnswerView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.opened = true;
+    this.plugin.syncReadingChrome();
     this.contentEl.addClass("qr-view");
     this.unsub = this.plugin.onLibraryChanged(() => {
       if (!this.opened) return;
@@ -116,6 +125,7 @@ export class AnswerView extends ItemView {
     if (this.bookId && !this.questions.length) await this.loadQuestions();
   }
   async onClose(): Promise<void> {
+    this.plugin.rememberPageState(this.getViewType(), this.getState());
     this.opened = false;
     this.versionModal?.close();
     this.lifetime++;
@@ -353,6 +363,7 @@ export class AnswerView extends ItemView {
         : { kind: "answer", record: await this.plugin.library.recordAnswer(entry, chapterId, this.questionVersion, answerMap) };
       if (session !== this.session) return;
       this.saved = saved;
+      this.plugin.rememberPageState(this.getViewType(), this.getState());
       this.app.workspace.requestSaveLayout();
       if (!this.opened) {
         this.phase = "done";
@@ -525,7 +536,7 @@ export class AnswerView extends ItemView {
   }
 
   private back(): void {
-    if (this.mode === "review") void this.plugin.openReview(this.bookId);
+    if (this.mode === "review") void this.plugin.openReview();
     else void this.plugin.openReader(this.bookId);
   }
 }

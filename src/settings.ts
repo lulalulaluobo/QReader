@@ -1,11 +1,14 @@
 // Plugin settings (PRD §29).
 
-import type { ReadMode, ReadingTheme, ReadingLayout, ReadingColors } from "./types";
+import type { ReadMode, ReadingTheme, ReadingLayout, ReadingColors, HighlightColor } from "./types";
 import type { AiSettings } from "./ai/providers";
 
 export interface QReaderSettings {
   libraryPath: string; // vault-relative, e.g. "Books"
   ai: AiSettings;
+  questionPrompt: string; // Empty uses the built-in chapter prompt.
+  categories: string[];
+  highlightColor: HighlightColor;
   reading: ReadingLayout & {
     theme: ReadingTheme;
     defaultMode: ReadMode;
@@ -20,6 +23,9 @@ export const DEFAULT_SETTINGS: QReaderSettings = {
     agnesApiKey: "",
     custom: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
   },
+  questionPrompt: "",
+  categories: [],
+  highlightColor: "yellow",
   reading: {
     fontSize: 17,
     lineHeight: 1.75,
@@ -36,6 +42,14 @@ export const READING_PALETTES: Record<Exclude<ReadingTheme, "auto">, ReadingColo
   sepia: { background: "#f3e9d4", foreground: "#3b3329", muted: "#74634e", dark: false },
   sage: { background: "#e8ede4", foreground: "#2e382d", muted: "#5b6758", dark: false },
   dark: { background: "#202124", foreground: "#d8d9db", muted: "#a6a8ad", dark: true },
+};
+
+export const HIGHLIGHT_COLORS: Record<HighlightColor, { label: string; fill: string; edge: string }> = {
+  yellow: { label: "黄色", fill: "#f1c84e", edge: "#9e7500" },
+  green: { label: "绿色", fill: "#88c58a", edge: "#357546" },
+  blue: { label: "蓝色", fill: "#78b8df", edge: "#346e9b" },
+  pink: { label: "粉色", fill: "#e8a0bf", edge: "#a44770" },
+  purple: { label: "紫色", fill: "#b4a0df", edge: "#6b549f" },
 };
 
 export const READING_FONTS = {

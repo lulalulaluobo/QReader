@@ -1,13 +1,15 @@
 import { ItemView, Menu, Modal, Notice, TFile, TFolder, setIcon } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
-import type { BookEntry, HealthyBookEntry } from "../types";
-import { isHealthyBook } from "../types";
+import type { BookEntry, BookReadStatus, HealthyBookEntry } from "../types";
+import { getBookReadStatus, isHealthyBook } from "../types";
 import { el } from "../util";
 import type { QReaderPlugin } from "../main";
 import { ANNOTATIONS_MD } from "../core/library";
 import { BOOK_FILE_ACCEPT } from "../core/book-formats";
 
 export const VIEW_TYPE_BOOKSHELF = "qreader-bookshelf";
+
+type ShelfFilter = "all" | BookReadStatus | `category:${string}`;
 
 class ConfirmationModal extends Modal {
   private settled = false;
@@ -38,7 +40,9 @@ class ConfirmationModal extends Modal {
 
 export class BookshelfView extends ItemView {
   private search = "";
+  private selectedFilter: ShelfFilter = "all";
   private unsub: (() => void) | null = null;
+  private unsubSettings: (() => void) | null = null;
   private opened = false;
   private loadRevision = 0;
   private renderRevision = 0;
@@ -46,35 +50,64 @@ export class BookshelfView extends ItemView {
   private listBox: HTMLElement | null = null;
   private continueBox: HTMLElement | null = null;
   private status: HTMLElement | null = null;
+  private filterBox: HTMLElement | null = null;
+  private organizationModal: Modal | null = null;
+  private savingOrganization = new Set<string>();
   private importButton: HTMLButtonElement | null = null;
   private importing = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
+    this.navigation = true;
   }
   getViewType(): string { return VIEW_TYPE_BOOKSHELF; }
   getDisplayText(): string { return "QReader 书架"; }
   getIcon(): string { return "library"; }
 
-  getState(): Record<string, unknown> { return { search: this.search }; }
+  getState(): Record<string, unknown> { return { search: this.search, selectedFilter: this.selectedFilter }; }
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
-    if (state && typeof state === "object" && "search" in state && typeof state.search === "string") this.search = state.search;
+    const previousSearch = this.search;
+    const previousFilter = this.selectedFilter;
+    if (state && typeof state === "object") {
+      if ("search" in state && typeof state.search === "string") this.search = state.search;
+      if ("selectedFilter" in state) {
+        const filter = state.selectedFilter;
+        if (filter === "all" || filter === "unread" || filter === "read" || (typeof filter === "string" && filter.startsWith("category:"))) {
+          this.selectedFilter = filter as ShelfFilter;
+        }
+      }
+    }
+    if (previousSearch !== this.search || previousFilter !== this.selectedFilter) result.history = true;
     await super.setState(state, result);
-    if (this.opened) { this.buildShell(); await this.refresh(); }
+    if (this.opened) { this.buildShell(); await this.renderCards(); }
   }
 
   async onOpen(): Promise<void> {
     this.opened = true;
+    this.plugin.syncReadingChrome();
     this.contentEl.addClass("qr-view");
     this.buildShell();
     this.unsub = this.plugin.onLibraryChanged(() => void this.refresh());
+    this.unsubSettings = this.plugin.onSettingsChanged(() => {
+      if (!this.opened) return;
+      this.renderFilters();
+      void this.renderCards();
+    });
     await this.refresh();
   }
   async onClose(): Promise<void> {
+    this.plugin.rememberPageState(this.getViewType(), this.getState());
     this.opened = false;
     this.loadRevision++;
     this.renderRevision++;
     this.unsub?.();
+    this.unsubSettings?.();
+    this.unsubSettings = null;
+    this.organizationModal?.close();
+    this.organizationModal = null;
+    this.entries = [];
+    this.listBox = this.continueBox = this.filterBox = this.status = null;
+    this.importButton = null;
     this.unsub = null;
   }
 
@@ -97,8 +130,7 @@ export class BookshelfView extends ItemView {
       void this.renderCards();
     };
     searchBox.append(icon, input);
-    root.appendChild(searchBox);
-    top.appendChild(el("h1", "qr-shelf-heading", "书架"));
+    top.append(searchBox, el("h1", "qr-shelf-heading", "书架"));
     const importButton = el("button", "qr-btn qr-btn-primary", this.importing ? "正在导入……" : "导入");
     importButton.setAttribute("aria-label", "导入书籍");
     importButton.disabled = this.importing;
@@ -106,6 +138,10 @@ export class BookshelfView extends ItemView {
     this.importButton = importButton;
     top.appendChild(importButton);
     root.appendChild(top);
+    this.filterBox = el("nav", "qr-shelf-filters");
+    this.filterBox.setAttribute("aria-label", "书籍状态与学科分类");
+    root.appendChild(this.filterBox);
+    this.renderFilters();
     this.status = el("div", "qr-status qr-muted");
     this.status.setAttribute("role", "status");
     root.appendChild(this.status);
@@ -115,6 +151,175 @@ export class BookshelfView extends ItemView {
     root.appendChild(this.listBox);
     root.appendChild(this.bottomNav());
     this.contentEl.appendChild(root);
+  }
+
+  private renderFilters(): void {
+    const box = this.filterBox;
+    if (!this.opened || !box) return;
+    box.empty();
+    const filters: { key: ShelfFilter; label: string }[] = [
+      { key: "all", label: "全部" },
+      { key: "unread", label: "未读" },
+      { key: "read", label: "已读" },
+      ...this.plugin.settings.categories.map((category): { key: ShelfFilter; label: string } => ({ key: `category:${category}`, label: category })),
+    ];
+    for (const filter of filters) {
+      const button = el("button", `qr-shelf-filter${this.selectedFilter === filter.key ? " qr-shelf-filter-active" : ""}`, filter.label);
+      button.title = filter.label;
+      button.setAttribute("aria-pressed", String(this.selectedFilter === filter.key));
+      button.onclick = () => {
+        if (this.selectedFilter === filter.key) return;
+        void this.leaf.setViewState({ type: VIEW_TYPE_BOOKSHELF, state: { search: this.search, selectedFilter: filter.key } });
+      };
+      box.appendChild(button);
+    }
+    const add = el("button", "qr-shelf-filter qr-shelf-add-category", "新增分类");
+    add.onclick = () => this.openNewCategory();
+    box.appendChild(add);
+  }
+
+  private openNewCategory(): void {
+    if (this.organizationModal) return;
+    const modal = new Modal(this.app);
+    this.organizationModal = modal;
+    let closed = false;
+    let saving = false;
+    modal.titleEl.setText("新增学科分类");
+    modal.contentEl.addClass("qr-category-modal");
+    const form = el("form", "qr-category-form");
+    const input = el("input", "qr-category-input");
+    input.type = "text";
+    input.placeholder = "例如：文学、历史、计算机";
+    input.setAttribute("aria-label", "学科分类名称");
+    const errorBox = el("p", "qr-inline-error");
+    errorBox.setAttribute("role", "alert");
+    const row = el("div", "qr-form-actions");
+    const cancel = el("button", "qr-btn", "取消");
+    cancel.type = "button";
+    cancel.onclick = () => modal.close();
+    const submit = el("button", "qr-btn qr-btn-primary", "新增分类");
+    submit.type = "submit";
+    row.append(cancel, submit);
+    form.append(input, errorBox, row);
+    modal.contentEl.appendChild(form);
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (saving || closed) return;
+      const name = input.value.trim();
+      const duplicate = this.plugin.settings.categories.some((category) => category.trim().toLocaleLowerCase() === name.toLocaleLowerCase());
+      if (!name || ["全部", "未读", "已读"].includes(name) || duplicate) {
+        errorBox.setText(!name ? "请输入分类名称。" : duplicate ? "该分类已存在，请换一个名称。" : "不能使用内置分类名称。");
+        input.focus();
+        return;
+      }
+      saving = true;
+      input.disabled = submit.disabled = true;
+      submit.setText("正在保存……");
+      errorBox.setText("");
+      const previous = this.plugin.settings.categories;
+      const next = [...previous, name];
+      this.plugin.settings.categories = next;
+      try {
+        await this.plugin.saveSettings();
+        this.plugin.notifySettingsChanged();
+        new Notice(`已新增分类：${name}`);
+        if (!closed) modal.close();
+      } catch (error) {
+        if (this.plugin.settings.categories === next) this.plugin.settings.categories = previous;
+        this.plugin.notifySettingsChanged();
+        const message = `分类保存失败：${error instanceof Error ? error.message : String(error)}。请重试。`;
+        new Notice(message);
+        if (!closed) errorBox.setText(message);
+      } finally {
+        saving = false;
+        if (!closed) {
+          input.disabled = submit.disabled = false;
+          submit.setText("新增分类");
+        }
+      }
+    };
+    modal.onClose = () => {
+      closed = true;
+      if (this.organizationModal === modal) this.organizationModal = null;
+    };
+    modal.open();
+    input.focus();
+  }
+
+  private openCategoryAssignment(entry: HealthyBookEntry): void {
+    if (this.organizationModal) return;
+    const modal = new Modal(this.app);
+    this.organizationModal = modal;
+    let closed = false;
+    let saving = false;
+    modal.titleEl.setText("指定学科分类");
+    modal.contentEl.addClass("qr-category-modal");
+    modal.contentEl.appendChild(el("p", "qr-muted", `为《${entry.reading.book.title}》选择分类。`));
+    const form = el("form", "qr-category-form");
+    const select = el("select", "qr-category-input");
+    select.setAttribute("aria-label", "书籍学科分类");
+    const none = el("option", "", "不指定分类");
+    none.value = "";
+    select.appendChild(none);
+    const current = entry.reading.book.category;
+    const categories = [...this.plugin.settings.categories];
+    if (current && !categories.includes(current)) categories.push(current);
+    for (const category of categories) {
+      const option = el("option", "", category);
+      option.value = category;
+      select.appendChild(option);
+    }
+    select.value = current ?? "";
+    const errorBox = el("p", "qr-inline-error");
+    errorBox.setAttribute("role", "alert");
+    const row = el("div", "qr-form-actions");
+    const cancel = el("button", "qr-btn", "取消");
+    cancel.type = "button";
+    cancel.onclick = () => modal.close();
+    const submit = el("button", "qr-btn qr-btn-primary", "保存分类");
+    submit.type = "submit";
+    row.append(cancel, submit);
+    form.append(select, errorBox, row);
+    modal.contentEl.appendChild(form);
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      if (closed || saving || this.savingOrganization.has(entry.id)) return;
+      saving = true;
+      select.disabled = submit.disabled = true;
+      submit.setText("正在保存……");
+      errorBox.setText("");
+      try {
+        await this.updateOrganization(entry, { category: select.value || null });
+        if (!closed) modal.close();
+      } catch (error) {
+        if (!closed) errorBox.setText(`分类保存失败：${error instanceof Error ? error.message : String(error)}。请重试。`);
+      } finally {
+        saving = false;
+        if (!closed) {
+          select.disabled = submit.disabled = false;
+          submit.setText("保存分类");
+        }
+      }
+    };
+    modal.onClose = () => {
+      closed = true;
+      if (this.organizationModal === modal) this.organizationModal = null;
+    };
+    modal.open();
+    select.focus();
+  }
+
+  private async updateOrganization(entry: HealthyBookEntry, patch: { readStatus?: BookReadStatus; category?: string | null }): Promise<void> {
+    if (this.savingOrganization.has(entry.id)) throw new Error("书籍信息正在保存，请稍后重试");
+    this.savingOrganization.add(entry.id);
+    try {
+      await this.plugin.library.updateBookOrganization(entry, patch);
+    } catch (error) {
+      new Notice(`书籍信息保存失败：${error instanceof Error ? error.message : String(error)}。请重试。`);
+      throw error;
+    } finally {
+      this.savingOrganization.delete(entry.id);
+    }
   }
 
   private bottomNav(): HTMLElement {
@@ -172,10 +377,14 @@ export class BookshelfView extends ItemView {
     const query = this.search.trim().toLocaleLowerCase();
     const filtered = this.entries.filter((entry) => {
       const searchable = isHealthyBook(entry) ? `${entry.reading.book.title} ${entry.reading.book.author}` : entry.id;
-      return searchable.toLocaleLowerCase().includes(query);
+      if (!searchable.toLocaleLowerCase().includes(query)) return false;
+      if (this.selectedFilter === "all") return true;
+      if (!isHealthyBook(entry)) return false;
+      if (this.selectedFilter === "read" || this.selectedFilter === "unread") return getBookReadStatus(entry.reading) === this.selectedFilter;
+      return entry.reading.book.category === this.selectedFilter.slice("category:".length);
     });
     const cards = await Promise.all(filtered.map((entry) => this.buildCard(entry)));
-    const latest = this.entries.find((entry): entry is HealthyBookEntry => isHealthyBook(entry) && Boolean(entry.reading.progress.lastReadAt));
+    const latest = filtered.find((entry): entry is HealthyBookEntry => isHealthyBook(entry) && Boolean(entry.reading.progress.lastReadAt));
     const continuing = latest && !query ? await this.buildContinue(latest) : null;
     if (!this.opened || revision !== this.renderRevision) return;
     box.empty();
@@ -245,7 +454,10 @@ export class BookshelfView extends ItemView {
       const progress = entry.reading.progress;
       open.appendChild(await this.coverEl(entry, ""));
       open.appendChild(el("span", "qr-card-title", title));
-      open.appendChild(el("span", "qr-card-meta qr-muted", progress.lastReadAt ? `已读 ${Math.round(progress.percent * 100)}%` : "未读"));
+      const status = getBookReadStatus(entry.reading) === "read" ? "已读" : "未读";
+      const meta = el("span", "qr-card-meta qr-muted", `${status} · ${Math.round(progress.percent * 100)}%`);
+      meta.title = [meta.textContent, entry.reading.book.author, entry.reading.book.category].filter(Boolean).join(" · ");
+      open.appendChild(meta);
     } else {
       const cover = el("span", "qr-cover qr-cover-empty");
       cover.setAttribute("aria-hidden", "true");
@@ -261,8 +473,19 @@ export class BookshelfView extends ItemView {
   }
 
   private openCardMenu(event: MouseEvent, entry: BookEntry): void {
-    const menu = new Menu();
+    const menu = new Menu().setUseNativeMenu(true);
     if (isHealthyBook(entry)) {
+      const nextStatus = getBookReadStatus(entry.reading) === "read" ? "unread" : "read";
+      menu.addItem((item) => item.setTitle(nextStatus === "read" ? "标记为已读" : "标记为未读").setIcon(nextStatus === "read" ? "check" : "book-open").setDisabled(this.savingOrganization.has(entry.id)).onClick(() => {
+        void this.updateOrganization(entry, { readStatus: nextStatus }).catch(() => {});
+      }));
+      menu.addItem((item) => item.setTitle(entry.reading.book.category ? `指定分类（${entry.reading.book.category}）` : "指定分类").setIcon("tag").setDisabled(this.savingOrganization.has(entry.id)).onClick(() => this.openCategoryAssignment(entry)));
+      if (entry.reading.book.category) {
+        menu.addItem((item) => item.setTitle("取消分类").setIcon("x").setDisabled(this.savingOrganization.has(entry.id)).onClick(() => {
+          void this.updateOrganization(entry, { category: null }).catch(() => {});
+        }));
+      }
+      menu.addSeparator();
       menu.addItem((item) => item.setTitle("查看批注").setIcon("file-text").onClick(async () => {
         const file = this.app.vault.getAbstractFileByPath(`${entry.dir}/${ANNOTATIONS_MD}`);
         if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);

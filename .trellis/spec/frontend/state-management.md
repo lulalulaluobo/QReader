@@ -8,9 +8,17 @@ src/core/json-store.ts 对每本书串行执行变更、写入与校验，保留
 
 ## 回答与复习
 
-题目有版本；答案引用具体版本，反馈引用具体提交。重新生成不得破坏已作答历史。复习前隐藏原文、批注、旧答案及反馈；完成后才展示完整历史。任意章节可即时复习，但不能因此吞掉未来预约。日期按本地日历日解释，不按 UTC 截断。
+题目有版本；答案引用具体版本，反馈引用具体提交。重新生成始终追加版本，即使尚未提交回答也保留旧问题，防止导航草稿引用的题目被替换。复习前隐藏原文、批注、旧答案及反馈；完成后才展示完整历史。任意章节可即时复习，但不能因此吞掉未来预约。日期按本地日历日解释，不按 UTC 截断。
 
 健康书籍和损坏书籍使用判别联合；访问 reading 前先用 isHealthyBook 缩窄。
+
+## 1.1.2 提示词、导航、分类与高亮
+
+- 插件 `questionPrompt` 默认空，留空/空白使用用户提供的默认模板；`{{chapter_content}}` 替换章节正文，不含占位符时追加正文。支持三个中文标签或原有 questions JSON；拒绝空题、重复题、重复类型和多余标签，失败不更新问题版本。修改提示词只作用于后续生成，不自动清理缓存。
+- 四个视图启用 `navigation = true`；通过 `getMostRecentLeaf()` 复用当前主标签页，没有主标签页才使用 `getLeaf(false)`。`setState` 增加历史时保留宿主已设置的 `history`，不得将跨视图导航的历史标志覆盖为 false。
+- 回答草稿由 Obsidian 视图历史和插件 `pageStates` 记录轻量数据，按阅读库、书籍、章节、模式、预约日期区分；提交成功清除暂存草稿。书架搜索和筛选、复习筛选随导航恢复，不保留旧阅读引擎。
+- `settings.categories` 保存用户分类；每本书的 `book.category?` 和 `book.readStatus?` 经串行 JsonStore 写入。旧记录不迁移，缺状态以全书进度是否完成为显示默认；分类变化不移动原书、不改章节/进度/批注。
+- `AnnotationRecord.color?` 保存五种颜色；旧记录缺色时黄色。菜单选色只是草稿，短按确认才写盘；EPUB/PDF 共用 `HIGHLIGHT_COLORS` 并保存标记对象副本，改色后立即重绘，避免对象原地修改隐藏旧值。默认下次颜色另存插件设置。
 
 ## 六种书籍格式与 AI 提供方契约
 
@@ -118,4 +126,3 @@ const copiedText = selection.copyText ?? selection.text;
 // 正确：隐藏 leaf 不上报章首；恢复时使用 position.cfi 重建定位。
 if (!container.clientWidth || !container.clientHeight) return;
 ```
-

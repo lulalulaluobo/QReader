@@ -43,10 +43,12 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 1. 初始化入口、Git 与中文 Trellis 规范。
 2. 完成阅读引擎、可靠存储和四页面交互。
 3. 构建并通过实际 Obsidian 六格式阅读、阅读记录与回忆闭环验收。
-4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.1 与 BRAT 安装文件。
+4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.2 与 BRAT 安装文件。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.1.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.2.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
+- 1.1.2 增加可保存的每章三问提示词（留空用默认一问一靶模板）、当前标签页与原生回退、五色划线（长按选色、短按确认）、未读/已读及学科分类。重新出题保留未提交草稿引用的旧版本。
+- 1.1.2 在 macOS Obsidian 1.13.7 独立 Vault 通过提示词、无效响应、单页导航/回退、草稿、三题提交/反馈重试、闭卷复习、EPUB/PDF 颜色持久化、旧黄色、分类与 56 组宽度/主题/视图检查；375×667 移动 CSS 模拟首屏四卡完整可见。Android/iOS 真机和真实供应商模型质量仍未验证。
 - 1.1.0 将阅读扩展为 EPUB、PDF、FB2、MOBI、AZW3、CBZ。未加密 MOBI/AZW3、独立 FB2 与 ZIP FB2 在内存组装为 EPUB 视图，阅读库仍保存原始文件字节和实际格式；CBZ 自然页序只提供图片阅读与页码位置。
 - 独立 Obsidian 1.12.4 Vault 实测六类原书导入/读取/重开，额外覆盖 `.fb2.zip` 导入别名；FB2/MOBI/AZW3 精确 CFI 批注可跳回原文。既有 EPUB/PDF 的 CFI、页内比例、划线、批注、题目版本、回答、复习与反馈保存重启后保持不变。
 - 1.1.1 在 macOS Obsidian 1.12.4 独立 Vault 验证原生选文滚动扰动恢复、复制、笔记删除同步、AI 解读失败重试与关闭迟到结果、任意题直达、问题版本切换和反馈重试。隐藏阅读页返回、退出重开及阅读模式切换保持 CFI。
@@ -54,6 +56,6 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 - AI 预设使用官方核实的 `deepseek-flash` / `https://api.deepseek.com` 和 `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1`；本地 OpenAI-compatible 协议服务通过实际 UI 探针、三问、批注解释与回答反馈流程。无供应商密钥；未验证外部联网或模型效果。密钥仅保存在插件 `data.json`，未加密。
 - 克隆调研参考 `joeseesun/qiaomu-reader` commit `cff28ba6`（GPL-3.0-only），未复制其插件代码：`src/reader-engine.js` 说明 Foliate.js 的 EPUB/MOBI/AZW3/FB2（独立/压缩）/CBZ 与独立 PDF 路径；`src/main.js` 展示扩展名路由；`src/status-bar.js` 与 `src/styles.css` 展示跟随活动阅读视图、卸载清理的宿主导航控制；`src/epub-zip.js` 记录无 UTF-8 ZIP 标志时的中文路径兼容问题。QReader 自行采用 EPUB.js/PDF.js 双引擎和 MIT 格式适配；依赖 Foliate.js 1.0.1、fflate 0.8.2，保留上游许可证声明。
 - 验收用的独立 Obsidian 为 1.12.4 与 1.13.7；OS 为 macOS。Android/iOS 真机、加密/DRM 书籍、真实供应商密钥均未测试，不宣称受支持。
-- [GitHub Release 1.1.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1) 已正式发布并设为 latest，包含 BRAT 所需 `main.js`、`manifest.json`、`styles.css` 与手动安装包 `QReader-1.1.1.zip`；四个公开下载附件的 SHA-256 均与实测构建一致，标签指向源码提交 `b402b95`。
+- 历史 [GitHub Release 1.1.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.1) 的四个公开附件已校验，标签指向源码提交 `b402b95`；最新 1.1.2 发布状态与校验记录见 Trellis 任务。
 - 1.1.1 长中文书名封面缓存使用 SHA-256 文件名，避免文件名过长；缓存仍位于插件目录，不改变原书文件。
 - 历史 GitHub Release 1.0.1 仍可通过 [GitHub 仓库](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 安装；生成的生产 `main.js` 不纳入源码分支。

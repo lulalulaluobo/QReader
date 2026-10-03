@@ -224,6 +224,8 @@ export function validateReading(raw: unknown): ReadingFile {
   if (b.format !== "epub" && b.format !== "pdf" && b.format !== "fb2" && b.format !== "mobi" && b.format !== "azw3" && b.format !== "cbz") throw new Error("reading.json 书籍格式无效");
   if (b.spineLength !== undefined) integer(b.spineLength, "spineLength", 1);
   if (b.numPages !== undefined) integer(b.numPages, "numPages", 1);
+  if (b.readStatus !== undefined && b.readStatus !== "unread" && b.readStatus !== "read") throw new Error("reading.json 阅读状态无效");
+  optionalString(b.category, "book.category");
   string(v.importedAt, "importedAt");
   const chapters = requireRecord(v.chapters, "chapters");
   const p = requireRecord(v.progress, "progress");
@@ -284,6 +286,7 @@ export function validateReading(raw: unknown): ReadingFile {
     if (!(a.chapterId in chapters) || annotationIds.has(a.id)) throw new Error("reading.json 批注章节无效或编号重复");
     annotationIds.add(a.id); number(a.sortKey, "sortKey");
     if (a.kind !== undefined && a.kind !== "highlight" && a.kind !== "annotation") throw new Error("reading.json 标记类型无效");
+    if (a.color !== undefined && a.color !== "yellow" && a.color !== "green" && a.color !== "blue" && a.color !== "pink" && a.color !== "purple") throw new Error("reading.json 高亮颜色无效");
     if (a.kind === "highlight" && (a.note || a.aiExplanation)) throw new Error("reading.json 纯划线不能包含批注内容");
     optionalString(a.updatedAt, "updatedAt"); optionalString(a.note, "note"); optionalString(a.aiExplanation, "aiExplanation"); optionalString(a.cfi, "annotation.cfi");
     if (a.pdfPage !== undefined) integer(a.pdfPage, "annotation.pdfPage", 1);

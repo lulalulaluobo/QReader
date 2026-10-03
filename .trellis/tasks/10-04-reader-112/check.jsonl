@@ -1,0 +1,3 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"统一构建、隔离真实 Obsidian 和浅深色移动验收"}
+{"file":".trellis/spec/frontend/state-management.md","reason":"回退草稿、问题版本、阅读位置、分类和高亮持久化验收"}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"确认旧阅读 renderer 和订阅被释放，迟到 AI 结果安全"}

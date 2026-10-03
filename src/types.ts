@@ -5,6 +5,8 @@ export type QuestionType = "core" | "logic" | "retell";
 export type ReadMode = "paginated" | "scrolled";
 export type ReadingTheme = "auto" | "light" | "sepia" | "sage" | "dark";
 export type ReadingFont = "original" | "sans" | "serif";
+export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "purple";
+export type BookReadStatus = "unread" | "read";
 
 export interface Question {
   id: string; // q1 | q2 | q3
@@ -51,6 +53,7 @@ export interface AnnotationRecord {
   chapterId: string;
   createdAt: string; // ISO
   kind?: "highlight" | "annotation"; // Missing on V1 records means annotation.
+  color?: HighlightColor; // Missing on existing records means yellow.
   updatedAt?: string;
   text: string; // quoted original text
   note?: string; // 我的理解 (may be empty)
@@ -98,6 +101,8 @@ export interface ReadingFile {
     fileName: string; // 原书在阅读库中的安全文件名；保留原始字节。
     spineLength?: number; // EPUB and memory-converted formats
     numPages?: number; // pdf
+    readStatus?: BookReadStatus;
+    category?: string;
   };
   progress: ReadingProgress;
   chapters: Record<string, ChapterState>;
@@ -125,6 +130,10 @@ export type BookEntry = HealthyBookEntry | DamagedBookEntry;
 
 export function isHealthyBook(entry: BookEntry): entry is HealthyBookEntry {
   return !entry.damaged && entry.reading !== null;
+}
+
+export function getBookReadStatus(reading: ReadingFile): BookReadStatus {
+  return reading.book.readStatus ?? (reading.progress.percent >= 1 ? "read" : "unread");
 }
 
 // Minimal persistence contract shared with views.

@@ -2,10 +2,11 @@
 // ··· menu, annotation card, chapter navigation and 完成本章.
 
 import { ItemView, Menu, Notice, setIcon } from "obsidian";
-import type { WorkspaceLeaf } from "obsidian";
+import type { WorkspaceLeaf, ViewStateResult } from "obsidian";
 import type {
   AnnotationRecord,
   HealthyBookEntry,
+  HighlightColor,
   ReadMode,
   ReadingTheme,
   ReadingColors,
@@ -18,7 +19,7 @@ import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
 import { el, genId, fmtDateTime } from "../util";
 import { explainSelection } from "../ai/tasks";
-import { READING_PALETTES } from "../settings";
+import { HIGHLIGHT_COLORS, READING_PALETTES } from "../settings";
 import { getAiConfig } from "../ai/providers";
 
 export const VIEW_TYPE_READER = "qreader-reader";
@@ -32,6 +33,7 @@ interface AnnotDraft {
   aiText: string;
   aiIncluded: boolean;
   aiLoading: boolean;
+  color: HighlightColor;
 }
 
 interface MarkTarget {
@@ -39,6 +41,8 @@ interface MarkTarget {
   record?: AnnotationRecord;
   anchor?: SelectionAnchor;
   confirmDelete?: boolean;
+  color: HighlightColor;
+  colorsOpen?: boolean;
 }
 
 export class ReaderView extends ItemView {
@@ -60,9 +64,12 @@ export class ReaderView extends ItemView {
   private panelSession = 0;
   private deletingNoteId: string | null = null;
   private confirmingNoteId: string | null = null;
+  private cancelHighlightPress: (() => void) | null = null;
+  private stateRequest = 0;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
+    this.navigation = true;
     // Subscribe only while the view is open.
   }
 
@@ -78,6 +85,7 @@ export class ReaderView extends ItemView {
 
   async onOpen(): Promise<void> {
     this.opened = true;
+    this.plugin.syncReadingChrome();
     this.contentEl.empty();
     this.buildSkeleton();
     this.applyThemeClass();
@@ -99,6 +107,7 @@ export class ReaderView extends ItemView {
 
   async onClose(): Promise<void> {
     this.opened = false;
+    ++this.stateRequest;
     ++this.generation;
     this.closePanels();
     this.draft = null;
@@ -117,12 +126,15 @@ export class ReaderView extends ItemView {
     return this.entry ? { bookId: this.entry.id } : {};
   }
 
-  async setState(state: unknown): Promise<void> {
-    if (typeof state !== "object" || state === null || !("bookId" in state)) return;
-    if (typeof state.bookId === "string") {
-      await this.plugin.library.scan();
-      await this.openBook(state.bookId);
-    }
+  async setState(state: unknown, result: ViewStateResult): Promise<void> {
+    const request = ++this.stateRequest;
+    const previousBookId = this.entry?.id;
+    await super.setState(state, result);
+    if (typeof state !== "object" || state === null || !("bookId" in state) || typeof state.bookId !== "string") return;
+    await this.plugin.library.scan();
+    if (!this.opened || request !== this.stateRequest) return;
+    await this.openBook(state.bookId);
+    if (this.opened && request === this.stateRequest && this.entry?.id !== previousBookId) result.history = true;
   }
 
   private async releaseSource(entry: HealthyBookEntry): Promise<void> {
@@ -248,7 +260,11 @@ export class ReaderView extends ItemView {
     const markMenu = el("div", "qr-mark-menu qr-hidden");
     markMenu.setAttribute("role", "group");
     markMenu.setAttribute("aria-label", "选文操作");
-    markMenu.onmousedown = (event) => event.preventDefault();
+    markMenu.onmousedown = (event) => {
+      // 保留 PDF 原生选区，同时允许按钮获得键盘焦点。
+      event.preventDefault();
+      (event.target as Element | null)?.closest<HTMLButtonElement>("button")?.focus({ preventScroll: true });
+    };
     this.markMenu = markMenu;
 
     root.append(mask, toc, markMenu, card);
@@ -282,6 +298,7 @@ export class ReaderView extends ItemView {
     this.lastLoc = null;
     this.lastProgressSave = 0;
     this.draft = null;
+    this.annotationSaving = false;
     this.markTarget = null;
     this.chromeHidden = true;
     this.mode = this.plugin.settings.reading.defaultMode;
@@ -1025,7 +1042,7 @@ export class ReaderView extends ItemView {
         })
     );
     this.closePanels();
-    this.markTarget = { record, selection, anchor: selection.anchor };
+    this.markTarget = { record, selection, anchor: selection.anchor, color: record?.color ?? (record ? "yellow" : this.plugin.settings.highlightColor) };
     this.renderMarkMenu();
   }
 
@@ -1034,11 +1051,13 @@ export class ReaderView extends ItemView {
     const record = this.entry.reading.annotations.find((record) => record.id === id);
     if (!record) return;
     this.closePanels();
-    this.markTarget = { record, anchor };
+    this.markTarget = { record, anchor, color: record.color ?? "yellow" };
     this.renderMarkMenu();
   }
 
   private closeMarkMenu(clearSelection = true): void {
+    this.cancelHighlightPress?.();
+    this.cancelHighlightPress = null;
     this.markTarget = null;
     this.markMenu.empty();
     this.markMenu.addClass("qr-hidden");
@@ -1046,6 +1065,8 @@ export class ReaderView extends ItemView {
   }
 
   private renderMarkMenu(): void {
+    this.cancelHighlightPress?.();
+    this.cancelHighlightPress = null;
     const target = this.markTarget;
     const menu = this.markMenu;
     menu.empty();
@@ -1067,8 +1088,9 @@ export class ReaderView extends ItemView {
     } : undefined);
     if (selection) {
       addAction("复制", () => void this.copySelection(selection, target));
-      addAction("AI 解读", () => this.openSelectionExplanation(selection, record));
+      addAction("AI 解读", () => this.openSelectionExplanation(selection, record, target.color));
     }
+    if (record || target.selection) this.appendHighlightControl(menu, target);
     if (record) {
       addAction(target.confirmDelete ? "确认取消画线及批注" : "取消画线", () => {
         if (record.kind !== "highlight" && (record.note || record.aiExplanation) && !target.confirmDelete) {
@@ -1082,8 +1104,7 @@ export class ReaderView extends ItemView {
       if (record.kind !== "highlight") addAction("取消批注", () => void this.removeMark(target, true));
     } else if (target.selection) {
       const selection = target.selection;
-      addAction("划线", () => void this.highlightSelection(target));
-      addAction("批注", () => this.openAnnotationCreate(selection));
+      addAction("批注", () => this.openAnnotationCreate(selection, target.color));
     }
     const close = el("button", "qr-icon-btn");
     setIcon(close, "x");
@@ -1091,6 +1112,11 @@ export class ReaderView extends ItemView {
     close.disabled = this.annotationSaving;
     close.onclick = () => this.closeMarkMenu();
     menu.appendChild(close);
+    this.positionMarkMenu(target);
+  }
+
+  private positionMarkMenu(target: MarkTarget): void {
+    const menu = this.markMenu;
     const root = this.root.getBoundingClientRect();
     const box = menu.getBoundingClientRect();
     const anchor = target.anchor;
@@ -1099,6 +1125,116 @@ export class ReaderView extends ItemView {
     const top = above >= 8 ? above : (anchor?.bottom ?? root.top) - root.top + 8;
     menu.style.left = `${Math.max(8, Math.min(left, root.width - box.width - 8))}px`;
     menu.style.top = `${Math.max(8, Math.min(top, root.height - box.height - 8))}px`;
+  }
+
+  private appendHighlightControl(menu: HTMLElement, target: MarkTarget): void {
+    const group = el("div", "qr-highlight-control");
+    const confirm = el("button", "qr-btn qr-btn-ghost qr-highlight-confirm");
+    const indicator = el("span", "qr-highlight-indicator");
+    indicator.setAttribute("aria-hidden", "true");
+    const label = el("span");
+    confirm.append(indicator, label);
+    const expand = el("button", "qr-icon-btn qr-highlight-expand");
+    setIcon(expand, "chevron-down");
+    expand.setAttribute("aria-label", target.colorsOpen ? "收起划线颜色" : "展开划线颜色");
+    expand.setAttribute("aria-expanded", String(Boolean(target.colorsOpen)));
+    confirm.disabled = expand.disabled = this.annotationSaving;
+    group.append(confirm, expand);
+    menu.appendChild(group);
+    const palette = el("div", "qr-highlight-palette");
+    palette.setAttribute("role", "group");
+    palette.setAttribute("aria-label", "待确认划线颜色");
+    palette.hidden = !target.colorsOpen;
+    const choices = new Map<HighlightColor, HTMLButtonElement>();
+    const update = (): void => {
+      const color = HIGHLIGHT_COLORS[target.color];
+      indicator.style.setProperty("--qr-highlight-fill", color.fill);
+      indicator.style.setProperty("--qr-highlight-edge", color.edge);
+      label.setText(`${target.record ? "应用" : "划线"} · ${color.label}`);
+      confirm.setAttribute("aria-label", `${target.record ? "应用划线颜色" : "保存划线"}：${color.label}；长按选择颜色`);
+      for (const [colorId, button] of choices) {
+        button.setAttribute("aria-pressed", String(colorId === target.color));
+      }
+    };
+    for (const colorId of Object.keys(HIGHLIGHT_COLORS) as HighlightColor[]) {
+      const color = HIGHLIGHT_COLORS[colorId];
+      const choice = el("button", "qr-btn qr-highlight-color", color.label);
+      choice.disabled = this.annotationSaving;
+      choice.setAttribute("aria-label", `${color.label}划线`);
+      choice.style.setProperty("--qr-highlight-fill", color.fill);
+      choice.style.setProperty("--qr-highlight-edge", color.edge);
+      choice.onclick = () => {
+        if (this.markTarget !== target || this.annotationSaving) return;
+        target.color = colorId;
+        update();
+      };
+      choices.set(colorId, choice);
+      palette.appendChild(choice);
+    }
+    palette.appendChild(el("span", "qr-highlight-help", "选择后点击「划线」或「应用」保存"));
+    menu.appendChild(palette);
+    const toggleColors = (open: boolean): void => {
+      if (!this.opened || this.markTarget !== target || this.annotationSaving) return;
+      target.colorsOpen = open;
+      palette.hidden = !open;
+      expand.setAttribute("aria-expanded", String(open));
+      expand.setAttribute("aria-label", open ? "收起划线颜色" : "展开划线颜色");
+      this.positionMarkMenu(target);
+    };
+    let timer: number | null = null;
+    let pointer: number | null = null;
+    let startX = 0;
+    let startY = 0;
+    let suppressClick = false;
+    const stopPress = (): void => {
+      if (timer !== null) window.clearTimeout(timer);
+      timer = null;
+      const captured = pointer;
+      pointer = null;
+      if (captured !== null && confirm.hasPointerCapture(captured)) confirm.releasePointerCapture(captured);
+    };
+    this.cancelHighlightPress = stopPress;
+    confirm.onpointerdown = (event) => {
+      if (!event.isPrimary || event.button !== 0 || this.annotationSaving || this.markTarget !== target) return;
+      stopPress();
+      suppressClick = false;
+      pointer = event.pointerId;
+      startX = event.clientX;
+      startY = event.clientY;
+      confirm.setPointerCapture(event.pointerId);
+      timer = window.setTimeout(() => {
+        timer = null;
+        if (pointer === null || this.markTarget !== target || !this.opened) return;
+        suppressClick = true;
+        toggleColors(true);
+      }, 450);
+    };
+    confirm.onpointermove = (event) => {
+      if (pointer !== event.pointerId || Math.hypot(event.clientX - startX, event.clientY - startY) <= 8) return;
+      suppressClick = true;
+      stopPress();
+    };
+    confirm.onpointerup = (event) => { if (pointer === event.pointerId) stopPress(); };
+    confirm.onpointercancel = (event) => {
+      if (pointer === event.pointerId) { suppressClick = true; stopPress(); }
+    };
+    confirm.onlostpointercapture = () => {
+      if (pointer !== null) { suppressClick = true; stopPress(); }
+    };
+    confirm.oncontextmenu = (event) => { event.preventDefault(); };
+    confirm.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") { stopPress(); suppressClick = false; }
+    };
+    confirm.onclick = (event) => {
+      if (suppressClick) {
+        suppressClick = false;
+        event.preventDefault();
+        return;
+      }
+      if (this.markTarget === target) void this.highlightSelection(target);
+    };
+    expand.onclick = () => { stopPress(); toggleColors(!target.colorsOpen); };
+    update();
   }
 
   private async copySelection(selection: EngineSelection, target: MarkTarget): Promise<void> {
@@ -1115,7 +1251,7 @@ export class ReaderView extends ItemView {
     }
   }
 
-  private openSelectionExplanation(selection: EngineSelection, record?: AnnotationRecord): void {
+  private openSelectionExplanation(selection: EngineSelection, record?: AnnotationRecord, color = this.plugin.settings.highlightColor): void {
     const entry = this.entry;
     const engine = this.engine;
     if (!entry || !engine || entry.reading.book.format === "cbz") return;
@@ -1179,7 +1315,7 @@ export class ReaderView extends ItemView {
         if (record) {
           if (!entry.reading.annotations.some((annotation) => annotation.id === record.id)) throw new Error("原笔记已删除，请重新选择原文");
           await this.plugin.library.updateAnnotation(entry, record.id, { kind: "annotation", aiExplanation: text });
-        } else await this.saveSelection(selection, "annotation", undefined, text);
+        } else await this.saveSelection(selection, "annotation", undefined, text, color);
         if (!current()) return;
         saved = true;
         save.setText("已存入笔记");
@@ -1198,17 +1334,33 @@ export class ReaderView extends ItemView {
   }
 
   private async highlightSelection(target: MarkTarget): Promise<void> {
-    if (!target.selection || this.annotationSaving) return;
+    const entry = this.entry;
+    const engine = this.engine;
+    const generation = this.generation;
+    if (!entry || (!target.selection && !target.record) || this.annotationSaving || this.markTarget !== target) return;
     this.annotationSaving = true;
     this.renderMarkMenu();
     try {
-      await this.saveSelection(target.selection, "highlight");
-      if (this.markTarget === target) this.closeMarkMenu();
+      if (target.record) {
+        await this.plugin.library.updateAnnotation(entry, target.record.id, { color: target.color });
+        if (!this.opened || generation !== this.generation) return;
+        const updated = entry.reading.annotations.find((record) => record.id === target.record?.id);
+        if (!updated) throw new Error("原标记已删除，请重新选择原文");
+        if (this.engine === engine) engine?.addHighlight(updated);
+        await this.rememberHighlightColor(target.color, generation);
+      } else if (target.selection) {
+        await this.saveSelection(target.selection, "highlight", undefined, undefined, target.color);
+      }
+      if (this.opened && generation === this.generation && this.markTarget === target) this.closeMarkMenu();
     } catch (error) {
-      new Notice(`划线保存失败：${error instanceof Error ? error.message : String(error)}`);
+      if (this.opened && generation === this.generation && this.markTarget === target) {
+        new Notice(`划线保存失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
-      this.annotationSaving = false;
-      this.renderMarkMenu();
+      if (generation === this.generation) {
+        this.annotationSaving = false;
+        if (this.opened && this.markTarget === target) this.renderMarkMenu();
+      }
     }
   }
 
@@ -1216,36 +1368,57 @@ export class ReaderView extends ItemView {
     const entry = this.entry;
     const record = target.record;
     const engine = this.engine;
+    const generation = this.generation;
     if (!entry || !record || this.annotationSaving) return;
     this.annotationSaving = true;
     this.renderMarkMenu();
     try {
       if (commentOnly) await this.plugin.library.clearAnnotation(entry, record.id);
       else await this.plugin.library.deleteAnnotation(entry, record.id);
+      if (!this.opened || generation !== this.generation) return;
       if (!commentOnly && this.engine === engine) engine?.removeHighlight(record);
       if (this.markTarget === target) this.closeMarkMenu();
     } catch (error) {
-      new Notice(`${commentOnly ? "取消批注" : "取消画线"}失败：${error instanceof Error ? error.message : String(error)}`);
+      if (this.opened && generation === this.generation && this.markTarget === target) {
+        new Notice(`${commentOnly ? "取消批注" : "取消画线"}失败：${error instanceof Error ? error.message : String(error)}`);
+      }
     } finally {
-      this.annotationSaving = false;
-      this.renderMarkMenu();
+      if (generation === this.generation) {
+        this.annotationSaving = false;
+        if (this.opened && this.markTarget === target) this.renderMarkMenu();
+      }
     }
   }
 
-  private async saveSelection(selection: EngineSelection, kind: "highlight" | "annotation", note?: string, aiExplanation?: string): Promise<void> {
+  private async saveSelection(selection: EngineSelection, kind: "highlight" | "annotation", note?: string, aiExplanation?: string, color = this.plugin.settings.highlightColor): Promise<void> {
     const entry = this.entry;
     const engine = this.engine;
+    const generation = this.generation;
     const chapterId = selection.chapterId ?? this.currentChapterId;
     if (!entry || !chapterId) throw new Error("当前不在章节中，请先从目录创建或选择章节");
     const record = await this.plugin.library.saveAnnotation(entry, {
-      id: genId("a"), chapterId, kind, text: selection.text, note, aiExplanation,
+      id: genId("a"), chapterId, kind, color, text: selection.text, note, aiExplanation,
       cfi: selection.cfi, pdfPage: selection.pdfPage, itemRanges: selection.itemRanges,
       sortKey: selection.sortKey ?? 0,
     });
+    if (!this.opened || generation !== this.generation) return;
     if (this.engine === engine) engine?.addHighlight(record);
+    await this.rememberHighlightColor(color, generation);
   }
 
-  private openAnnotationCreate(sel: EngineSelection): void {
+  private async rememberHighlightColor(color: HighlightColor, generation: number): Promise<void> {
+    if (!this.opened || generation !== this.generation || this.plugin.settings.highlightColor === color) return;
+    this.plugin.settings.highlightColor = color;
+    try {
+      await this.plugin.saveSettings();
+    } catch (error) {
+      if (this.opened && generation === this.generation) {
+        new Notice(`标记已保存，但默认划线颜色保存失败：${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+  }
+
+  private openAnnotationCreate(sel: EngineSelection, color = this.plugin.settings.highlightColor): void {
     const entry = this.entry;
     if (!entry) return;
     const chapterId = sel.chapterId ?? this.currentChapterId;
@@ -1262,6 +1435,7 @@ export class ReaderView extends ItemView {
       aiText: "",
       aiIncluded: false,
       aiLoading: false,
+      color,
     };
     this.renderAnnotationCard();
   }
@@ -1280,6 +1454,7 @@ export class ReaderView extends ItemView {
       aiText: record.aiExplanation ?? "",
       aiIncluded: Boolean(record.aiExplanation),
       aiLoading: false,
+      color: record.color ?? "yellow",
     };
     this.renderAnnotationCard();
   }
@@ -1287,6 +1462,7 @@ export class ReaderView extends ItemView {
   private renderAnnotationCard(): void {
     const draft = this.draft;
     const entry = this.entry;
+    const generation = this.generation;
     const card = this.annotCard;
     card.empty();
     card.removeClass("qr-hidden");
@@ -1329,16 +1505,18 @@ export class ReaderView extends ItemView {
     const save = el("button", "qr-btn qr-btn-primary", "保存");
     save.disabled = draft.aiLoading || this.annotationSaving;
     save.onclick = async () => {
-      if (this.annotationSaving) return;
+      if (!this.opened || generation !== this.generation || this.draft !== draft || this.annotationSaving) return;
       this.annotationSaving = true;
       save.disabled = true;
       try {
         await this.saveAnnotation();
       } catch (error) {
-        new Notice(`批注保存失败：${error instanceof Error ? error.message : String(error)}`);
+        if (this.opened && generation === this.generation && this.draft === draft) {
+          new Notice(`批注保存失败：${error instanceof Error ? error.message : String(error)}`);
+        }
       } finally {
-        this.annotationSaving = false;
-        save.disabled = false;
+        if (generation === this.generation) this.annotationSaving = false;
+        if (this.opened && generation === this.generation && this.draft === draft && save.isConnected) save.disabled = false;
       }
     };
     actions.append(cancel, save);
@@ -1448,7 +1626,7 @@ export class ReaderView extends ItemView {
         aiExplanation: ai,
       });
     } else if (draft.selection) {
-      await this.saveSelection(draft.selection, "annotation", note, ai);
+      await this.saveSelection(draft.selection, "annotation", note, ai, draft.color);
     }
     if (!this.opened || generation !== this.generation || this.draft !== draft) return;
     this.draft = null;

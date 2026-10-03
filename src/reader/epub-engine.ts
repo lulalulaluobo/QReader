@@ -6,10 +6,9 @@ import type Section from "epubjs/types/section";
 import type { AnnotationRecord, BookFormat, ChapterState, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
 import { epubChapterId } from "../types";
-import { READING_FONTS } from "../settings";
+import { HIGHLIGHT_COLORS, READING_FONTS } from "../settings";
 
 const HL_CLASS = "qr-hl";
-const HL_STYLES = { fill: "#FDE68A", "fill-opacity": "0.55", "mix-blend-mode": "multiply" };
 interface ContentsLike {
   document: Document;
   window: Window;
@@ -94,7 +93,7 @@ export class EpubEngine implements ReaderEngine {
       this.chapterIds.set(chapter, ordinal === 0 ? epubChapterId(chapter.spineIndex) : `${epubChapterId(chapter.spineIndex)}-${ordinal}`);
       ordinals.set(chapter.spineIndex, ordinal + 1);
     }
-    for (const annotation of annotations) this.marks.set(annotation.id, annotation);
+    for (const annotation of annotations) this.marks.set(annotation.id, { ...annotation });
   }
 
   async mount(container: HTMLElement): Promise<void> {
@@ -174,8 +173,9 @@ export class EpubEngine implements ReaderEngine {
     rendition.hooks.content.register((contents: ContentsLike) => this.bindContents(contents));
     try {
       let displayed = false;
+      let restoredCfi = false;
       if (point.cfi) {
-        try { await rendition.display(point.cfi); displayed = true; } catch { /* Try the saved percentage next. */ }
+        try { await rendition.display(point.cfi); displayed = restoredCfi = true; } catch { /* Try the saved percentage next. */ }
       }
       if (!displayed && typeof point.percent === "number" && Number.isFinite(point.percent)) {
         if (this.book.packaging.metadata.layout === "pre-paginated") {
@@ -204,6 +204,12 @@ export class EpubEngine implements ReaderEngine {
       // reportLocation resolves on epub.js's animation-frame relocation. Keep the
       // intermediate default chapter suppressed throughout that frame.
       await rendition.reportLocation();
+      if (restoredCfi && point.cfi && !this.destroyed && generation === this.generation) {
+        // Converted books can finish their first layout after the initial CFI
+        // display. Reapply the saved target once that layout has been measured.
+        await rendition.display(point.cfi);
+        await rendition.reportLocation();
+      }
       this.restoring = false;
       if (rendition.location?.start) this.handleRelocated(rendition.location);
     } finally {
@@ -419,12 +425,17 @@ export class EpubEngine implements ReaderEngine {
   private attachHighlight(annotation: AnnotationRecord): void {
     if (!annotation.cfi || !this.rendition || this.attached.has(annotation.id)) return;
     const id = annotation.id;
+    const color = HIGHLIGHT_COLORS[annotation.color ?? "yellow"];
     this.rendition.annotations.add("highlight", annotation.cfi, { id }, (event: Event) => {
       event.stopPropagation();
       const target = event.currentTarget as Element | null;
       const anchor = target?.getBoundingClientRect();
       if (this.marks.has(id)) this.hooks.onAnnotationClick(id, anchor);
-    }, HL_CLASS, HL_STYLES);
+    }, HL_CLASS, {
+      fill: color.fill, "fill-opacity": "0.28",
+      stroke: color.edge, "stroke-opacity": "0.8", "stroke-width": "0.8",
+      "mix-blend-mode": "normal",
+    });
     this.attached.add(id);
   }
 
@@ -432,7 +443,7 @@ export class EpubEngine implements ReaderEngine {
     const previous = this.marks.get(annotation.id);
     if (previous?.cfi) this.rendition?.annotations.remove(previous.cfi, "highlight");
     this.attached.delete(annotation.id);
-    this.marks.set(annotation.id, annotation);
+    this.marks.set(annotation.id, { ...annotation });
     this.attachHighlight(annotation);
   }
 
