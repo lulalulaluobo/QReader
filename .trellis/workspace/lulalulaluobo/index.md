@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 2
+- **Total Sessions**: 3
 - **Last Active**: 2026-10-03
 <!-- @@@/auto:current-status -->
 
@@ -23,4 +23,5 @@
 | --- | --- | --- | --- | --- |
 | 1 | 2026-10-03 | 初始化并完成 QReader 插件 | b3d3f5c | main |
 | 2 | 2026-10-03 | 修复阅读交互并发布 1.0.1 | b90bb29 | main |
+| 3 | 2026-10-03 | 完成六格式阅读改版与 AI 预设 | 4dbb78c | main |
 <!-- @@@/auto:session-history -->
