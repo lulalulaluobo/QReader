@@ -47,8 +47,8 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 4. 提交中文 Git 记录，推送 main 到指定 GitHub 仓库。
 
 ## 7. 交付与验收
-- 从源码执行 `npm ci`、`npm run build`；将 main.js、manifest.json、styles.css 放入 Vault 的 `.obsidian/plugins/qreader/`，在 Obsidian 社区插件设置中启用 QReader。
+- 从源码执行 `npm ci`、`npm run build`；也可在 BRAT 中添加仓库 `lulalulaluobo/QReader`，安装 GitHub `1.0.0` release。release 提供 BRAT 所需的 main.js、manifest.json、styles.css。源码手动安装时将三个产物放入 Vault 的 `.obsidian/plugins/qreader/`，再启用 QReader。
 - 通过「QReader：打开书架」命令或书架图标进入；原生设置中配置阅读库路径、Base URL、API Key、Model，并测试连接。
 - 已在 Obsidian 1.13.7 验证 EPUB/PDF、批注、三问回答、预约/即时复习及位置恢复；四页面在 320–1440px 的 28 组布局检查无横向溢出。
 - AI 使用临时本地兼容协议服务验收请求、解析与失败重试，不代表真实供应商效果；Android/iOS 真机及其他 Obsidian 版本未验收。具体证据及限制保存在 Trellis 工作日志。
-- 源码已用中文提交推送至 [GitHub 仓库](https://github.com/lulalulaluobo/QReader) 的 main；生产 main.js 为本地构建产物，不纳入源码仓库。
+- 源码已用中文提交推送至 [GitHub 仓库](https://github.com/lulalulaluobo/QReader) 的 main；v1.0.0 已作为含插件产物的 [GitHub Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.0) 发布。BRAT 从 release 下载安装文件，生产 main.js 不纳入源码分支。

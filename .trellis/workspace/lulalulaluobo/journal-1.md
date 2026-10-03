@@ -28,3 +28,4 @@
 - 安装：npm ci 后执行 npm run build，将三个产物复制到 Vault/.obsidian/plugins/qreader/，在社区插件设置启用；通过原生命令或图标打开书架，再配置 AI。API Key 在本地 data.json 中未加密，应保护 Vault 同步和备份。
 - 源码提交 b3d3f5c（完成 QReader V1 阅读、三问批注和主动复习插件）已推送 main 至 https://github.com/lulalulaluobo/QReader.git，未强制覆盖历史；GitHub CLI 未安装，使用原生 Git 完成推送。
 - 已关闭独立 Obsidian 验收窗口，停止本地协议服务和渲染测试服务器，移除临时验收目录；保留源码和三个本地安装产物，不提交密钥、原书或临时 Vault。
+- 已发布 GitHub Release `1.0.0`，release/tag/manifest 版本一致，BRAT 必需的 `main.js`、`manifest.json`、`styles.css` 均作为公开附件上传并校验 SHA-256。安装时在 BRAT 的 “Add a beta plugin for testing” 添加 `lulalulaluobo/QReader`，选择最新 release。
