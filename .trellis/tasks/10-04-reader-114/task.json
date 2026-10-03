@@ -2,12 +2,12 @@
   "id": "reader-114",
   "name": "reader-114",
   "title": "增加中英文界面与语言提示词并发布 1.1.4",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
-  "completedAt": null,
+  "completedAt": "2026-10-04",
   "branch": "main",
-  "commit": null,
-  "notes": "用户授权设置页增加中英文选择、前端和默认 AI 提示词跟随语言、更新 README 并推送补丁 Release。"
+  "commit": "73b355a5db8cd031db64001d5c986b1adcb72bdc",
+  "notes": "中英文界面/默认提示词、草稿和阅读位置保留、双语 README 完成；main 与注解标签 1.1.4 已推送，正式 latest Release 四个公开附件逐字节/SHA-256/digest 和 ZIP 内容校验一致。实际独立 Obsidian 验收通过，真机与真实模型质量未验证。"
 }

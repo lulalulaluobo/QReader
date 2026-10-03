@@ -139,3 +139,14 @@
 - 生产构建、14 组书架/14 组菜单浅深色宽度、375×667 四卡、复制/解读/批注/删除确认、指针/键盘、EPUB/PDF 颜色重开、FB2/MOBI/AZW3 无描边高亮通过。16 本样书原书 SHA-256 不变，未处理错误为空。macOS 独立 Obsidian 1.13.7 移动 CSS 模拟，不宣称 Android/iOS 真机或真实模型质量。
 - 源码 `c08b1158702b0b809a89f104ae91ca47b22603f0`、main/注解标签 1.1.3 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.3) 四个公开下载附件逐字节、SHA-256 和 digest 与实测产物一致。
 - ZIP SHA-256：`6b53573c16c526edcfb668afe8ec59bad07bb33f468cec5175d59add2977fd65`；详细证据见 `.trellis/tasks/10-04-reader-113/verification.md`。
+
+## Session 8: 中英文界面、语言提示词与双语 README，发布 1.1.4
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 用户要求下一步提供英语前端、设置语言选择、提示词跟随中英文、更新 README 并推送补丁版本。选择 1.1.4；保留已有四卡、单行全图标、无边框高亮和单页回退。
+- 添加 zh-CN/en 类型安全消息表，四页面/设置/命令/菜单/图标/通知/已知错误本地化；旧配置默认中文，不翻译原书和用户内容。空白三问模板、选文/批注解读、回答/复习反馈跟随语言；自定义模板原文保留，中英标签与 JSON 使用稳定类型/ID。
+- 切换只重绘阅读控制，不移动 iframe，保留非零 CFI、答题步骤和回答/批注/设置草稿；英文长按钮允许换行，书架导航紧凑收缩，Theme 使用简短标签。
+- 实际独立 Obsidian 1.13.7 验收原生设置保存/重开/回退、3 条命令与标签页刷新、112 组中英/浅深色/宽度/四页布局、英文菜单 5 宽度、三问/解释/反馈请求与无效响应、复制/批注/闭卷三题/复习反馈。16 本原文件 SHA-256 不变、旧历史不变、未处理错误为空。移动 CSS 与固定协议回复不代表真机或真实模型质量。
+- 源码 `73b355a5db8cd031db64001d5c986b1adcb72bdc`、main/注解标签 1.1.4 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.4) 四个公开附件逐字节/SHA-256/digest 与本地实测构建一致，ZIP 只含三个安装文件。
+- ZIP SHA-256：`2dc48cdbcfd6671ba3fbcbba2fd9d923eaefff9f6350544757f9cf2573bb265f`；详情见 `.trellis/tasks/10-04-reader-114/verification.md`。独立验收 GUI 与服务器已关闭。

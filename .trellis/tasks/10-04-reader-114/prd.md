@@ -18,6 +18,6 @@
 - [x] 语言切换不重载阅读 iframe，不丢 CFI/草稿，单页导航保持。
 - [x] 默认中英三问/解释/反馈请求，中文/英文/JSON 问题解析及无效响应保护；自定义模板/空白回退。
 - [x] 中英文窄宽、浅深色、四卡与单行图标；已知错误英文、原书与旧记录安全。
-- [ ] README 双语、版本一致、main/tag 推送、正式 latest Release 与公开附件校验。
+- [x] README 双语、版本一致、main/tag 推送、正式 latest Release 与公开附件校验。
 
 使用 tmp/release-112-smoke 独立 Obsidian 1.13.7 Vault。移动端为模拟，AI 为隔离协议端点；不宣称真机或真实模型质量。

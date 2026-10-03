@@ -22,4 +22,15 @@
 
 ## 发布
 
-待源码提交、main/1.1.4 推送与正式 latest Release 附件公开下载校验后补记。
+- 源码提交 `73b355a5db8cd031db64001d5c986b1adcb72bdc`、main 与注解标签 1.1.4 已推送。远程标签解析到该源码提交，保留旧标签。
+- [QReader 1.1.4 正式 Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.4) 为 latest，draft=false、prerelease=false；三个 BRAT 文件和 ZIP 均 uploaded。
+- 无鉴权公开下载的四个附件与本地实测构建逐字节一致，SHA-256 和 GitHub digest 相同。ZIP 仅含 `qreader/main.js`、`qreader/manifest.json`、`qreader/styles.css`，解压后三文件与公开单文件逐字节相同；manifest/package/lock 根与包版本均 1.1.4。
+
+| 附件 | 字节 | SHA-256 |
+|---|---:|---|
+| main.js | 6382680 | `9aa1417cf3fc71e7b0f286b9c88ec36bbd40d0d0726c68f0428d932f8f0e6994` |
+| manifest.json | 256 | `78f9f9fd85dd3910faf7e8abdf350961bd34719ff6d2257ee0e1771c1be8b17c` |
+| styles.css | 35948 | `2fff33d69fd423cff11a65fa929ef529bfbe1aeacbf9a8a070656bddc0dae349` |
+| QReader-1.1.4.zip | 2926351 | `2dc48cdbcfd6671ba3fbcbba2fd9d923eaefff9f6350544757f9cf2573bb265f` |
+
+独立验收 Obsidian 已正常退出，隔离协议服务器已停止；最终未处理错误为空。
