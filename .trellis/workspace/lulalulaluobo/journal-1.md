@@ -59,3 +59,9 @@
 - DeepSeek `deepseek-flash` / `https://api.deepseek.com`、Agnes `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1` 在原生设置中只呈现本服务 password API Key；互切保留独立密钥，不丢未保存的阅读库输入和既有自定义 endpoint/model/key。本地兼容端点实际运行探针、问题生成、批注解释及回答—反馈保存闭环；provider/key/model 变更和设置关闭重开时旧探针结果被丢弃或按钮复原。离线协议脚本还验证旧 flat config 迁移、三个准确 endpoints/Authorization、DeepSeek thinking 条件、HTTP/网络/恶意 URL 错误脱敏，无外网请求。
 - 独立 Obsidian 1.13.7 中再次加载最终 1.1.0 构建，1440 桌面 reader 正文/面板正常且状态栏隐藏；导入解析、位置和跨格式 CFI 回归以 1.12.4 独立 Vault 为准。所有测试 Vault/源书/模拟 API 密钥与协议脚本均属 `tmp/redesign-smoke/` 临时验收数据，交付前移除。
 - 验收环境仅 macOS 的 Obsidian Electron 1.12.4/1.13.7 与模拟视口/触摸；未用 Android/iOS 真机、真实 DeepSeek/Agnes API Key 或 DRM 保护书籍。AI 协议通过不代表外部账号可用或模型输出质量；PRD 准确写明限制。GitHub latest 仍为 1.0.1，本地 1.1.0 ZIP 未发布。
+
+## 2026-10-03：推送并发布 QReader 1.1.0
+
+- `main` 以 fast-forward 推送到 `origin`，发布标签 `1.1.0` 指向源码提交 `c601791`；未强推。
+- GitHub Release 已设为 latest，上传 `main.js`、`manifest.json`、`styles.css` 与 `QReader-1.1.0.zip`；公开页面可访问：[QReader 1.1.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.0)。
+- 发布说明保留 CBZ 无 OCR、DRM 不支持、未做 Android/iOS 真机与真实 AI Key 验收等限制。

@@ -43,7 +43,7 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 1. 初始化入口、Git 与中文 Trellis 规范。
 2. 完成阅读引擎、可靠存储和四页面交互。
 3. 构建并通过实际 Obsidian 六格式阅读、阅读记录与回忆闭环验收。
-4. 提交中文 Git 记录，推送 main 到指定 GitHub 仓库。
+4. 提交中文 Git 记录，推送 main，并发布 GitHub Release 1.1.0 与 BRAT 安装文件。
 
 ## 7. 交付与验收
 - 从源码执行 `npm ci`、`npm run build`；解压 `dist/QReader-1.1.0.zip` 的 `qreader/` 目录到 Vault 的 `.obsidian/plugins/`，得到 `.obsidian/plugins/qreader/{main.js,manifest.json,styles.css}` 后启用插件。源码分支忽略生成的 `main.js`。
@@ -53,5 +53,5 @@ QReader 是 Obsidian 内的问题驱动阅读插件：先提问，再阅读，�
 - AI 预设使用官方核实的 `deepseek-flash` / `https://api.deepseek.com` 和 `agnes-2.5-flash` / `https://apihub.agnes-ai.com/v1`；本地 OpenAI-compatible 协议服务通过实际 UI 探针、三问、批注解释与回答反馈流程。无供应商密钥；未验证外部联网或模型效果。密钥仅保存在插件 `data.json`，未加密。
 - 克隆调研参考 `joeseesun/qiaomu-reader` commit `cff28ba6`（GPL-3.0-only），未复制其插件代码：`src/reader-engine.js` 说明 Foliate.js 的 EPUB/MOBI/AZW3/FB2（独立/压缩）/CBZ 与独立 PDF 路径；`src/main.js` 展示扩展名路由；`src/status-bar.js` 与 `src/styles.css` 展示跟随活动阅读视图、卸载清理的宿主导航控制；`src/epub-zip.js` 记录无 UTF-8 ZIP 标志时的中文路径兼容问题。QReader 自行采用 EPUB.js/PDF.js 双引擎和 MIT 格式适配；依赖 Foliate.js 1.0.1、fflate 0.8.2，保留上游许可证声明。
 - 验收用的独立 Obsidian 为 1.12.4 与 1.13.7；OS 为 macOS。Android/iOS 真机、加密/DRM 书籍、真实供应商密钥均未测试，不宣称受支持。
-- GitHub latest 仍为 1.0.1；1.1.0 当前提供本地安装包，未推送或发布 Release。发布 BRAT 前需将源码推送并附 `main.js`、`manifest.json`、`styles.css`。
+- GitHub Release 1.1.0 已发布并设为 latest，包含 BRAT 所需 `main.js`、`manifest.json`、`styles.css` 与手动安装包 `QReader-1.1.0.zip`。
 - 历史 GitHub Release 1.0.1 仍可通过 [GitHub 仓库](https://github.com/lulalulaluobo/QReader/releases/tag/1.0.1) 安装；生成的生产 `main.js` 不纳入源码分支。
