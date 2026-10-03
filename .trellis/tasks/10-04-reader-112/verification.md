@@ -21,4 +21,13 @@
 
 ## 发布
 
-待 Git 推送及正式 Release 完成后记录源码提交、附件 SHA-256 和公开下载校验结果。安装包只包含 `qreader/` 下的 main.js、manifest.json、styles.css。
+- 源码提交：`3443459ec202979c6c039e47bb4350ca7533c772`，已推送 main；注解标签 `1.1.2` 指向同一源码。
+- 正式 latest Release：[QReader 1.1.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2)，draft=false、prerelease=false，四个附件均 uploaded。
+- 四个附件均通过无凭据的公开地址下载，与本地实测文件逐字节相同；下载 manifest 为 1.1.2。GitHub 返回的 digest 同样一致。ZIP 仅含 `qreader/` 下三个安装文件，解压后也与单独附件一致。
+
+| 附件 | SHA-256 |
+| --- | --- |
+| main.js | `486925743db84a89d755c5b40c6866bf0f68a1f235cea3615e5e6cafa75e12ab` |
+| manifest.json | `3773765e10c29cd5f922d173c0c8733e5630b459db2ffc20d8b2eb925db42844` |
+| styles.css | `0e6d68e31f65a9078f8fa57bc5f6dc2bcc245029d995784d76faeac4e9bf3a33` |
+| QReader-1.1.2.zip | `563a8ebff282f5a072d593ee85aaa2e2d468b16f59ae6576f821c0ef65823cdd` |

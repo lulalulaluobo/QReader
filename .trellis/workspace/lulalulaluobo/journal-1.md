@@ -116,3 +116,15 @@
 ### Next Steps
 
 - 无，任务已完成。
+
+## Session 6: 优化三问、单页导航、高亮和分类并发布 1.1.2
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 每章三问设置支持自定义提示词、空白回退用户默认模板、章节正文替换；标签/JSON 解析和错误不落盘通过。重新生成始终追加版本，保留导航草稿引用的问题。
+- 四页面启用 navigation 并复用 getMostRecentLeaf，原生前进/回退实测 leaf ID/数量不变，CFI、草稿、筛选恢复；关闭旧阅读引擎和订阅。各页打开时同步宿主 chrome，转换书首次布局测量后重定位保存 CFI，修复 AZW3 重开退页。
+- 选文菜单提高对比，五色划线长按选色、短按确认；松手/选色/取消不落盘，已有标记改色、EPUB/PDF 颜色重开与旧黄色通过。
+- 书架手机两列四卡、未读/已读和用户学科分类，新增/分配/搜索组合/磁盘/回退通过；真实长英文书名的复习按钮支持换行。七种宽度浅深色共 56 组页面检查通过，375×667 移动 CSS 首屏四卡可见。
+- macOS Obsidian 1.13.7 独立 Vault 验证 EPUB/PDF 及 FB2/MOBI6/KF8-AZW3/CBZ 阅读/重开，原书字节不变；三题提交、反馈 503 重试不重复保存、闭卷复习、键盘焦点/Escape 通过。生产构建和 diff 检查通过，无未处理运行错误。Android/iOS 真机和真实供应商输出质量未验证。
+- 源码提交 `3443459ec202979c6c039e47bb4350ca7533c772`、main 与注解标签 1.1.2 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.2) 的四个附件 uploaded，公开下载与本地逐字节/SHA-256 一致。
+- ZIP SHA-256：`563a8ebff282f5a072d593ee85aaa2e2d468b16f59ae6576f821c0ef65823cdd`；仅含 qreader 下三个安装文件。详情见 `.trellis/tasks/10-04-reader-112/verification.md`。
