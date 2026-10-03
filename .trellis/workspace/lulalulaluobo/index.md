@@ -21,5 +21,5 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 | --- | --- | --- | --- | --- |
-| 1 | 2026-10-03 | 初始化并完成 QReader 插件 | 验收后记录 | main |
+| 1 | 2026-10-03 | 初始化并完成 QReader 插件 | b3d3f5c | main |
 <!-- @@@/auto:session-history -->
