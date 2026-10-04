@@ -7,6 +7,8 @@ import type { AnnotationRecord, BookFormat, ChapterState, ReadMode, ReadingLayou
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
 import { epubChapterId } from "../types";
 import { HIGHLIGHT_COLORS, READING_FONTS } from "../settings";
+import { WordLayer } from "./word-layer";
+import type { VocabularyWord } from "../core/vocabulary";
 
 const HL_CLASS = "qr-hl";
 interface ContentsLike {
@@ -24,6 +26,11 @@ export class EpubEngine implements ReaderEngine {
   private rendition: Rendition | null = null;
   private contentHook: Book["spine"]["hooks"]["content"] | null = null;
   private container: HTMLElement | null = null;
+  private wordLayers = new Map<Document, WordLayer>();
+  private vocabulary: readonly VocabularyWord[] = [];
+  private vocabularyHighlight = true;
+  private lookupEnabled = false;
+  private vocabularyThreshold = 5;
   private mode: ReadMode;
   private layout: ReadingLayout;
   private theme: ReadingColors;
@@ -165,12 +172,17 @@ export class EpubEngine implements ReaderEngine {
     this.selectionScroll = null;
     this.applyTheme();
     rendition.on("relocated", (location: Location) => {
-      if (generation === this.generation && !this.destroyed && !this.restoring) this.handleRelocated(location);
+      if (generation !== this.generation || this.destroyed) return;
+      for (const [doc, layer] of this.wordLayers) {
+        if (!doc.defaultView?.frameElement?.isConnected) { layer.flush(); layer.destroy(); this.wordLayers.delete(doc); }
+        else layer.refresh();
+      }
+      if (!this.restoring) this.handleRelocated(location);
     });
     rendition.on("selected", (cfi: string, contents: ContentsLike) => {
       if (generation === this.generation && !this.destroyed) this.handleSelected(cfi, contents);
     });
-    rendition.hooks.content.register((contents: ContentsLike) => this.bindContents(contents));
+    rendition.hooks.content.register((contents: ContentsLike) => { if (generation === this.generation && !this.destroyed) this.bindContents(contents); });
     try {
       let displayed = false;
       let restoredCfi = false;
@@ -219,6 +231,12 @@ export class EpubEngine implements ReaderEngine {
 
   private bindContents(contents: ContentsLike): void {
     const doc = contents.document;
+    this.wordLayers.get(doc)?.destroy();
+    if (this.container && this.format !== "cbz") {
+      const words = new WordLayer(doc, doc.body, this.container, `epub:${contents.sectionIndex}`, this.hooks.onWordLookup, this.hooks.onWordExposure);
+      this.wordLayers.set(doc, words);
+      words.set(this.vocabulary, this.vocabularyHighlight, this.lookupEnabled, this.vocabularyThreshold);
+    }
     contents.addStylesheetCss(this.readingCss, "qreader-reading");
     for (const chapter of this.chapters) {
       if (chapter.spineIndex !== contents.sectionIndex) continue;
@@ -299,6 +317,7 @@ export class EpubEngine implements ReaderEngine {
           return;
         }
       }
+      if (this.wordLayers.get(doc)?.handleClick(event)) return;
       const x = (hostX - surface.left) / surface.width;
       const y = (hostY - surface.top) / surface.height;
       if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
@@ -419,7 +438,7 @@ export class EpubEngine implements ReaderEngine {
       top: Math.max(surface.top, frame.top + rect.top),
       bottom: Math.min(surface.bottom, frame.top + rect.bottom),
     } : undefined;
-    this.hooks.onSelect({ text: selection.toString().trim(), copyText: selection.toString(), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length, anchor });
+    this.hooks.onSelect({ text: selection.toString().trim(), copyText: selection.toString(), paragraphId: this.wordLayers.get(contents.document)?.paragraphId(range.startContainer), chapterId: this.chapterForCfi(cfi), cfi, sortKey: spine * 1_000_000_000 + prefix.toString().length, anchor });
   }
 
   private attachHighlight(annotation: AnnotationRecord): void {
@@ -457,22 +476,26 @@ export class EpubEngine implements ReaderEngine {
   async goToChapter(chapterId: string, targetHref?: string): Promise<void> {
     const chapter = this.chapterById(chapterId);
     if (!chapter || chapter.spineIndex === undefined || !this.rendition) return;
+    this.flushVocabulary();
     this.clearSelection();
     await this.rendition.display(targetHref ?? chapter.href ?? this.book.spine.get(chapter.spineIndex).href);
   }
 
   async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
     if (!annotation.cfi || !this.rendition) throw new Error("这条批注没有可用的原文位置");
+    this.flushVocabulary();
     this.clearSelection();
     await this.rendition.display(annotation.cfi);
   }
 
   async next(): Promise<void> {
+    this.flushVocabulary();
     this.clearSelection();
     if (this.mode === "scrolled") this.scrollBy(0.85);
     else await this.rendition?.next();
   }
   async prev(): Promise<void> {
+    this.flushVocabulary();
     this.clearSelection();
     if (this.mode === "scrolled") this.scrollBy(-0.85);
     else await this.rendition?.prev();
@@ -491,6 +514,8 @@ export class EpubEngine implements ReaderEngine {
   }
 
   private async rebuildRendition(): Promise<void> {
+    for (const layer of this.wordLayers.values()) layer.destroy();
+    this.wordLayers.clear();
     const cfi = this.position.cfi ?? this.rendition?.location?.start?.cfi;
     const point = { ...this.position, cfi };
     this.suspended = false;
@@ -570,6 +595,8 @@ export class EpubEngine implements ReaderEngine {
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;
+    for (const layer of this.wordLayers.values()) layer.destroy();
+    this.wordLayers.clear();
     this.generation++;
     window.clearTimeout(this.resizeTimer);
     this.selectionScroller?.removeEventListener("scroll", this.guardSelectionScroll);
@@ -582,4 +609,11 @@ export class EpubEngine implements ReaderEngine {
     this.rendition = null;
     this.container?.replaceChildren();
   }
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void {
+    this.vocabulary = words; this.vocabularyHighlight = highlight; this.lookupEnabled = lookupEnabled;
+    this.vocabularyThreshold = threshold;
+    for (const layer of this.wordLayers.values()) layer.set(words, highlight, lookupEnabled, threshold);
+  }
+  noteVocabularyLookup(word: string, paragraphId?: string): void { for (const layer of this.wordLayers.values()) layer.noteLookup(word, paragraphId); }
+  flushVocabulary(): void { for (const layer of this.wordLayers.values()) layer.flush(); }
 }

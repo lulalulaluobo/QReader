@@ -7,6 +7,8 @@ import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLay
 import { pdfChapterId } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
 import { HIGHLIGHT_COLORS } from "../settings";
+import { WordLayer } from "./word-layer";
+import type { VocabularyWord } from "../core/vocabulary";
 
 interface PageDims { width: number; height: number; }
 interface RenderState {
@@ -23,6 +25,11 @@ export class PdfEngine implements ReaderEngine {
   readonly format = "pdf" as const;
   readonly reflowable = false;
   private container: HTMLElement | null = null;
+  private wordLayers = new Map<number, WordLayer>();
+  private vocabulary: readonly VocabularyWord[] = [];
+  private vocabularyHighlight = true;
+  private lookupEnabled = false;
+  private vocabularyThreshold = 5;
   private scroller: HTMLElement | null = null;
   private wrappers = new Map<number, HTMLElement>();
   private renders = new Map<number, RenderState>();
@@ -271,7 +278,14 @@ export class PdfEngine implements ReaderEngine {
       else if (viewport.rotation === 270) layer.style.transform = "rotate(270deg) translateX(-100%)";
       await state.textLayer.render();
       if (!this.isCurrent(number, state)) return;
+      let paragraph = 0;
+      let previousY: number | undefined;
       state.textLayer.textDivs.forEach((span, index) => {
+        const item = items[index];
+        const y = item?.transform[5];
+        if (y !== undefined && previousY !== undefined && Math.abs(y - previousY) > Math.max(1, item?.height ?? 12) * 1.8) paragraph++;
+        if (y !== undefined) previousY = y;
+        span.dataset.qrParagraph = `pdf:${number}:${paragraph}`;
         span.dataset.i = String(index);
         span.style.position = "absolute";
         span.style.color = "transparent";
@@ -284,6 +298,11 @@ export class PdfEngine implements ReaderEngine {
       });
       for (const br of layer.querySelectorAll("br")) { br.style.position = "absolute"; br.style.color = "transparent"; }
       wrapper.dataset.rendered = "true";
+      if (this.scroller) {
+        const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordLookup, this.hooks.onWordExposure, true);
+        this.wordLayers.set(number, words);
+        words.set(this.vocabulary, this.vocabularyHighlight, this.lookupEnabled, this.vocabularyThreshold);
+      }
       this.paintHighlights(number);
       // Retain at most eight fully rendered pages even with very small pages.
       if (this.mode === "scrolled" && this.renders.size > 8) {
@@ -307,6 +326,7 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private dropPage(number: number): void {
+    this.wordLayers.get(number)?.destroy(); this.wordLayers.delete(number);
     const state = this.renders.get(number);
     if (state) {
       state.cancelled = true;
@@ -371,7 +391,7 @@ export class PdfEngine implements ReaderEngine {
         top: pageRect.top + first.y * pageRect.height,
         bottom: pageRect.top + (first.y + first.height) * pageRect.height,
       } : undefined;
-      this.hooks.onSelect({ text, copyText: selection.toString(), chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start, anchor });
+      this.hooks.onSelect({ text, copyText: selection.toString(), paragraphId: this.wordLayers.get(page)?.paragraphId(selection.getRangeAt(0).startContainer), chapterId: this.chapterForPage(page) ?? undefined, pdfPage: page, itemRanges: ranges, sortKey: page * 1_000_000_000 + ranges[0].item * 10_000 + ranges[0].start, anchor });
       return;
     }
   }
@@ -478,6 +498,7 @@ export class PdfEngine implements ReaderEngine {
         }
       }
     }
+    for (const layer of this.wordLayers.values()) if (layer.handleClick(event)) return;
     const rect = this.scroller?.getBoundingClientRect();
     if (!rect) return;
     const x = (event.clientX - rect.left) / rect.width;
@@ -504,6 +525,7 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private async setPage(page: number, fraction = 0): Promise<void> {
+    this.flushVocabulary();
     this.currentPage = Math.max(1, Math.min(page, this.doc.numPages));
     this.currentPageFraction = fraction;
     if (this.mode === "paginated") await this.rebuild();
@@ -523,10 +545,12 @@ export class PdfEngine implements ReaderEngine {
     await this.setPage(annotation.pdfPage, Math.max(0, Math.min(1, fraction)));
   }
   async next(): Promise<void> {
+    this.flushVocabulary();
     if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
     else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "smooth" });
   }
   async prev(): Promise<void> {
+    this.flushVocabulary();
     if (this.mode === "paginated") { if (this.currentPage > 1) await this.setPage(this.currentPage - 1); }
     else this.scroller?.scrollBy({ top: -this.scroller.clientHeight * 0.85, behavior: "smooth" });
   }
@@ -562,6 +586,7 @@ export class PdfEngine implements ReaderEngine {
     void this.rebuild().catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))));
   }
   destroy(): void {
+    for (const layer of this.wordLayers.values()) layer.destroy(); this.wordLayers.clear();
     if (this.destroyed) return;
     this.destroyed = true;
     this.generation++;
@@ -577,4 +602,11 @@ export class PdfEngine implements ReaderEngine {
     this.container?.replaceChildren();
     this.scroller = null;
   }
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void {
+    this.vocabulary = words; this.vocabularyHighlight = highlight; this.lookupEnabled = lookupEnabled;
+    this.vocabularyThreshold = threshold;
+    for (const layer of this.wordLayers.values()) layer.set(words, highlight, lookupEnabled, threshold);
+  }
+  noteVocabularyLookup(word: string, paragraphId?: string): void { for (const layer of this.wordLayers.values()) layer.noteLookup(word, paragraphId); }
+  flushVocabulary(): void { for (const layer of this.wordLayers.values()) layer.flush(); }
 }

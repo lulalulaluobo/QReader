@@ -14,8 +14,9 @@ import { ReviewView, VIEW_TYPE_REVIEW } from "./views/review";
 import { QReaderSettingTab } from "./settings-tab";
 import { localizeMessage, localizedError, normalizeLanguage, translate } from "./i18n";
 import type { MessageKey } from "./i18n";
+import { loadTranslationSettings, YoudaoClient } from "./translation/youdao";
 
-export type SettingsChangeReason = "settings" | "language";
+export type SettingsChangeReason = "settings" | "language" | "translation";
 
 // Obsidian's native settings controller is not exposed by its public typings.
 interface AppSettingsAccess extends App {
@@ -31,6 +32,7 @@ export class QReaderPlugin extends Plugin {
   declare settings: QReaderSettings;
   library!: LibraryManager;
   cache!: BookCache;
+  translation = new YoudaoClient();
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<(reason: SettingsChangeReason) => void>();
   private ribbon: HTMLElement | null = null;
@@ -101,6 +103,7 @@ export class QReaderPlugin extends Plugin {
   localizeStatus(text: string): string { return localizeMessage(this.settings.language, text); }
 
   onunload(): void {
+    this.translation.clear();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_READER);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_ANSWER);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_BOOKSHELF);
@@ -121,6 +124,7 @@ export class QReaderPlugin extends Plugin {
     const reading = typeof data.reading === "object" && data.reading !== null ? data.reading : DEFAULT_SETTINGS.reading;
     this.settings = {
       language: normalizeLanguage(data.language),
+      translation: loadTranslationSettings(data.translation),
       libraryPath: libraryPath?.ok ? libraryPath.path : DEFAULT_SETTINGS.libraryPath,
       ai,
       questionPrompt: typeof data.questionPrompt === "string" ? data.questionPrompt : "",

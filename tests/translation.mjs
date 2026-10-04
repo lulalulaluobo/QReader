@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import {createHash,webcrypto} from 'node:crypto';
+globalThis.crypto ??= webcrypto;
+import {build} from 'esbuild';
+const bundle = await build({stdin:{contents:`export * from './src/translation/youdao'; export * from './src/core/vocabulary'; export * from './src/ai/providers'; export * from './src/ai/client';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'obsidian-test',setup(b){b.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const requestUrl = async (options) => globalThis.qrRequest(options);',loader:'js'}));}}]});
+const m = await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const settings={...m.DEFAULT_TRANSLATION_SETTINGS,appKey:'test-app',appSecret:'test-secret'};
+assert.equal(m.loadTranslationSettings(undefined).deletionThreshold,5);
+for(const value of ['sustain','SUSTAIN',"can't",'long-term'])assert.ok(m.singleWord(value));
+for(const value of ['two words','sustain.','你好','42','a b c'])assert.equal(m.singleWord(value),null);
+for(const text of ['sustain','abcdefghijklmnopqrstuvwxy','😀abcdefghijklmnopqrstu😀']){
+  const body=new URLSearchParams(await m.youdaoBody(text,settings,'nonce','123'));
+  const chars=Array.from(text);const input=chars.length<=20?text:chars.slice(0,10).join('')+chars.length+chars.slice(-10).join('');
+  assert.equal(body.get('sign'),createHash('sha256').update('test-app'+input+'nonce123test-secret').digest('hex'));
+  assert.equal(body.get('from'),'en');assert.equal(body.get('to'),'zh-CHS');assert.equal(body.get('signType'),'v3');assert.ok(!body.toString().includes('test-secret'));
+}
+assert.equal(m.safeAudioUrl('javascript:alert(1)'), '');assert.equal(m.safeAudioUrl('https://evil.com/x'), '');
+assert.equal(m.parseTranslation({errorCode:'0',translation:['维持'],speakUrl:'https://openapi.youdao.com/audio'},'sustain').phonetic,'');
+assert.throws(()=>m.parseTranslation({errorCode:'202',query:'SECRET'},'x'),/签名无效/);
+let calls=0;const client=new m.YoudaoClient(async()=>{calls++;await new Promise(r=>setTimeout(r,5));return {status:200,text:JSON.stringify({errorCode:'0',translation:['维持'],speakUrl:'https://openapi.youdao.com/audio'})};});
+await Promise.all([client.lookup('sustain',settings),client.lookup('Sustain',settings)]);assert.equal(calls,1);
+await client.lookup('SUSTAIN',settings);assert.equal(calls,1);await client.lookup('sustain',{...settings,appSecret:'another'});assert.equal(calls,2);
+client.clear();await client.lookup('sustain',settings);assert.equal(calls,3);
+const bad=new m.YoudaoClient(async()=>{throw new Error('test-secret');});await assert.rejects(bad.lookup('x',settings),error=>!error.message.includes('test-secret'));
+let resolveOld;let started;let freshCalls=0;const entered=new Promise(r=>{started=r;});
+const invalidated=new m.YoudaoClient(async()=>{freshCalls++;if(freshCalls===1){started();await new Promise(r=>{resolveOld=r;});}return {status:200,text:JSON.stringify({errorCode:'0',translation:['译文']})};});
+const oldRequest=invalidated.lookup('pending',settings);await entered;invalidated.clear();await invalidated.lookup('pending',settings);resolveOld();await oldRequest;await invalidated.lookup('pending',settings);assert.equal(freshCalls,2);
+const files=new Map();let fail=false;
+const fs={queueScope:{},exists:async p=>files.has(p),read:async p=>{if(!files.has(p))throw Error('missing');return files.get(p);},write:async(p,data)=>{if(fail){fail=false;files.set(p,'partial');throw Error('IO');}files.set(p,data);},remove:async p=>{files.delete(p);},mkdir:async()=>{},list:async()=>({files:[],folders:[]})};
+const a=new m.VocabularyStore(fs,'a/vocabulary.json'),a2=new m.VocabularyStore(fs,'a/vocabulary.json'),b=new m.VocabularyStore(fs,'b/vocabulary.json');
+await a.load();assert.equal(files.size,0);
+const result={query:'sustain',translation:'维持',phonetic:'',audioUrl:''};
+await a.lookup({...result,query:'two words'},'p0',true);assert.equal(files.size,0);
+await a.lookup(result,'p0',false);assert.equal(files.size,0);
+await a.lookup(result,'p0',true);
+await a.expose([{word:'sustain',paragraphId:'p0',lookupCount:1}],5);assert.equal(a.words[0].noLookupCount,0);
+await a.expose([{word:'sustain',paragraphId:'p1',lookupCount:1},{word:'sustain',paragraphId:'p1',lookupCount:1}],5);assert.equal(a.words[0].noLookupCount,1);
+await a2.load();await a2.expose([{word:'sustain',paragraphId:'p1',lookupCount:1}],5);assert.equal(a2.words[0].noLookupCount,1);
+await a.lookup(result,'p2',false);assert.equal(a.words[0].lookupCount,2);assert.equal(a.words[0].noLookupCount,0);
+await a.expose([{word:'sustain',paragraphId:'p3',lookupCount:1}],5);assert.equal(a.words[0].noLookupCount,0);
+for(let i=0;i<4;i++)await a.expose([{word:'sustain',paragraphId:'new'+i,lookupCount:2}],5);
+assert.equal(a.words[0].noLookupCount,4);
+await a.expose([{word:'sustain',paragraphId:'new4',lookupCount:2}],5);assert.equal(a.words.length,0);
+assert.deepEqual(JSON.parse(files.get(a.path)).words,[]);
+await Promise.all([a.lookup(result,'reset',true),a2.lookup({...result,query:'growth'},'reset',true)]);await a.load();assert.equal(a.words.length,2);
+let otherSaw=false;const unsubscribe=a2.subscribe(words=>{otherSaw=words.some(word=>word.word==='shared');});await a.lookup({...result,query:'shared'},'reset',true);assert.ok(otherSaw);assert.equal(a2.words.length,3);unsubscribe();
+await b.load();assert.equal(b.words.length,0);
+const before=files.get(a.path);fail=true;await assert.rejects(a.lookup(result,'p0',true),/IO/);assert.equal(files.get(a.path),before);
+files.set(b.path,'broken');await assert.rejects(b.lookup(result,'p0',true),/无效/);assert.equal(files.get(b.path),'broken');
+const old=m.loadAiSettings({provider:'agnes',agnesApiKey:'a',deepseekApiKey:'d',custom:{baseUrl:'http://localhost/v1',model:'custom',apiKey:'c'}});assert.equal(old.agnesModel,'agnes-2.5-flash');assert.equal(m.loadAiSettings(undefined).agnesModel,'agnes-3.0-flash');
+old.agnesBaseUrl='https://apihub.agnes-ai.com/v1/chat/completions';old.agnesModel='agnes-2.5-pro';assert.equal(m.getAiConfig(old).model,'agnes-2.5-pro');old.provider='deepseek';assert.equal(m.getAiConfig(old).apiKey,'d');
+let sent;globalThis.qrRequest=async options=>{sent=options;return {status:200,text:JSON.stringify({choices:[{message:{content:'ok'}}]})};};
+for(const url of ['https://apihub.agnes-ai.com/v1','https://apihub.agnes-ai.com/v1/chat/completions','https://apihub.agnes-ai.com/v1/chat/completions/']){
+  await m.chatCompletion({baseUrl:url,model:'agnes-3.0-flash',apiKey:'dummy'},[{role:'user',content:'ok'}]);assert.equal(sent.url,'https://apihub.agnes-ai.com/v1/chat/completions');
+}
+await m.chatCompletion({baseUrl:'https://api.deepseek.com',model:'deepseek-v4-pro',apiKey:'dummy'},[{role:'user',content:'ok'}]);assert.deepEqual(JSON.parse(sent.body).thinking,{type:'disabled'});
+await m.chatCompletion({baseUrl:'https://example.com/v1',model:'deepseek-v4-pro',apiKey:'dummy'},[{role:'user',content:'ok'}]);assert.equal(JSON.parse(sent.body).thinking,undefined);
+console.log(JSON.stringify({pass:'Youdao signing/cache/errors, word rules, default 5, per-book concurrency/rollback/dedup/reset/deletion, AI migration/templates/base and full URLs'}));

@@ -13,14 +13,17 @@ export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opt
   if (!cfg.model.trim()) throw new AiError("未配置 AI Model");
   if (!cfg.apiKey.trim()) throw new AiError("未配置 API Key");
   let endpoint: URL;
-  try { endpoint = new URL(cfg.baseUrl.trim().replace(/\/+$/, "") + "/chat/completions"); }
+  try {
+    endpoint = new URL(cfg.baseUrl.trim().replace(/\/+$/, ""));
+    if (!endpoint.pathname.endsWith("/chat/completions")) endpoint.pathname = endpoint.pathname.replace(/\/+$/, "") + "/chat/completions";
+  }
   catch { throw new AiError("AI Base URL 格式无效"); }
   if (!/^https?:$/.test(endpoint.protocol) || endpoint.username || endpoint.password || endpoint.search || endpoint.hash) throw new AiError("AI Base URL 必须是不含凭据、查询或片段的 HTTP(S) 地址");
   const body: { model: string; messages: ChatMessage[]; temperature: number; max_tokens?: number; thinking?: { type: "disabled" } } = {
     model: cfg.model.trim(), messages, temperature: opts?.temperature ?? 0.7,
   };
   if (opts?.maxTokens) body.max_tokens = opts.maxTokens;
-  if (endpoint.origin === AI_PRESETS.deepseek.baseUrl && (endpoint.pathname === "/chat/completions" || endpoint.pathname === "/v1/chat/completions") && body.model === AI_PRESETS.deepseek.model) {
+  if (endpoint.origin === AI_PRESETS.deepseek.baseUrl && (endpoint.pathname === "/chat/completions" || endpoint.pathname === "/v1/chat/completions") && AI_PRESETS.deepseek.models.includes(body.model)) {
     body.thinking = { type: "disabled" };
   }
   let response: RequestUrlResponse;
@@ -52,7 +55,7 @@ export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opt
 
 export async function testConnection(cfg: AiConfig): Promise<{ ok: boolean; message: string }> {
   try {
-    const reply = await chatCompletion(cfg, [{ role: "system", content: "You are a connectivity probe. Reply with the single word: ok" }, { role: "user", content: "ping" }], { temperature: 0, maxTokens: 8 });
+    const reply = await chatCompletion(cfg, [{ role: "system", content: "You are a connectivity probe. Reply with the single word: ok" }, { role: "user", content: "ping" }], { temperature: 0, maxTokens: 128 });
     return { ok: true, message: `连接成功（${cfg.model} 返回: ${reply.trim().slice(0, 20)}）` };
   } catch (error) { return { ok: false, message: error instanceof AiError ? error.message : "AI 连接失败" }; }
 }

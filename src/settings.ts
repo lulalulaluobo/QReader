@@ -3,9 +3,12 @@
 import type { ReadMode, ReadingTheme, ReadingLayout, ReadingColors, HighlightColor } from "./types";
 import type { AiSettings } from "./ai/providers";
 import type { AppLanguage, MessageKey } from "./i18n";
+import { loadAiSettings } from "./ai/providers";
+import { DEFAULT_TRANSLATION_SETTINGS, type TranslationSettings } from "./translation/youdao";
 
 export interface QReaderSettings {
   language: AppLanguage;
+  translation: TranslationSettings;
   libraryPath: string; // vault-relative, e.g. "Books"
   ai: AiSettings;
   questionPrompt: string; // Empty uses the built-in chapter prompt.
@@ -19,13 +22,9 @@ export interface QReaderSettings {
 
 export const DEFAULT_SETTINGS: QReaderSettings = {
   language: "zh-CN",
+  translation: DEFAULT_TRANSLATION_SETTINGS,
   libraryPath: "Books",
-  ai: {
-    provider: "deepseek",
-    deepseekApiKey: "",
-    agnesApiKey: "",
-    custom: { baseUrl: "https://api.openai.com/v1", apiKey: "", model: "gpt-4o-mini" },
-  },
+  ai: loadAiSettings(undefined),
   questionPrompt: "",
   categories: [],
   highlightColor: "yellow",

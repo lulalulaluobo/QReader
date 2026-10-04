@@ -9,6 +9,7 @@ import type {
   ReadingLayout,
   ReadingColors,
 } from "../types";
+import type { VocabularyWord, WordExposure } from "../core/vocabulary";
 
 export interface EngineLocation {
   chapterId: string | null;
@@ -28,6 +29,7 @@ export interface SelectionAnchor {
 
 export interface EngineSelection {
   text: string;
+  paragraphId?: string;
   /** Raw browser selection for copying; PDF annotation quotes stay page-scoped. */
   copyText?: string;
   chapterId?: string;
@@ -39,6 +41,8 @@ export interface EngineSelection {
 }
 
 export interface EngineHooks {
+  onWordLookup(word: string, paragraphId: string): void;
+  onWordExposure(exposures: readonly WordExposure[]): void;
   onLocation(loc: EngineLocation): void;
   onSelect(sel: EngineSelection): void;
   onAnnotationClick(id: string, anchor?: SelectionAnchor): void;
@@ -67,5 +71,8 @@ export interface ReaderEngine {
   clearSelection(): void;
   getSelectionContext(sel: EngineSelection): Promise<{ before: string; after: string }>;
   resize(): void;
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void;
+  noteVocabularyLookup(word: string, paragraphId?: string): void;
+  flushVocabulary(): void;
   updateChapters?(chapters: ChapterState[]): void;
 }

@@ -1,6 +1,19 @@
 # 状态管理
 
-reading.json 是每本书唯一事实源，批注.md 是可重建的派生输出。插件配置通过 Obsidian loadData/saveData 保存，API Key 不进入阅读库。
+reading.json 是每本书阅读、批注与问答的事实源，批注.md 是可重建的派生输出。vocabulary.json 独立保存活跃生词。插件配置通过 Obsidian loadData/saveData 保存，API Key/App Secret 不进入阅读库。
+
+## 1.1.5 翻译与生词契约
+
+- 首版只用有道文本翻译 `/v2/api`，v3 SHA-256 签名、英文到中文、音频只接受有道 HTTPS 地址；用户确认不使用禁止缓存的独立词典 `/v2/dict`。不承诺文本接口提供音标或未开通 TTS 的发音。
+- `translation` 配置 appKey/appSecret、autoAdd/highlight、deletionThreshold（默认 5，1–100）；旧配置无该字段时补默认。翻译设置通知用 `translation` 原因，更新词层且不重排阅读引擎。
+- `vocabulary.json: {version:1,words:VocabularyWord[]}` 每书一份，第一次成功加入才创建；只保存活跃词，不创建历史、复习或永久翻译库。现有原书/reading.json/批注.md 不迁移。
+- 单词按英文边界、大小写归一，保留词形；句子只翻译，不加入。重新查询增加 lookupCount，noLookupCount 清零，seenParagraphs 重启并排除查询所在段落。
+- exposureCount 为累计有效段落出现，noLookupCount 为本轮连续未查询次数；同词同段落一次，稳定 EPUB spine/paragraph 或 PDF page/text-block ID 保证跨重排/重开去重。事件携带 lookupCount，旧轮迟到曝光不能改变重查后的状态。
+- 只有词实际可见才开启曝光，离开整个段落或显式翻页结算；长段中词先离开视口不可提前结算。后台/隐藏/面板遮挡暂停；章节加载不直接计数。到阈值从 words 删除，无历史库。
+- 按 adapter/路径串行读最新文件再修改，校验写入与回读，可恢复失败还原旧文件；损坏文件不覆盖。订阅只在视图打开期间存在，同书不同视图同步新词数据；队列完成后清理路径。
+- 有容量/寿命的会话缓存为 128 条/30 分钟，同词并发请求合并。清空/卸载使迟到请求不能回填缓存；持久缓存只在活跃词记录内，删除记录后不保留旧词历史。
+- 预设 DeepSeek/Agnes 的 URL/model/key 也独立可改，模板只改变模型。支持 Base URL 与完整 `/chat/completions` URL；仅官方 DeepSeek origin/path 和支持的模板模型禁用 thinking，代理不加该选项。
+- 2026-10-04 官方模板：DeepSeek deepseek-flash/deepseek-v4-pro；Agnes agnes-3.0-flash/agnes-2.5-flash/agnes-2.5-pro。新安装 Agnes 默认 3.0，旧结构缺 model 仍保留 2.5；默认完整 URL 为 https://apihub.agnes-ai.com/v1/chat/completions。
 
 ## 1.1.4 语言契约
 
@@ -8,7 +21,7 @@ reading.json 是每本书唯一事实源，批注.md 是可重建的派生输出
 - `src/i18n.ts` 与 `src/locales/` 维护类型安全消息表，编号占位符保留动态值。状态切换只转换 QReader 自有文案，较具体模板优先；未知外部错误及用户文字不翻译。
 - 空白 `questionPrompt` 使用当前语言的默认模板；非空自定义模板按原文保存，不追加强制输出语言。三问、独立/批注解读、回答/复习反馈的所有调用点传入语言。连接测试保持固定协议探针。
 - 解析同时接受中英三个标签（英文忽略大小写）与既有 JSON，统一为 core/logic/retell、q1/q2/q3；重复、缺失或额外问题拒绝入库。
-- 设置通知携带 settings/language 原因；语言切换重绘控件，保留阅读引擎/CFI、当前答题步骤和草稿。不会翻译历史内容，新请求使用发出时所选语言；已生成题目需由用户重新生成才换语言。
+- 设置通知携带 settings/language/translation 原因；语言切换重绘控件，保留阅读引擎/CFI、当前答题步骤和草稿。不会翻译历史内容，新请求使用发出时所选语言；已生成题目需由用户重新生成才换语言。
 - 分类原样存储；创建分类时同时保留中英文内置筛选名称，避免语言切换后名称歧义。
 
 ## 写入
@@ -41,13 +54,13 @@ src/core/json-store.ts 对每本书串行执行变更、写入与校验，保留
 - `detectBookFormat(fileName: string, bytes: ArrayBuffer): Promise<BookFormat>` 验证扩展名、容器签名与可读取结构；`.fb2.zip` 记录为 `fb2`。
 - `bookAsEpub(bytes: ArrayBuffer, fileName: string, format: BookFormat): Promise<ArrayBuffer>`：EPUB 返回同一书籍数据；PDF 拒绝；其余格式生成确定性内存 EPUB，不写转换副本。
 - `BookCache.getEpub(entry)` 仅读阅读库 `book.fileName` 中的原书。`EpubEngine` 使用原格式身份共享章节 CFI；PDF 保存 `pdfPage` 与 `pdfPageFraction`。
-- `loadAiSettings(raw: unknown): AiSettings` 迁移旧版扁平地址/密钥/模型到 `custom`；`getAiConfig(settings)` 只读取当前提供方键。`chatCompletion(config, messages, opts?)` 向 `${baseUrl}/chat/completions` 发送 `{ model, messages, temperature, max_tokens? }`，仅当请求 origin 为 `https://api.deepseek.com`、pathname 为 `/chat/completions` 或 `/v1/chat/completions` 且模型为 `deepseek-flash` 时附 `thinking: {type:"disabled"}`；Agnes、custom 不附。
+- `loadAiSettings(raw: unknown): AiSettings` 迁移旧版扁平地址/密钥/模型到 `custom`；`getAiConfig(settings)` 只读取当前提供方键。`chatCompletion(config, messages, opts?)` 接受基础或完整 URL，发送 `{ model, messages, temperature, max_tokens? }`；仅官方 DeepSeek origin、规范路径与 deepseek-flash/deepseek-v4-pro 附 `thinking: {type:"disabled"}`。按实际地址和模型判断，代理地址不附。
 
 ### 3. 持久化与请求契约
 - `reading.json` `version: 1` 仍保存实际 `book.format`、清洗后安全 `book.fileName`、原书内容、原版 CFI/PDF 定位、批注、问题版本、答案/反馈/复习。改版不迁移、不覆盖用户原书或书库记录。
 - CBZ 仅保存 `book.format: "cbz"`、序页及进度。不得为图像页生成空正文三问、回答、文本标记或复习记录。
 - 密钥仅存 Obsidian 插件 `data.json`，按 `deepseekApiKey` / `agnesApiKey` / `custom.apiKey` 独立保存；未加密，UI 用 password 控件并明确备份风险。AI 仍只调用三问、选文解释、提交反馈的既定场景。
-- 内置 Base URL/model 为 `https://api.deepseek.com` + `deepseek-flash` 与 `https://apihub.agnes-ai.com/v1` + `agnes-2.5-flash`；用户只需填写其对应 API Key。旧自定义配置以原字符串迁入，不向任一内置提供方复制密钥。
+- 默认 Base URL/model 与可编辑模板见 1.1.5 契约。旧自定义配置以原字符串迁入，不向任一预设提供方复制密钥。
 
 ### 4. 验证与错误矩阵
 

@@ -21,6 +21,9 @@ import { el, genId, fmtDateTime } from "../util";
 import { explainSelection } from "../ai/tasks";
 import { HIGHLIGHT_COLORS, READING_PALETTES } from "../settings";
 import { getAiConfig } from "../ai/providers";
+import { VocabularyStore } from "../core/vocabulary";
+import { VaultFs } from "../core/fs";
+import { singleWord } from "../translation/youdao";
 
 export const VIEW_TYPE_READER = "qreader-reader";
 
@@ -67,6 +70,10 @@ export class ReaderView extends ItemView {
   private confirmingNoteId: string | null = null;
   private cancelHighlightPress: (() => void) | null = null;
   private stateRequest = 0;
+  private vocabulary: VocabularyStore | null = null;
+  private unsubVocabulary: (() => void) | null = null;
+  private vocabularyJobs = new Set<Promise<void>>();
+  private translationAudio: HTMLAudioElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -99,7 +106,8 @@ export class ReaderView extends ItemView {
         this.renderTitle();
         this.renderProgress(this.lastLoc?.percent ?? this.entry?.reading.progress.percent ?? 0);
         this.renderAnnotationCard();
-      } else this.applyThemeClass();
+      } else if (reason !== "translation") this.applyThemeClass();
+      this.updateVocabulary();
     });
     this.registerDomEvent(document, "visibilitychange", () => {
       if (document.hidden) void this.persistProgress(true);
@@ -116,6 +124,7 @@ export class ReaderView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.engine?.flushVocabulary();
     this.opened = false;
     ++this.stateRequest;
     ++this.generation;
@@ -124,11 +133,13 @@ export class ReaderView extends ItemView {
     this.unsub?.();
     this.unsubSettings?.();
     this.unsub = this.unsubSettings = null;
+    this.unsubVocabulary?.(); this.unsubVocabulary = null;
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     const saving = this.persistProgress(true);
     this.engine?.destroy();
     this.engine = null;
     await saving;
+    await Promise.allSettled([...this.vocabularyJobs]);
     if (this.entry) await this.releaseSource(this.entry);
   }
 
@@ -298,7 +309,10 @@ export class ReaderView extends ItemView {
       await this.applyThemeClass();
       return;
     }
+    this.engine?.flushVocabulary();
     const generation = ++this.generation;
+    await Promise.allSettled([...this.vocabularyJobs]);
+    if (!this.opened || generation !== this.generation) return;
     this.closePanels();
     await this.persistProgress(true);
     if (generation !== this.generation) return;
@@ -306,6 +320,7 @@ export class ReaderView extends ItemView {
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.engine?.destroy();
     this.engine = null;
+    this.unsubVocabulary?.(); this.unsubVocabulary = null; this.vocabulary = null;
     this.entry = null;
     if (previous) await this.releaseSource(previous);
     if (generation !== this.generation) return;
@@ -325,6 +340,16 @@ export class ReaderView extends ItemView {
     this.renderProgress(entry.reading.progress.percent);
     this.contentHost.appendChild(el("div", "qr-empty qr-status", this.plugin.t("正在打开书籍……")));
 
+    if (entry.reading.book.format !== "cbz") {
+      const vocabulary = new VocabularyStore(new VaultFs(this.app.vault.adapter), `${entry.dir}/vocabulary.json`);
+      try {
+        await vocabulary.load();
+        if (generation !== this.generation) return;
+        this.vocabulary = vocabulary;
+        this.unsubVocabulary = vocabulary.subscribe(() => this.updateVocabulary());
+      } catch (error) { new Notice(this.plugin.t("生词文件无法读取：{0}", this.plugin.errorText(error))); }
+    }
+
     try {
       const engine = await this.createEngine(entry);
       if (generation !== this.generation) {
@@ -332,6 +357,7 @@ export class ReaderView extends ItemView {
         return;
       }
       this.engine = engine;
+      this.updateVocabulary();
       this.contentHost.empty();
       await engine.mount(this.contentHost);
     } catch (e) {
@@ -362,7 +388,20 @@ export class ReaderView extends ItemView {
     const generation = this.generation;
     const hooks: EngineHooks = {
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
-      onSelect: (sel) => { if (generation === this.generation) this.openSelectionMenu(sel); },
+      onSelect: (sel) => {
+        if (generation !== this.generation) return;
+        if (singleWord(sel.text) && this.translationReady()) this.openTranslation(sel.text, sel.paragraphId, sel);
+        else this.openSelectionMenu(sel);
+      },
+      onWordLookup: (word, paragraphId) => { if (generation === this.generation) this.openTranslation(word, paragraphId); },
+      onWordExposure: (events) => {
+        const store = this.vocabulary;
+        if (generation !== this.generation || !store || !events.length) return;
+        const job = store.expose(events, this.plugin.settings.translation.deletionThreshold)
+          .catch((error) => { new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); })
+          .finally(() => this.vocabularyJobs.delete(job));
+        this.vocabularyJobs.add(job);
+      },
       onAnnotationClick: (id, anchor) => { if (generation === this.generation) this.openMarkMenu(id, anchor); },
       onZoneTap: () => this.toggleChrome(),
       onSurfaceClick: () => this.closePanels(),
@@ -384,6 +423,75 @@ export class ReaderView extends ItemView {
       pdfPage: progress.pdfPage ?? 1,
       fraction: progress.pdfPageFraction ?? 0,
     }, hooks, entry.reading.annotations, { mode: this.mode });
+  }
+
+  private translationReady(): boolean {
+    const settings = this.plugin.settings.translation;
+    return !!(settings.appKey.trim() && settings.appSecret.trim());
+  }
+  private updateVocabulary(): void {
+    const settings = this.plugin.settings.translation;
+    this.engine?.setVocabulary(this.vocabulary?.words ?? [], settings.highlight, this.translationReady(), settings.deletionThreshold);
+  }
+  private openTranslation(text: string, paragraphId?: string, selection?: EngineSelection): void {
+    if (!this.entry || !this.engine || this.contentHost.inert || this.draft || this.annotationSaving) return;
+    const word = singleWord(text);
+    this.engine.noteVocabularyLookup(word ?? text, paragraphId);
+    const generation = this.generation;
+    const store = this.vocabulary;
+    const sheet = this.createReadingSheet(word ? text : this.plugin.t("翻译"), "qr-translation-sheet");
+    const session = this.panelSession;
+    const current = (): boolean => this.opened && generation === this.generation && session === this.panelSession && sheet.isConnected;
+    const body = el("div", "qr-reading-sheet-body qr-translation-body");
+    const status = el("div", "qr-translation-result", this.plugin.t("正在翻译……"));
+    status.setAttribute("aria-live", "polite");
+    body.appendChild(status); sheet.appendChild(body);
+    const appendSelectionAction = (): void => {
+      if (!selection) return;
+      const more = el("button", "qr-icon-btn");
+      more.setAttribute("aria-label", this.plugin.t("选文操作")); more.title = this.plugin.t("选文操作"); setIcon(more, "more-horizontal");
+      more.onclick = () => { if (current()) { this.closePanels(); this.openSelectionMenu(selection); } };
+      body.appendChild(more);
+    };
+    const request = async (refresh = false): Promise<void> => {
+      if (!current()) return;
+      status.setText(this.plugin.t("正在翻译……"));
+      body.querySelectorAll("button,.qr-translation-phonetic").forEach((element) => element.remove());
+      try {
+        const cached = !refresh && word ? store?.words.find((record) => record.word === word) : undefined;
+        const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: cached.audioUrl }
+          : await this.plugin.translation.lookup(text, this.plugin.settings.translation);
+        if (!current()) return;
+        status.setText(result.translation);
+        if (result.phonetic) body.prepend(el("div", "qr-translation-phonetic", `/${result.phonetic}/`));
+        if (result.audioUrl) {
+          const play = el("button", "qr-icon-btn qr-translation-audio");
+          play.setAttribute("aria-label", this.plugin.t("播放发音")); play.title = this.plugin.t("播放发音"); setIcon(play, "volume-2");
+          play.onclick = () => {
+            if (!current()) return;
+            this.translationAudio?.pause();
+            const audio = new Audio(result.audioUrl); this.translationAudio = audio;
+            void audio.play().catch(() => { if (current()) new Notice(this.plugin.t("发音播放失败，请刷新翻译后重试")); });
+          };
+          body.appendChild(play);
+        }
+        const retry = el("button", "qr-icon-btn qr-translation-refresh");
+        retry.setAttribute("aria-label", this.plugin.t("刷新翻译")); retry.title = this.plugin.t("刷新翻译"); setIcon(retry, "refresh-cw");
+        retry.onclick = () => { this.plugin.translation.clear(); void request(true); }; body.appendChild(retry);
+        appendSelectionAction();
+        if (word && store) {
+          try { await store.lookup(result, paragraphId, this.plugin.settings.translation.autoAdd); }
+          catch (error) { if (current()) new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); }
+        }
+      } catch (error) {
+        if (!current()) return;
+        status.setText(this.plugin.errorText(error));
+        const retry = el("button", "qr-icon-btn"); retry.setAttribute("aria-label", this.plugin.t("重试翻译")); setIcon(retry, "refresh-cw");
+        retry.onclick = () => void request(); body.appendChild(retry);
+        appendSelectionAction();
+      }
+    };
+    void request();
   }
 
   // ------------------------------------------------------------ engine events
@@ -1107,7 +1215,7 @@ export class ReaderView extends ItemView {
     } : undefined);
     if (selection) {
       addAction(this.plugin.t("复制"), "copy", () => void this.copySelection(selection, target));
-      addAction(this.plugin.t("AI 解读"), "sparkles", () => this.openSelectionExplanation(selection, record, target.color));
+      addAction(this.plugin.t("翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId));
     }
     if (record || target.selection) this.appendHighlightControl(menu, target);
     if (record) {
@@ -1123,6 +1231,7 @@ export class ReaderView extends ItemView {
       });
       more.dataset.action = "mark-options";
       more.setAttribute("aria-expanded", String(Boolean(target.actionsOpen)));
+      if (selection) addAction(this.plugin.t("AI 解读"), "sparkles", () => this.openSelectionExplanation(selection, record, target.color), actions);
       const remove = addAction(target.confirmDelete ? this.plugin.t("确认取消画线及批注") : this.plugin.t("取消画线"), target.confirmDelete ? "circle-check" : "trash-2", () => {
         if (record.kind !== "highlight" && (record.note || record.aiExplanation) && !target.confirmDelete) {
           target.confirmDelete = true;
@@ -1139,7 +1248,16 @@ export class ReaderView extends ItemView {
     } else if (target.selection) {
       const selection = target.selection;
       addAction(this.plugin.t("批注"), "square-pen", () => this.openAnnotationCreate(selection, target.color));
-      addAction(this.plugin.t("关闭选文菜单"), "x", () => this.closeMarkMenu());
+      const actions = el("div", "qr-mark-secondary qr-mark-options");
+      actions.hidden = !target.actionsOpen;
+      actions.setAttribute("role", "group"); actions.setAttribute("aria-label", this.plugin.t("更多标记操作"));
+      const more = addAction(this.plugin.t("更多标记操作"), "more-horizontal", () => {
+        target.actionsOpen = !target.actionsOpen; target.colorsOpen = false; this.renderMarkMenu();
+      });
+      more.dataset.action = "mark-options"; more.setAttribute("aria-expanded", String(Boolean(target.actionsOpen)));
+      addAction(this.plugin.t("AI 解读"), "sparkles", () => this.openSelectionExplanation(selection, undefined, target.color), actions);
+      addAction(this.plugin.t("关闭选文菜单"), "x", () => this.closeMarkMenu(), actions);
+      menu.appendChild(actions);
     }
     this.positionMarkMenu(target);
   }
@@ -1687,6 +1805,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ panels
 
   private closePanels(): void {
+    this.translationAudio?.pause(); this.translationAudio = null;
     ++this.panelSession;
     this.confirmingNoteId = null;
     this.closeMarkMenu(false);
@@ -1716,6 +1835,7 @@ export class ReaderView extends ItemView {
       this.renderAnnotationCard();
       this.engine?.destroy();
       this.engine = null;
+      this.unsubVocabulary?.(); this.unsubVocabulary = null; this.vocabulary = null;
       this.entry = null;
       this.contentHost.empty();
       this.contentHost.appendChild(el("div", "qr-empty", this.plugin.t("书籍已移除或记录损坏，请返回书架处理")));

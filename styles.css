@@ -1786,3 +1786,9 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
     transition: none !important;
   }
 }
+/* Lightweight translation: one word, optional phonetic, definition and icons. */
+.qr-translation-sheet { max-width: 460px; }
+.qr-translation-body { padding: 16px 20px; }
+.qr-translation-result { white-space: pre-wrap; line-height: 1.65; overflow-wrap: anywhere; margin-bottom: 12px; }
+.qr-translation-phonetic { color: var(--qr-muted); font-size: .9em; margin-bottom: 10px; }
+.qr-translation-body .qr-icon-btn { display: inline-flex; margin-right: 8px; }

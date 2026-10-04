@@ -1,0 +1,13 @@
+{
+  "id": "reader-vocabulary",
+  "name": "reader-vocabulary",
+  "title": "动态翻译、按书生词高亮与可编辑模型模板",
+  "status": "in_progress",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-04",
+  "completedAt": null,
+  "branch": "main",
+  "commit": null,
+  "notes": "用户提供动态生词 PRD，明确同段落回看不重复计数、离开段落/翻页结算；DeepSeek/Agnes URL 与模型也需可改，模板提供多个当前模型。"
+}

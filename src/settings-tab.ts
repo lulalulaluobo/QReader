@@ -111,7 +111,7 @@ export class QReaderSettingTab extends PluginSettingTab {
       aiContainer.createEl("h3", { text: this.plugin.t("AI 配置") });
       const providers = new Setting(aiContainer)
         .setName(this.plugin.t("AI 服务"))
-        .setDesc(this.plugin.t("DeepSeek 和 Agnes 只需填写各自的 API Key；自定义接口配置独立保留。"));
+        .setDesc(this.plugin.t("每个服务独立保存接口地址、模型和密钥。请填写你信任的 OpenAI Compatible 接口。"));
       providers.settingEl.addClass("qr-ai-providers");
       const options: AiProvider[] = ["deepseek", "agnes", "custom"];
       for (const option of options) {
@@ -141,28 +141,44 @@ export class QReaderSettingTab extends PluginSettingTab {
         try { await this.plugin.saveSettings(); }
         catch { new Notice(this.plugin.t("AI 配置保存失败，请重新编辑后重试")); }
       };
-      if (provider === "custom") {
-        new Setting(aiContainer).setName("Base URL")
-          .setDesc(this.plugin.t("自定义 OpenAI Compatible 接口地址，不影响内置服务。"))
-          .addText((text) => {
-            text.inputEl.setAttribute("aria-label", this.plugin.t("自定义接口 Base URL"));
-            text.setPlaceholder("https://api.openai.com/v1").setValue(ai.custom.baseUrl).onChange(async (value) => {
-              ai.custom.baseUrl = value;
+      const config = getAiConfig(ai);
+      const changeConfig = (field: "baseUrl" | "model", value: string): void => {
+        if (provider === "custom") ai.custom[field] = value;
+        else if (provider === "deepseek") {
+          if (field === "baseUrl") ai.deepseekBaseUrl = value;
+          else ai.deepseekModel = value;
+        } else {
+          if (field === "baseUrl") ai.agnesBaseUrl = value;
+          else ai.agnesModel = value;
+        }
+      };
+      if (provider !== "custom") {
+        new Setting(aiContainer).setName(this.plugin.t("模型模板"))
+          .setDesc(this.plugin.t("选择模板填写模型 ID；接口地址和密钥保持当前值，也可手动填写其他模型。"))
+          .addDropdown((dropdown) => {
+            dropdown.selectEl.setAttribute("aria-label", this.plugin.t("模型模板"));
+            dropdown.addOption("", this.plugin.t("选择模型模板"));
+            for (const model of AI_PRESETS[provider].models) dropdown.addOption(model, model);
+            dropdown.onChange(async (value) => {
+              if (!value) return;
+              changeConfig("model", value);
               await persistAiChange();
+              renderAi();
             });
           });
-        new Setting(aiContainer).setName("Model").addText((text) => {
-          text.inputEl.setAttribute("aria-label", this.plugin.t("自定义接口 Model"));
-          text.setPlaceholder(this.plugin.t("模型 ID")).setValue(ai.custom.model).onChange(async (value) => {
-            ai.custom.model = value;
-            await persistAiChange();
-          });
-        });
-      } else {
-        const preset = AI_PRESETS[provider];
-        new Setting(aiContainer).setName(this.plugin.t("模型（预设）")).setDesc(preset.model);
-        new Setting(aiContainer).setName(this.plugin.t("接口地址（预设）")).setDesc(preset.baseUrl);
       }
+      new Setting(aiContainer).setName("Base URL")
+        .setDesc(this.plugin.t("每个服务独立保存接口地址、模型和密钥。请填写你信任的 OpenAI Compatible 接口。"))
+        .addText((text) => {
+          text.inputEl.setAttribute("aria-label", `${provider} Base URL`);
+          text.setPlaceholder(provider === "custom" ? "https://api.openai.com/v1" : AI_PRESETS[provider].baseUrl)
+            .setValue(config.baseUrl).onChange(async (value) => { changeConfig("baseUrl", value); await persistAiChange(); });
+        });
+      new Setting(aiContainer).setName("Model").addText((text) => {
+        text.inputEl.setAttribute("aria-label", `${provider} Model`);
+        text.setPlaceholder(this.plugin.t("模型 ID")).setValue(config.model)
+          .onChange(async (value) => { changeConfig("model", value); await persistAiChange(); });
+      });
       const keyLabel = provider === "custom" ? this.plugin.t("自定义接口 API Key") : `${AI_PRESETS[provider].name} API Key`;
       const apiKey = provider === "deepseek" ? ai.deepseekApiKey : provider === "agnes" ? ai.agnesApiKey : ai.custom.apiKey;
       new Setting(aiContainer).setName(keyLabel)
@@ -210,6 +226,48 @@ export class QReaderSettingTab extends PluginSettingTab {
     };
     this.renderAi = renderAi;
     renderAi();
+
+    containerEl.createEl("h3", { text: this.plugin.t("翻译") });
+    new Setting(containerEl).setName(this.plugin.t("翻译服务")).setDesc(this.plugin.t("有道文本翻译；只有主动查询时发送选文，释义固定译为中文。"));
+    const saveTranslation = async (): Promise<void> => {
+      try { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("translation"); }
+      catch { new Notice(this.plugin.t("翻译设置保存失败，请重试")); }
+    };
+    for (const field of ["appKey", "appSecret"] as const) {
+      const label = field === "appKey" ? "Youdao App Key" : "Youdao App Secret";
+      new Setting(containerEl).setName(label).addText((text) => {
+        text.inputEl.type = "password"; text.inputEl.autocomplete = "off"; text.inputEl.setAttribute("aria-label", label);
+        text.setValue(s.translation[field]).onChange(async (value) => { s.translation[field] = value; await saveTranslation(); });
+      });
+    }
+    containerEl.createEl("h3", { text: this.plugin.t("动态生词") });
+    new Setting(containerEl).setName(this.plugin.t("查询后自动加入生词表")).addToggle((toggle) =>
+      toggle.setValue(s.translation.autoAdd).onChange(async (value) => { s.translation.autoAdd = value; await saveTranslation(); }));
+    new Setting(containerEl).setName(this.plugin.t("后续出现自动高亮")).addToggle((toggle) =>
+      toggle.setValue(s.translation.highlight).onChange(async (value) => { s.translation.highlight = value; await saveTranslation(); }));
+    const threshold = new Setting(containerEl).setName(this.plugin.t("自动删除阈值"))
+      .setDesc(this.plugin.t("连续遇到但未查询的次数，默认 5 次。离开段落或翻页时结算，同段回看不重复。"));
+    threshold.addDropdown((dropdown) => {
+      dropdown.selectEl.setAttribute("aria-label", this.plugin.t("自动删除阈值"));
+      dropdown.addOptions({ "3": "3", "4": "4", "5": "5", custom: this.plugin.t("自定义") })
+        .setValue([3, 4, 5].includes(s.translation.deletionThreshold) ? String(s.translation.deletionThreshold) : "custom")
+        .onChange(async (value) => {
+          if (value === "custom") { threshold.settingEl.querySelector<HTMLInputElement>("input")?.focus(); return; }
+          s.translation.deletionThreshold = Number(value);
+          const input = threshold.settingEl.querySelector<HTMLInputElement>("input"); if (input) input.value = value;
+          await saveTranslation();
+        });
+    }).addText((text) => {
+      text.inputEl.type = "number"; text.inputEl.min = "1"; text.inputEl.max = "100"; text.inputEl.step = "1";
+      text.inputEl.setAttribute("aria-label", this.plugin.t("自定义未查询次数"));
+      text.setValue(String(s.translation.deletionThreshold)).onChange(async (value) => {
+        const number = Number(value);
+        if (!Number.isInteger(number) || number < 1 || number > 100) { text.inputEl.setAttribute("aria-invalid", "true"); return; }
+        text.inputEl.removeAttribute("aria-invalid"); s.translation.deletionThreshold = number;
+        const select = threshold.settingEl.querySelector<HTMLSelectElement>("select"); if (select) select.value = [3, 4, 5].includes(number) ? value : "custom";
+        await saveTranslation();
+      });
+    });
 
     // 提示词独立于 provider 重绘，切换接口不会丢失编辑草稿或串配置。
     if (!this.promptSaving && !preserveDraft) {

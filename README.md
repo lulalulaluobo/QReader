@@ -2,7 +2,7 @@
 
 An Obsidian reader that helps you understand an author's ideas and reasoning, then recall them in your own words. / 在 Obsidian 中阅读，理解作者的表达与推理，再合上书用自己的话复述。
 
-[Download / 下载 1.1.4](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.4) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.5](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.5) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -11,14 +11,15 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 - EPUB、PDF、FB2（含 `.fb2.zip`）、未加密 MOBI、AZW3 和 CBZ；原文件保存在 Vault 中。
 - 每页四本真实封面卡片，支持搜索、未读/已读和自定义分类。
 - 沉浸阅读、翻页/滚动、字体和背景设置，自动保存阅读位置。
-- 选文菜单为单行图标：复制、AI 解读、颜色圆圈、批注、关闭。短按色圈保存高亮，长按选色；正文使用无边框半透明高亮。
+- 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
+- 主动查英文词或翻译句子；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除。
 - 每章三问分别检查核心观点、关键推理和自己的复述，一题只问一件事。
 - 闭卷回答、简短 AI 反馈、历史答案对比和自行安排复习日期。
 - 书架、阅读、回答、复习在当前标签页跳转，使用 Obsidian 原生回退。
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.4.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.5.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -28,15 +29,36 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 
 在 QReader 设置中选择 DeepSeek、Agnes 或自定义 OpenAI Compatible 接口，并填写对应密钥。只有使用 AI 功能时才需要配置接口；阅读和本地批注不依赖 AI。
 
+各服务独立保存 URL、模型和密钥，预设也可手动修改。URL 可填基础地址或完整 `/chat/completions` 地址，不会重复追加路径。模型模板只填模型 ID，不覆盖当前 URL 或密钥。
+
+| 服务 | 默认 URL | 可选模型模板 |
+|---|---|---|
+| DeepSeek | `https://api.deepseek.com` | `deepseek-flash`、`deepseek-v4-pro` |
+| Agnes | `https://apihub.agnes-ai.com/v1/chat/completions` | `agnes-3.0-flash`、`agnes-2.5-flash`、`agnes-2.5-pro` |
+
+模板按 2026-10-04 的 [DeepSeek 官方集成文档](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/) 和 [Agnes 官方模型目录](https://wiki.agnes-ai.com/llms.txt) 核实；尚未发布的模型不列入模板。新安装默认 Flash，升级保留旧 Agnes 模型选择；可选择新模板或手动填写账户可用的其他模型。
+
 **每章三问提示词**留空时，使用当前语言的默认模板。自定义提示词按原文保存；用 `{{chapter_content}}` 插入章节正文，不写占位符时会自动追加正文。三问输出可用中文标签“核心问题/逻辑问题/复述问题”、英文标签“Core question/Logic question/Retelling question”，或 `questions` JSON 数组。
 
 切换语言不会翻译原书、分类名称、笔记、旧问题、答案或反馈，也不会重置阅读位置和未提交回答。新生成的默认三问、AI 解读和反馈使用当前语言；已有问题保留，需要新语言时可重新生成。自定义出题模板保留自己的语言和要求。
 
+### 翻译与动态生词
+
+设置 **有道 App Key / App Secret** 后，点击英文词，或长按选中一个词，即可主动查询。选中句子后点击翻译图标，只显示译文，不加入生词表。单词卡片提供简短中文释义；接口提供音标时显示音标，点击声音图标才播放发音。单词选区卡片的更多图标可返回复制、画线和批注菜单。
+
+首版使用[有道文本翻译 API](https://ai.youdao.com/DOCSIRMA/html/trans/api/wbfy/index.html)，需要为应用绑定文本翻译服务；发音还需绑定语音合成服务。文本接口不保证提供音标；不使用禁止缓存的独立词典服务。
+
+查询成功的单词默认自动保存到当前书籍的 `vocabulary.json`，重新查询会清零连续未查询次数并恢复最强高亮。词形按原样记录，忽略大小写，不自动猜词根。可分别关闭自动加入和后续高亮。
+
+生词所在段落真正进入视口后，在离开段落或翻页时计一次有效出现。同词同段只计一次，回看、重排和重开不重复；重新查询开启新一轮。连续 **5 次**有效出现且未查询后，逐渐淡化的高亮和单词记录一起删除。设置可选择 **3 / 4 / 5**，或自定义 **1–100** 次。没有单词历史库、背诵、测试或复习任务。
+
+活跃生词优先读取本书保存的释义。其他查词和句子翻译使用最多 128 条、30 分钟有效的会话缓存，关闭插件后清空，不建立永久翻译库。
+
 ### 数据与限制
 
-每本书的目录保存原书、`reading.json` 和 `批注.md`；语言切换不改这些文件的名称或存储字段。API Key 保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。AI 生成会将相应章节、选文及上下文或回答发送至你选择的接口；连接测试仅发送探针。
+每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。API Key 和有道 App Secret 保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。AI 生成会将相应章节、选文及上下文或回答发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的选文，译文固定为中文，不随界面语言改变。
 
-CBZ 仅供图片阅读，没有文字问答。DRM/加密书籍不受支持。1.1.4 在 macOS Obsidian 1.13.7 独立 Vault 验收，中英文窄屏使用移动 CSS 模拟；Android/iOS 真机和真实 AI 模型质量尚未验证。
+CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。1.1.5 在 macOS Obsidian 1.13.7 独立 Vault 验收，中英文窄屏使用移动 CSS 模拟；Agnes 3.0 Flash 真实连接探针通过，有道使用模拟响应测试。Android/iOS 真机、有道真实账户调用和 AI 内容质量未验证。
 
 ## English
 
@@ -45,14 +67,15 @@ CBZ 仅供图片阅读，没有文字问答。DRM/加密书籍不受支持。1.1
 - Read EPUB, PDF, FB2 (including `.fb2.zip`), unencrypted MOBI, AZW3 and CBZ. Original files stay in your Vault.
 - Four real cover cards per page, search, unread/read filters and your own categories.
 - Immersive reading, paginated or scrolling layouts, font/background controls and saved reading positions.
-- A single row of selection icons: copy, AI explanation, color circle, annotation and close. Tap the circle to save a highlight; hold it to choose a color. Highlights use a soft fill without an outline.
+- A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
+- Look up English words or translate sentences. Vocabulary is saved per book and fades on later appearances; words are removed after 5 appearances without another lookup by default.
 - Three chapter questions focus on the core idea, one key reasoning link and retelling in your own words. Each question has one clear target.
 - Closed-book answers, brief AI feedback, complete answer history and review dates you choose.
 - Library, reader, answers and review share the current tab and support Obsidian's native back navigation.
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.4.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.5.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -62,21 +85,43 @@ Open **Settings → QReader → 语言 / Language** and choose **English** or **
 
 Choose DeepSeek, Agnes or a custom OpenAI Compatible endpoint in QReader settings and enter its API key. AI setup is needed only for AI features; reading and local annotations work without it.
 
+Every provider keeps its own editable URL, model and key. Both base URLs and full `/chat/completions` URLs work. Templates fill only the model ID, preserving your URL and key.
+
+| Provider | Default URL | Model templates |
+|---|---|---|
+| DeepSeek | `https://api.deepseek.com` | `deepseek-flash`, `deepseek-v4-pro` |
+| Agnes | `https://apihub.agnes-ai.com/v1/chat/completions` | `agnes-3.0-flash`, `agnes-2.5-flash`, `agnes-2.5-pro` |
+
+Verified on 2026-10-04 against the [official DeepSeek integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/) and [Agnes model directory](https://wiki.agnes-ai.com/llms.txt). Unreleased models are excluded. New installations use Flash; upgrades preserve the older Agnes model selection. You can choose another template or enter any model available to your account.
+
 Leave **Chapter question prompt** empty to use the built-in template in the selected language. Custom prompts are preserved exactly. Insert `{{chapter_content}}` where the chapter belongs; without this placeholder, QReader appends the chapter automatically. Question output accepts the labels `Core question`, `Logic question`, `Retelling question`, their Chinese equivalents, or a `questions` JSON array.
 
 Changing language preserves book text, category names, notes, existing questions, answers and feedback, as well as reading positions and unsubmitted answers. New questions from the default template, explanations and feedback use the selected language. Regenerate existing questions if you want them in the new language. Custom question templates retain their own language and instructions.
 
+### Translation and dynamic vocabulary
+
+Configure **Youdao App Key / App Secret**, then tap an English word or select a single word to look it up. Select a sentence and tap Translate to translate it without saving vocabulary. The card shows a brief Chinese definition, a phonetic only when supplied by the API, and pronunciation played only when you press the speaker icon. More on a selected-word card returns to copying, highlighting and annotations.
+
+This release uses the [Youdao text translation API](https://ai.youdao.com/DOCSIRMA/html/trans/api/wbfy/index.html). Enable text translation for your application and speech synthesis for pronunciation. Phonetics are not guaranteed; the separate dictionary API is not used.
+
+Successful single-word lookups are saved in the current book's `vocabulary.json` by default. Another lookup resets the consecutive missed-lookup count and restores the strongest highlight. Words are case-insensitive but are not stemmed. Automatic saving and highlighting can be disabled separately.
+
+A paragraph must actually enter the reading viewport. An appearance is counted when leaving that paragraph or turning a page; the same word in the same paragraph counts once. Rereading, reflowing and reopening do not count again. A new lookup starts another round. After **5 consecutive appearances without a lookup**, the word and its fading highlight are removed. Choose **3 / 4 / 5** or a custom **1–100** in settings. There is no vocabulary history, memorization, testing or review schedule.
+
+Active words use their saved per-book definitions first. Other lookups and sentences use a session cache of at most 128 entries, valid for 30 minutes and cleared when the plugin closes. There is no permanent translation archive.
+
 ### Data and limitations
 
-Each book folder keeps the original file, `reading.json` and `批注.md`. Changing language does not rename these files or their data fields. API keys are stored unencrypted in the plugin's local `data.json`; protect your Vault sync and backups. AI generation sends the relevant chapter, selected passage/context or answers to your chosen endpoint. Connection testing sends only a probe.
+Each book folder keeps the original file, `reading.json` and `批注.md`. A first successful saved-word lookup adds only `vocabulary.json`. Language changes preserve existing files and data. API keys and Youdao App Secret are stored unencrypted in the plugin's local `data.json`; protect your Vault sync and backups. AI sends relevant text to your chosen endpoint; connection tests send only a probe. Youdao receives only actively queried text and translates into Chinese regardless of interface language.
 
-CBZ supports image reading only. DRM/encrypted books are unsupported. Version 1.1.4 is validated in an isolated macOS Obsidian 1.13.7 Vault; narrow layouts use mobile CSS simulation. Android/iOS devices and real AI model quality have not been tested.
+CBZ and scanned PDFs have no queryable text; other PDFs depend on their text layer and paragraph layout. DRM/encrypted books are unsupported. Version 1.1.5 is validated in an isolated macOS Obsidian 1.13.7 Vault; narrow layouts use mobile CSS simulation. A live Agnes 3.0 Flash connectivity probe passed. Youdao uses mocked responses in tests; real Youdao accounts, Android/iOS devices and AI content quality have not been tested.
 
 ## 从源码构建 / Build from source
 
 ```sh
 npm ci
 npm run build
+npm run test:translation
 ```
 
 Copy the generated `main.js` together with `manifest.json` and `styles.css` to the plugin folder. `main.js` is a build artifact and is not tracked in Git. / 将生成的 `main.js` 与 `manifest.json`、`styles.css` 放入插件目录；Git 不跟踪生成的 `main.js`。
