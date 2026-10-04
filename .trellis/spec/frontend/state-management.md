@@ -4,6 +4,9 @@ reading.json 是每本书阅读、批注与问答的事实源，批注.md 是可
 
 ## 1.1.6 免密查词契约（覆盖下述 1.1.5 有道凭据方案）
 
+- 1.1.7 交互修正：单击原文不查询，只通过原生长按单词选区（桌面选词同样可用）进入卡片。词层仅高亮和统计曝光，不再命中点击或持有查词回调。
+- 卡片垃圾桶显式删除当前书的当前词；其他词/书不变，删除回读验证并通知即时消除高亮。译文留在卡片，刷新不重新加入，关闭后再次主动查询从 lookupCount=1 开始；没有历史库或撤销档案。
+
 - 用户改用 englishPodStudy 的免密方式：GET `dict.youdao.com/jsonapi?q=...`，原文仅单个英文词。ec/simple 音标和嵌套释义从 unknown 校验，web_trans 优先 `web-translation`；不返回空释义，不复制参考项目的词库/课程功能。
 - 发音直接 `dict.youdao.com/dictvoice?audio=...&type=2`，只用户点按播放，关闭暂停。旧活跃词可继续读定义，播放和再次保存改用免密音频地址。
 - translation 设置仅 autoAdd/highlight/deletionThreshold，删除密钥字段和签名请求；归一化丢弃旧 appKey/appSecret，下一次设置保存移除磁盘旧字段。查词无需 AI 或有道凭据，既有 vocabulary.json 无迁移。

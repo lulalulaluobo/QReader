@@ -2,7 +2,7 @@
 
 An Obsidian reader that helps you understand an author's ideas and reasoning, then recall them in your own words. / 在 Obsidian 中阅读，理解作者的表达与推理，再合上书用自己的话复述。
 
-[Download / 下载 1.1.6](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.6) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.7](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.7) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -12,14 +12,14 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 - 每页四本真实封面卡片，支持搜索、未读/已读和自定义分类。
 - 沉浸阅读、翻页/滚动、字体和背景设置，自动保存阅读位置。
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
-- 主动查英文词或翻译句子；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除。
+- 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
 - 每章三问分别检查核心观点、关键推理和自己的复述，一题只问一件事。
 - 闭卷回答、简短 AI 反馈、历史答案对比和自行安排复习日期。
 - 书架、阅读、回答、复习在当前标签页跳转，使用 Obsidian 原生回退。
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.6.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.7.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -44,7 +44,9 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 
 ### 翻译与动态生词
 
-**有道查词无需密钥或额外配置。** 点击英文词，或长按选中一个词，即可主动查询中文释义、可用音标；点击声音图标播放发音。单词选区卡片的更多图标可返回复制、画线和批注菜单。
+**有道查词无需密钥或额外配置。** 手机长按选中英文词即可查询中文释义、可用音标；单击原文不查词。桌面选中单词也可查询。点击声音图标播放发音；更多图标可返回复制、画线和批注菜单。
+
+单词已加入当前书的生词表时，卡片会显示垃圾桶图标。点击即可删除该词记录和生词高亮，保留当前译文；本卡片刷新不会重新加入，以后再次主动查词会重新开始。
 
 查词使用[有道公开词典](https://dict.youdao.com/)的单词查询与发音接口，不需要有道智云账户。公开接口可能调整；请求失败时可重试，已有生词仍可读取本书保存的释义。
 
@@ -70,14 +72,14 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - Four real cover cards per page, search, unread/read filters and your own categories.
 - Immersive reading, paginated or scrolling layouts, font/background controls and saved reading positions.
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
-- Look up English words or translate sentences. Vocabulary is saved per book and fades on later appearances; words are removed after 5 appearances without another lookup by default.
+- Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
 - Three chapter questions focus on the core idea, one key reasoning link and retelling in your own words. Each question has one clear target.
 - Closed-book answers, brief AI feedback, complete answer history and review dates you choose.
 - Library, reader, answers and review share the current tab and support Obsidian's native back navigation.
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.6.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.7.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -102,7 +104,9 @@ Changing language preserves book text, category names, notes, existing questions
 
 ### Translation and dynamic vocabulary
 
-**Youdao word lookup needs no key or setup.** Tap an English word or select a single word to look it up. The card shows Chinese definitions and available phonetics; press the speaker icon to play pronunciation. More on a selected-word card returns to copying, highlighting and annotations.
+**Youdao word lookup needs no key or setup.** On mobile, hold and select an English word to look it up. A single tap on the passage does not query it. Selecting a word also works on desktop. The card shows Chinese definitions and available phonetics; press the speaker icon to play pronunciation. More returns to copying, highlighting and annotations.
+
+If the word is saved in the current book, a trash icon removes its vocabulary record and highlight while keeping the displayed translation. Refreshing this card will not add it again. A later new lookup starts a fresh record.
 
 Lookup uses the [public Youdao dictionary](https://dict.youdao.com/) word and pronunciation endpoints without a Youdao cloud account. Public endpoints may change. Retry failed requests; active words retain their saved definitions in the current book.
 

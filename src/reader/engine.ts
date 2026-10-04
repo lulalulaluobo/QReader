@@ -41,7 +41,6 @@ export interface EngineSelection {
 }
 
 export interface EngineHooks {
-  onWordLookup(word: string, paragraphId: string): void;
   onWordExposure(exposures: readonly WordExposure[]): void;
   onLocation(loc: EngineLocation): void;
   onSelect(sel: EngineSelection): void;
@@ -71,7 +70,7 @@ export interface ReaderEngine {
   clearSelection(): void;
   getSelectionContext(sel: EngineSelection): Promise<{ before: string; after: string }>;
   resize(): void;
-  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void;
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void;
   noteVocabularyLookup(word: string, paragraphId?: string): void;
   flushVocabulary(): void;
   updateChapters?(chapters: ChapterState[]): void;

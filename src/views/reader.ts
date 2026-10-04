@@ -394,7 +394,6 @@ export class ReaderView extends ItemView {
         if (singleWord(sel.text)) this.openTranslation(sel.text, sel.paragraphId, sel);
         else this.openSelectionMenu(sel);
       },
-      onWordLookup: (word, paragraphId) => { if (generation === this.generation) this.openTranslation(word, paragraphId); },
       onWordExposure: (events) => {
         const store = this.vocabulary;
         if (generation !== this.generation || !store || !events.length) return;
@@ -428,7 +427,7 @@ export class ReaderView extends ItemView {
 
   private updateVocabulary(): void {
     const settings = this.plugin.settings.translation;
-    this.engine?.setVocabulary(this.vocabulary?.words ?? [], settings.highlight, true, settings.deletionThreshold);
+    this.engine?.setVocabulary(this.vocabulary?.words ?? [], settings.highlight, settings.deletionThreshold);
   }
   private openTranslation(text: string, paragraphId?: string, selection?: EngineSelection): void {
     if (!this.entry || !this.engine || this.contentHost.inert || this.draft || this.annotationSaving) return;
@@ -439,6 +438,9 @@ export class ReaderView extends ItemView {
     const sheet = this.createReadingSheet(word ? text : this.plugin.t("AI 翻译"), "qr-translation-sheet");
     const session = this.panelSession;
     const current = (): boolean => this.opened && generation === this.generation && session === this.panelSession && sheet.isConnected;
+    let removed = false;
+    let removing = false;
+    let requestId = 0;
     const body = el("div", "qr-reading-sheet-body qr-translation-body");
     if (!word) body.appendChild(el("p", "qr-settings-status", this.plugin.t("使用当前 AI 服务译为中文，不加入生词表。")));
     const status = el("div", "qr-translation-result", this.plugin.t("正在翻译……"));
@@ -451,8 +453,27 @@ export class ReaderView extends ItemView {
       more.onclick = () => { if (current()) { this.closePanels(); this.openSelectionMenu(selection); } };
       body.appendChild(more);
     };
+    const appendDeleteAction = (): void => {
+      if (!word || !store || removed || !store.words.some((record) => record.word === word)) return;
+      const button = el("button", "qr-icon-btn qr-translation-delete");
+      button.setAttribute("aria-label", this.plugin.t("删除生词记录")); button.title = this.plugin.t("删除生词记录"); setIcon(button, "trash-2");
+      button.onclick = async () => {
+        if (!current() || removing) return;
+        removing = true; button.disabled = true;
+        try {
+          await store.remove(word);
+          removed = true;
+          if (current()) { button.remove(); new Notice(this.plugin.t("已从本书生词表移除")); }
+        } catch (error) {
+          if (current()) { button.disabled = false; new Notice(this.plugin.t("生词删除失败：{0}", this.plugin.errorText(error))); }
+        } finally { removing = false; }
+      };
+      body.appendChild(button);
+    };
     const request = async (refresh = false): Promise<void> => {
-      if (!current()) return;
+      if (!current() || removing) return;
+      const id = ++requestId;
+      const latest = (): boolean => current() && id === requestId;
       status.setText(this.plugin.t("正在翻译……"));
       body.querySelectorAll("button,.qr-translation-phonetic").forEach((element) => element.remove());
       try {
@@ -460,7 +481,7 @@ export class ReaderView extends ItemView {
         const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cached.word)}&type=2` }
           : word ? await this.plugin.translation.lookup(text)
             : await translateSentence(getAiConfig(this.plugin.settings.ai), text, this.plugin.settings.language);
-        if (!current()) return;
+        if (!latest()) return;
         status.setText(result.translation);
         if (result.phonetic) body.prepend(el("div", "qr-translation-phonetic", `/${result.phonetic}/`));
         if (result.audioUrl) {
@@ -478,16 +499,18 @@ export class ReaderView extends ItemView {
         retry.setAttribute("aria-label", this.plugin.t("刷新翻译")); retry.title = this.plugin.t("刷新翻译"); setIcon(retry, "refresh-cw");
         retry.onclick = () => { if (word) this.plugin.translation.clear(); void request(true); }; body.appendChild(retry);
         appendSelectionAction();
-        if (word && store) {
+        if (word && store && !removed) {
           try { await store.lookup(result, paragraphId, this.plugin.settings.translation.autoAdd); }
-          catch (error) { if (current()) new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); }
+          catch (error) { if (latest()) new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); }
         }
+        if (latest()) appendDeleteAction();
       } catch (error) {
-        if (!current()) return;
+        if (!latest()) return;
         status.setText(this.plugin.errorText(error));
         const retry = el("button", "qr-icon-btn"); retry.setAttribute("aria-label", this.plugin.t("重试翻译")); setIcon(retry, "refresh-cw");
         retry.onclick = () => void request(); body.appendChild(retry);
         appendSelectionAction();
+        appendDeleteAction();
       }
     };
     void request();

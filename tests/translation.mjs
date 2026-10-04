@@ -52,8 +52,15 @@ assert.deepEqual(JSON.parse(files.get(a.path)).words,[]);
 await Promise.all([a.lookup(result,'reset',true),a2.lookup({...result,query:'growth'},'reset',true)]);await a.load();assert.equal(a.words.length,2);
 let otherSaw=false;const unsubscribe=a2.subscribe(words=>{otherSaw=words.some(word=>word.word==='shared');});await a.lookup({...result,query:'shared'},'reset',true);assert.ok(otherSaw);assert.equal(a2.words.length,3);unsubscribe();
 await b.load();assert.equal(b.words.length,0);
+await b.remove('missing');assert.equal(files.has(b.path),false);
+const otherBefore=files.get(a.path);await b.lookup(result,'seed',true);await b.remove('SUSTAIN');assert.equal(b.words.length,0);assert.equal(files.get(a.path),otherBefore);
+const stopRemovalSync=a2.subscribe(()=>{});await a.remove('GROWTH');assert.equal(a.words.some(word=>word.word==='growth'),false);assert.equal(a2.words.some(word=>word.word==='growth'),false);stopRemovalSync();assert.ok(a.words.some(word=>word.word==='sustain'));
+const beforeRemove=files.get(a.path);fail=true;await assert.rejects(a.remove('sustain'),/IO/);assert.equal(files.get(a.path),beforeRemove);assert.ok(a.words.some(word=>word.word==='sustain'));
+await a.remove('sustain');await a.expose([{word:'sustain',paragraphId:'stale',lookupCount:1}],5);assert.equal(a.words.some(word=>word.word==='sustain'),false);
+await a.lookup(result,'new-query',true);assert.equal(a.words.find(word=>word.word==='sustain').lookupCount,1);assert.equal(a.words.find(word=>word.word==='sustain').noLookupCount,0);
 const before=files.get(a.path);fail=true;await assert.rejects(a.lookup(result,'p0',true),/IO/);assert.equal(files.get(a.path),before);
 files.set(b.path,'broken');await assert.rejects(b.lookup(result,'p0',true),/无效/);assert.equal(files.get(b.path),'broken');
+await assert.rejects(b.remove('sustain'),/无效/);assert.equal(files.get(b.path),'broken');
 const old=m.loadAiSettings({provider:'agnes',agnesApiKey:'a',deepseekApiKey:'d',custom:{baseUrl:'http://localhost/v1',model:'custom',apiKey:'c'}});assert.equal(old.agnesModel,'agnes-2.5-flash');assert.equal(m.loadAiSettings(undefined).agnesModel,'agnes-3.0-flash');
 old.agnesBaseUrl='https://apihub.agnes-ai.com/v1/chat/completions';old.agnesModel='agnes-2.5-pro';assert.equal(m.getAiConfig(old).model,'agnes-2.5-pro');old.provider='deepseek';assert.equal(m.getAiConfig(old).apiKey,'d');
 let sent;globalThis.qrRequest=async options=>{sent=options;return {status:200,text:JSON.stringify({choices:[{message:{content:'ok'}}]})};};
@@ -69,4 +76,4 @@ for(const language of ['en','zh-CN']){
 }
 await assert.rejects(m.translateSentence({baseUrl:'https://example.com/v1',model:'chosen',apiKey:''},'A sentence.','en'),/未配置 API Key/);
 await assert.rejects(m.translateSentence({},'x'.repeat(5001),'en'),/5000/);
-console.log(JSON.stringify({pass:'Keyless Youdao GET/parser/audio/cache/errors, legacy key removal, word rules, default 5, per-book concurrency/rollback/dedup/reset/deletion, AI migration/templates/base and full URLs'}));
+console.log(JSON.stringify({pass:'Keyless Youdao GET/parser/audio/cache/errors, legacy key removal, default 5, per-book concurrency/rollback/dedup/reset/deletion/manual removal and fresh lookup, explicit bilingual AI sentences, AI models/URLs'}));

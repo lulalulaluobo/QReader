@@ -28,7 +28,6 @@ export class WordLayer {
   private frame: number | null = null;
   private destroyed = false;
   private highlighted = true;
-  private lookupEnabled = false;
   private threshold = 5;
   private win: HighlightWindow;
   private schedule = (): void => {
@@ -37,8 +36,7 @@ export class WordLayer {
   };
 
   constructor(private doc: Document, private root: HTMLElement, private host: HTMLElement,
-    prefix: string, private onLookup: (word: string, paragraphId: string) => void,
-    private onExposure: (events: readonly WordExposure[]) => void, pdf = false) {
+    prefix: string, private onExposure: (events: readonly WordExposure[]) => void, pdf = false) {
     this.win = doc.defaultView as HighlightWindow;
     this.paragraphs = pdf
       ? Array.from(root.querySelectorAll<HTMLElement>("[data-qr-paragraph]")).map((element) => ({ element, id: element.dataset.qrParagraph! }))
@@ -61,12 +59,12 @@ export class WordLayer {
     return this.paragraphs.find((paragraph) => paragraph.element === closest)?.id
       ?? this.paragraphs.find((paragraph) => paragraph.element.contains(node))?.id;
   }
-  set(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold = 5): void {
+  set(words: readonly VocabularyWord[], highlight: boolean, threshold = 5): void {
     this.highlighted = highlight;
-    this.lookupEnabled = lookupEnabled;
     this.threshold = threshold;
     const active = new Map(words.map((word) => [word.word, word]));
     this.lookupCounts = new Map(words.map((word) => [word.word, word.lookupCount]));
+    for (const [key, event] of this.episodes) if (active.get(event.word)?.lookupCount !== event.lookupCount) this.episodes.delete(key);
     for (const [key, count] of this.suppressed) if (active.get(key.split("\0")[0])?.lookupCount !== count) this.suppressed.delete(key);
     const signature = [...active.keys()].sort().join("\0");
     if (signature !== this.wordSignature) {
@@ -153,27 +151,6 @@ export class WordLayer {
   flush(): void {
     const events = [...this.episodes.values()]; this.episodes.clear();
     if (events.length) this.onExposure(events);
-  }
-  handleClick(event: MouseEvent): boolean {
-    if (!this.lookupEnabled || this.host.closest("[inert]")) return false;
-    const doc = this.doc;
-    const caret = doc.caretRangeFromPoint?.(event.clientX, event.clientY);
-    const position = caret ? { offsetNode: caret.startContainer, offset: caret.startOffset } : doc.caretPositionFromPoint?.(event.clientX, event.clientY);
-    if (!position || position.offsetNode.nodeType !== 3 || !this.root.contains(position.offsetNode)) return false;
-    const text = position.offsetNode.textContent ?? "";
-    wordPattern.lastIndex = 0;
-    let match: RegExpExecArray | null;
-    while ((match = wordPattern.exec(text))) {
-      if (position.offset < match.index || position.offset > match.index + match[0].length) continue;
-      const range = this.doc.createRange();
-      range.setStart(position.offsetNode, match.index); range.setEnd(position.offsetNode, match.index + match[0].length);
-      if (!Array.from(range.getClientRects()).some((rect) => event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom)) continue;
-      const paragraphId = this.paragraphId(position.offsetNode);
-      if (!paragraphId) return false;
-      event.preventDefault(); event.stopPropagation();
-      this.noteLookup(match[0], paragraphId); this.onLookup(match[0], paragraphId); return true;
-    }
-    return false;
   }
   private paint(): void {
     const registry = this.win.CSS?.highlights;

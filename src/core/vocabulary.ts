@@ -103,6 +103,16 @@ export class VocabularyStore {
       return true;
     });
   }
+  remove(text: string): Promise<void> {
+    const word = singleWord(text);
+    if (!word) return Promise.resolve();
+    return this.change((file) => {
+      const index = file.words.findIndex((record) => record.word === word);
+      if (index < 0) return false;
+      file.words.splice(index, 1);
+      return true;
+    });
+  }
   expose(exposures: readonly WordExposure[], threshold: number): Promise<void> {
     return this.change((file) => {
       let changed = false;

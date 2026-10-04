@@ -28,7 +28,6 @@ export class PdfEngine implements ReaderEngine {
   private wordLayers = new Map<number, WordLayer>();
   private vocabulary: readonly VocabularyWord[] = [];
   private vocabularyHighlight = true;
-  private lookupEnabled = false;
   private vocabularyThreshold = 5;
   private scroller: HTMLElement | null = null;
   private wrappers = new Map<number, HTMLElement>();
@@ -299,9 +298,9 @@ export class PdfEngine implements ReaderEngine {
       for (const br of layer.querySelectorAll("br")) { br.style.position = "absolute"; br.style.color = "transparent"; }
       wrapper.dataset.rendered = "true";
       if (this.scroller) {
-        const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordLookup, this.hooks.onWordExposure, true);
+        const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordExposure, true);
         this.wordLayers.set(number, words);
-        words.set(this.vocabulary, this.vocabularyHighlight, this.lookupEnabled, this.vocabularyThreshold);
+        words.set(this.vocabulary, this.vocabularyHighlight, this.vocabularyThreshold);
       }
       this.paintHighlights(number);
       // Retain at most eight fully rendered pages even with very small pages.
@@ -498,7 +497,6 @@ export class PdfEngine implements ReaderEngine {
         }
       }
     }
-    for (const layer of this.wordLayers.values()) if (layer.handleClick(event)) return;
     const rect = this.scroller?.getBoundingClientRect();
     if (!rect) return;
     const x = (event.clientX - rect.left) / rect.width;
@@ -602,10 +600,10 @@ export class PdfEngine implements ReaderEngine {
     this.container?.replaceChildren();
     this.scroller = null;
   }
-  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void {
-    this.vocabulary = words; this.vocabularyHighlight = highlight; this.lookupEnabled = lookupEnabled;
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void {
+    this.vocabulary = words; this.vocabularyHighlight = highlight;
     this.vocabularyThreshold = threshold;
-    for (const layer of this.wordLayers.values()) layer.set(words, highlight, lookupEnabled, threshold);
+    for (const layer of this.wordLayers.values()) layer.set(words, highlight, threshold);
   }
   noteVocabularyLookup(word: string, paragraphId?: string): void { for (const layer of this.wordLayers.values()) layer.noteLookup(word, paragraphId); }
   flushVocabulary(): void { for (const layer of this.wordLayers.values()) layer.flush(); }

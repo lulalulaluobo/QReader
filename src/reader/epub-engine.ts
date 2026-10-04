@@ -29,7 +29,6 @@ export class EpubEngine implements ReaderEngine {
   private wordLayers = new Map<Document, WordLayer>();
   private vocabulary: readonly VocabularyWord[] = [];
   private vocabularyHighlight = true;
-  private lookupEnabled = false;
   private vocabularyThreshold = 5;
   private mode: ReadMode;
   private layout: ReadingLayout;
@@ -233,9 +232,9 @@ export class EpubEngine implements ReaderEngine {
     const doc = contents.document;
     this.wordLayers.get(doc)?.destroy();
     if (this.container && this.format !== "cbz") {
-      const words = new WordLayer(doc, doc.body, this.container, `epub:${contents.sectionIndex}`, this.hooks.onWordLookup, this.hooks.onWordExposure);
+      const words = new WordLayer(doc, doc.body, this.container, `epub:${contents.sectionIndex}`, this.hooks.onWordExposure);
       this.wordLayers.set(doc, words);
-      words.set(this.vocabulary, this.vocabularyHighlight, this.lookupEnabled, this.vocabularyThreshold);
+      words.set(this.vocabulary, this.vocabularyHighlight, this.vocabularyThreshold);
     }
     contents.addStylesheetCss(this.readingCss, "qreader-reading");
     for (const chapter of this.chapters) {
@@ -317,7 +316,6 @@ export class EpubEngine implements ReaderEngine {
           return;
         }
       }
-      if (this.wordLayers.get(doc)?.handleClick(event)) return;
       const x = (hostX - surface.left) / surface.width;
       const y = (hostY - surface.top) / surface.height;
       if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
@@ -609,10 +607,10 @@ export class EpubEngine implements ReaderEngine {
     this.rendition = null;
     this.container?.replaceChildren();
   }
-  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, lookupEnabled: boolean, threshold: number): void {
-    this.vocabulary = words; this.vocabularyHighlight = highlight; this.lookupEnabled = lookupEnabled;
+  setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void {
+    this.vocabulary = words; this.vocabularyHighlight = highlight;
     this.vocabularyThreshold = threshold;
-    for (const layer of this.wordLayers.values()) layer.set(words, highlight, lookupEnabled, threshold);
+    for (const layer of this.wordLayers.values()) layer.set(words, highlight, threshold);
   }
   noteVocabularyLookup(word: string, paragraphId?: string): void { for (const layer of this.wordLayers.values()) layer.noteLookup(word, paragraphId); }
   flushVocabulary(): void { for (const layer of this.wordLayers.values()) layer.flush(); }
