@@ -2,7 +2,7 @@
 
 An Obsidian reader that helps you understand an author's ideas and reasoning, then recall them in your own words. / 在 Obsidian 中阅读，理解作者的表达与推理，再合上书用自己的话复述。
 
-[Download / 下载 1.1.5](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.5) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.6](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.6) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -19,7 +19,7 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.5.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.6.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -44,21 +44,23 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 
 ### 翻译与动态生词
 
-设置 **有道 App Key / App Secret** 后，点击英文词，或长按选中一个词，即可主动查询。选中句子后点击翻译图标，只显示译文，不加入生词表。单词卡片提供简短中文释义；接口提供音标时显示音标，点击声音图标才播放发音。单词选区卡片的更多图标可返回复制、画线和批注菜单。
+**有道查词无需密钥或额外配置。** 点击英文词，或长按选中一个词，即可主动查询中文释义、可用音标；点击声音图标播放发音。单词选区卡片的更多图标可返回复制、画线和批注菜单。
 
-首版使用[有道文本翻译 API](https://ai.youdao.com/DOCSIRMA/html/trans/api/wbfy/index.html)，需要为应用绑定文本翻译服务；发音还需绑定语音合成服务。文本接口不保证提供音标；不使用禁止缓存的独立词典服务。
+查词使用[有道公开词典](https://dict.youdao.com/)的单词查询与发音接口，不需要有道智云账户。公开接口可能调整；请求失败时可重试，已有生词仍可读取本书保存的释义。
+
+公开查词接口不提供整句译文。选中句子后点击 **AI 翻译** 图标，使用已配置的 DeepSeek、Agnes 或自定义 AI 服务译为中文，卡片明确显示 AI 来源。整句只翻译，不加入生词表；使用此功能需要现有 AI 配置，单词查词不依赖 AI。
 
 查询成功的单词默认自动保存到当前书籍的 `vocabulary.json`，重新查询会清零连续未查询次数并恢复最强高亮。词形按原样记录，忽略大小写，不自动猜词根。可分别关闭自动加入和后续高亮。
 
 生词所在段落真正进入视口后，在离开段落或翻页时计一次有效出现。同词同段只计一次，回看、重排和重开不重复；重新查询开启新一轮。连续 **5 次**有效出现且未查询后，逐渐淡化的高亮和单词记录一起删除。设置可选择 **3 / 4 / 5**，或自定义 **1–100** 次。没有单词历史库、背诵、测试或复习任务。
 
-活跃生词优先读取本书保存的释义。其他查词和句子翻译使用最多 128 条、30 分钟有效的会话缓存，关闭插件后清空，不建立永久翻译库。
+活跃生词优先读取本书保存的释义。其他单词查询使用最多 128 条、30 分钟有效的会话缓存，关闭插件后清空；整句译文仅显示在当前卡片，不建立永久翻译库。
 
 ### 数据与限制
 
-每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。API Key 和有道 App Secret 保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。AI 生成会将相应章节、选文及上下文或回答发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的选文，译文固定为中文，不随界面语言改变。
+每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。AI 密钥保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。升级保留现有生词，旧有道凭据不再使用并在下一次保存设置时移除。AI 生成或整句翻译会将相应文本发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的单词和播放发音的单词。查词释义与整句译文使用中文，不随界面语言改变。
 
-CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。1.1.5 在 macOS Obsidian 1.13.7 独立 Vault 验收，中英文窄屏使用移动 CSS 模拟；Agnes 3.0 Flash 真实连接探针通过，有道使用模拟响应测试。Android/iOS 真机、有道真实账户调用和 AI 内容质量未验证。
+CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。免密有道单词查询与音频已实际连通；AI 整句译文质量和 Android/iOS 真机尚未验证。桌面验收使用 macOS Obsidian 1.13.7 独立 Vault，窄屏使用移动 CSS 模拟。
 
 ## English
 
@@ -75,7 +77,7 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.5.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.6.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -100,21 +102,23 @@ Changing language preserves book text, category names, notes, existing questions
 
 ### Translation and dynamic vocabulary
 
-Configure **Youdao App Key / App Secret**, then tap an English word or select a single word to look it up. Select a sentence and tap Translate to translate it without saving vocabulary. The card shows a brief Chinese definition, a phonetic only when supplied by the API, and pronunciation played only when you press the speaker icon. More on a selected-word card returns to copying, highlighting and annotations.
+**Youdao word lookup needs no key or setup.** Tap an English word or select a single word to look it up. The card shows Chinese definitions and available phonetics; press the speaker icon to play pronunciation. More on a selected-word card returns to copying, highlighting and annotations.
 
-This release uses the [Youdao text translation API](https://ai.youdao.com/DOCSIRMA/html/trans/api/wbfy/index.html). Enable text translation for your application and speech synthesis for pronunciation. Phonetics are not guaranteed; the separate dictionary API is not used.
+Lookup uses the [public Youdao dictionary](https://dict.youdao.com/) word and pronunciation endpoints without a Youdao cloud account. Public endpoints may change. Retry failed requests; active words retain their saved definitions in the current book.
+
+The public dictionary does not return sentence translations. Select a passage and press **AI translation** to translate it into Chinese using your configured DeepSeek, Agnes or custom AI service. The card identifies its AI source. Passages are not saved as vocabulary. This feature needs your existing AI setup; word lookup does not use AI.
 
 Successful single-word lookups are saved in the current book's `vocabulary.json` by default. Another lookup resets the consecutive missed-lookup count and restores the strongest highlight. Words are case-insensitive but are not stemmed. Automatic saving and highlighting can be disabled separately.
 
 A paragraph must actually enter the reading viewport. An appearance is counted when leaving that paragraph or turning a page; the same word in the same paragraph counts once. Rereading, reflowing and reopening do not count again. A new lookup starts another round. After **5 consecutive appearances without a lookup**, the word and its fading highlight are removed. Choose **3 / 4 / 5** or a custom **1–100** in settings. There is no vocabulary history, memorization, testing or review schedule.
 
-Active words use their saved per-book definitions first. Other lookups and sentences use a session cache of at most 128 entries, valid for 30 minutes and cleared when the plugin closes. There is no permanent translation archive.
+Active words use their saved per-book definitions first. Other word lookups use a session cache of at most 128 entries, valid for 30 minutes and cleared when the plugin closes. Sentence translations appear only in the current card. There is no permanent translation archive.
 
 ### Data and limitations
 
-Each book folder keeps the original file, `reading.json` and `批注.md`. A first successful saved-word lookup adds only `vocabulary.json`. Language changes preserve existing files and data. API keys and Youdao App Secret are stored unencrypted in the plugin's local `data.json`; protect your Vault sync and backups. AI sends relevant text to your chosen endpoint; connection tests send only a probe. Youdao receives only actively queried text and translates into Chinese regardless of interface language.
+Each book folder keeps the original file, `reading.json` and `批注.md`. A first successful saved-word lookup adds only `vocabulary.json`. Language changes preserve existing files and data. AI keys are stored unencrypted in the plugin's local `data.json`; protect your Vault sync and backups. Upgrades retain vocabulary; old Youdao credentials are unused and removed on the next settings save. AI sends relevant text to your chosen endpoint for AI features and sentence translation; connection tests send only a probe. Youdao receives only words you actively look up or play. Definitions and sentence translations use Chinese regardless of interface language.
 
-CBZ and scanned PDFs have no queryable text; other PDFs depend on their text layer and paragraph layout. DRM/encrypted books are unsupported. Version 1.1.5 is validated in an isolated macOS Obsidian 1.13.7 Vault; narrow layouts use mobile CSS simulation. A live Agnes 3.0 Flash connectivity probe passed. Youdao uses mocked responses in tests; real Youdao accounts, Android/iOS devices and AI content quality have not been tested.
+CBZ and scanned PDFs have no queryable text; other PDFs depend on their text layer and paragraph layout. DRM/encrypted books are unsupported. Live keyless Youdao word and audio requests passed. AI sentence translation quality and Android/iOS devices have not been tested. Desktop validation uses an isolated macOS Obsidian 1.13.7 Vault; narrow layouts use mobile CSS simulation.
 
 ## 从源码构建 / Build from source
 

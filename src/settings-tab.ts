@@ -195,7 +195,7 @@ export class QReaderSettingTab extends PluginSettingTab {
           });
         });
       new Setting(aiContainer).setName(this.plugin.t("测试连接"))
-        .setDesc(this.plugin.t("仅将章节正文、选文或回答发送到所选接口，用于三问生成、批注解释和回答反馈；不提供通用对话。连接测试只发送探针。"))
+        .setDesc(this.plugin.t("章节正文、选文或回答会按需发送到所选接口，用于三问、解释、整句翻译和反馈。连接测试只发送探针。"))
         .addButton((button) => button.setButtonText(this.testing ? this.plugin.t("正在测试……") : this.plugin.t("测试连接"))
           .setDisabled(this.testing).onClick(async () => {
             if (this.testing) return;
@@ -228,18 +228,12 @@ export class QReaderSettingTab extends PluginSettingTab {
     renderAi();
 
     containerEl.createEl("h3", { text: this.plugin.t("翻译") });
-    new Setting(containerEl).setName(this.plugin.t("翻译服务")).setDesc(this.plugin.t("有道文本翻译；只有主动查询时发送选文，释义固定译为中文。"));
+    new Setting(containerEl).setName(this.plugin.t("翻译服务")).setDesc(this.plugin.t("有道单词查询，无需密钥；主动查词时获取中文释义、音标和发音。"));
+    new Setting(containerEl).setName(this.plugin.t("整句翻译")).setDesc(this.plugin.t("选句后点击 AI 翻译，使用已配置的 AI 服务译为中文，不加入生词表。"));
     const saveTranslation = async (): Promise<void> => {
       try { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("translation"); }
       catch { new Notice(this.plugin.t("翻译设置保存失败，请重试")); }
     };
-    for (const field of ["appKey", "appSecret"] as const) {
-      const label = field === "appKey" ? "Youdao App Key" : "Youdao App Secret";
-      new Setting(containerEl).setName(label).addText((text) => {
-        text.inputEl.type = "password"; text.inputEl.autocomplete = "off"; text.inputEl.setAttribute("aria-label", label);
-        text.setValue(s.translation[field]).onChange(async (value) => { s.translation[field] = value; await saveTranslation(); });
-      });
-    }
     containerEl.createEl("h3", { text: this.plugin.t("动态生词") });
     new Setting(containerEl).setName(this.plugin.t("查询后自动加入生词表")).addToggle((toggle) =>
       toggle.setValue(s.translation.autoAdd).onChange(async (value) => { s.translation.autoAdd = value; await saveTranslation(); }));

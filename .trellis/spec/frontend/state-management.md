@@ -1,6 +1,14 @@
 # 状态管理
 
-reading.json 是每本书阅读、批注与问答的事实源，批注.md 是可重建的派生输出。vocabulary.json 独立保存活跃生词。插件配置通过 Obsidian loadData/saveData 保存，API Key/App Secret 不进入阅读库。
+reading.json 是每本书阅读、批注与问答的事实源，批注.md 是可重建的派生输出。vocabulary.json 独立保存活跃生词。插件配置通过 Obsidian loadData/saveData 保存，AI 密钥不进入阅读库。
+
+## 1.1.6 免密查词契约（覆盖下述 1.1.5 有道凭据方案）
+
+- 用户改用 englishPodStudy 的免密方式：GET `dict.youdao.com/jsonapi?q=...`，原文仅单个英文词。ec/simple 音标和嵌套释义从 unknown 校验，web_trans 优先 `web-translation`；不返回空释义，不复制参考项目的词库/课程功能。
+- 发音直接 `dict.youdao.com/dictvoice?audio=...&type=2`，只用户点按播放，关闭暂停。旧活跃词可继续读定义，播放和再次保存改用免密音频地址。
+- translation 设置仅 autoAdd/highlight/deletionThreshold，删除密钥字段和签名请求；归一化丢弃旧 appKey/appSecret，下一次设置保存移除磁盘旧字段。查词无需 AI 或有道凭据，既有 vocabulary.json 无迁移。
+- 公开单词接口不支持整句，明确入口/卡片“AI 翻译”通过已配置 AI 服务翻译成中文；提示词按界面语言编写但目标中文固定，选文只作为翻译资料。整句不写生词、不统计单词查询、不建立翻译缓存/历史；超过 5000 字拒绝，未配置 AI 显示正常配置错误。
+- 保留 128 条/30 分钟单词会话缓存和并发/清空代次保护、按书活跃词优先、曝光与默认 5 次删除。网络/HTTP/非 JSON/空结果错误可重试且不写生词。公开端点可调整，不能宣称永久稳定的商业 API。
 
 ## 1.1.5 翻译与生词契约
 
@@ -59,7 +67,7 @@ src/core/json-store.ts 对每本书串行执行变更、写入与校验，保留
 ### 3. 持久化与请求契约
 - `reading.json` `version: 1` 仍保存实际 `book.format`、清洗后安全 `book.fileName`、原书内容、原版 CFI/PDF 定位、批注、问题版本、答案/反馈/复习。改版不迁移、不覆盖用户原书或书库记录。
 - CBZ 仅保存 `book.format: "cbz"`、序页及进度。不得为图像页生成空正文三问、回答、文本标记或复习记录。
-- 密钥仅存 Obsidian 插件 `data.json`，按 `deepseekApiKey` / `agnesApiKey` / `custom.apiKey` 独立保存；未加密，UI 用 password 控件并明确备份风险。AI 仍只调用三问、选文解释、提交反馈的既定场景。
+- 密钥仅存 Obsidian 插件 `data.json`，按 `deepseekApiKey` / `agnesApiKey` / `custom.apiKey` 独立保存；未加密，UI 用 password 控件并明确备份风险。AI 只在三问、选文解释、整句翻译和提交反馈场景调用。
 - 默认 Base URL/model 与可编辑模板见 1.1.5 契约。旧自定义配置以原字符串迁入，不向任一预设提供方复制密钥。
 
 ### 4. 验证与错误矩阵

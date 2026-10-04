@@ -1,30 +1,37 @@
 import assert from 'node:assert/strict';
-import {createHash,webcrypto} from 'node:crypto';
-globalThis.crypto ??= webcrypto;
 import {build} from 'esbuild';
-const bundle = await build({stdin:{contents:`export * from './src/translation/youdao'; export * from './src/core/vocabulary'; export * from './src/ai/providers'; export * from './src/ai/client';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'obsidian-test',setup(b){b.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const requestUrl = async (options) => globalThis.qrRequest(options);',loader:'js'}));}}]});
+const bundle = await build({stdin:{contents:`export * from './src/translation/youdao'; export * from './src/translation/sentence'; export * from './src/core/vocabulary'; export * from './src/ai/providers'; export * from './src/ai/client';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'obsidian-test',setup(b){b.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const requestUrl = async (options) => globalThis.qrRequest(options);',loader:'js'}));}}]});
 const m = await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
-const settings={...m.DEFAULT_TRANSLATION_SETTINGS,appKey:'test-app',appSecret:'test-secret'};
 assert.equal(m.loadTranslationSettings(undefined).deletionThreshold,5);
+assert.deepEqual(m.loadTranslationSettings({appKey:'old',appSecret:'old',autoAdd:false,highlight:false,deletionThreshold:9}),{autoAdd:false,highlight:false,deletionThreshold:9});
+for(const value of [null,[],{deletionThreshold:'3'},{deletionThreshold:2.5}])assert.equal(m.loadTranslationSettings(value).deletionThreshold,5);
 for(const value of ['sustain','SUSTAIN',"can't",'long-term'])assert.ok(m.singleWord(value));
 for(const value of ['two words','sustain.','你好','42','a b c'])assert.equal(m.singleWord(value),null);
-for(const text of ['sustain','abcdefghijklmnopqrstuvwxy','😀abcdefghijklmnopqrstu😀']){
-  const body=new URLSearchParams(await m.youdaoBody(text,settings,'nonce','123'));
-  const chars=Array.from(text);const input=chars.length<=20?text:chars.slice(0,10).join('')+chars.length+chars.slice(-10).join('');
-  assert.equal(body.get('sign'),createHash('sha256').update('test-app'+input+'nonce123test-secret').digest('hex'));
-  assert.equal(body.get('from'),'en');assert.equal(body.get('to'),'zh-CHS');assert.equal(body.get('signType'),'v3');assert.ok(!body.toString().includes('test-secret'));
-}
 assert.equal(m.safeAudioUrl('javascript:alert(1)'), '');assert.equal(m.safeAudioUrl('https://evil.com/x'), '');
-assert.equal(m.parseTranslation({errorCode:'0',translation:['维持'],speakUrl:'https://openapi.youdao.com/audio'},'sustain').phonetic,'');
-assert.throws(()=>m.parseTranslation({errorCode:'202',query:'SECRET'},'x'),/签名无效/);
-let calls=0;const client=new m.YoudaoClient(async()=>{calls++;await new Promise(r=>setTimeout(r,5));return {status:200,text:JSON.stringify({errorCode:'0',translation:['维持'],speakUrl:'https://openapi.youdao.com/audio'})};});
-await Promise.all([client.lookup('sustain',settings),client.lookup('Sustain',settings)]);assert.equal(calls,1);
-await client.lookup('SUSTAIN',settings);assert.equal(calls,1);await client.lookup('sustain',{...settings,appSecret:'another'});assert.equal(calls,2);
-client.clear();await client.lookup('sustain',settings);assert.equal(calls,3);
-const bad=new m.YoudaoClient(async()=>{throw new Error('test-secret');});await assert.rejects(bad.lookup('x',settings),error=>!error.message.includes('test-secret'));
+const dictionary={ec:{word:[{usphone:'səˈsteɪn',trs:[{tr:[{l:{i:['v. 维持；支撑']}}]},{tr:[{l:{i:['n. 延音']}}]}]}]},simple:{word:[{ukphone:'səˈsteɪn'}]}};
+assert.deepEqual(m.parseTranslation(dictionary,'sustain'),{query:'sustain',translation:'v. 维持；支撑\nn. 延音',phonetic:'səˈsteɪn',audioUrl:'https://dict.youdao.com/dictvoice?audio=sustain&type=2'});
+for(const field of ['web-translation','web_translation'])assert.equal(m.parseTranslation({web_trans:{[field]:[{trans:[{value:'维持'},{value:'维持'},{value:'支撑'}]}]}},'sustain').translation,'维持\n支撑');
+assert.equal(m.parseTranslation({ec:{word:[{trs:[{tr:[{l:{i:[null,'维持',4]}}]}]}]}},'sustain').phonetic,'');
+for(const raw of [null,[],{}, {simple:{word:[{usphone:'x'}]}},{ec:{word:[{trs:[null,{tr:[null,{l:{i:'bad'}}]}]}]}}])assert.throws(()=>m.parseTranslation(raw,'sustain'),/有道/);
+let calls=0;let lookupUrl;const client=new m.YoudaoClient(async url=>{calls++;lookupUrl=url;await new Promise(r=>setTimeout(r,5));return {status:200,text:JSON.stringify(dictionary)};});
+await Promise.all([client.lookup('sustain'),client.lookup('Sustain')]);assert.equal(calls,1);
+await client.lookup('SUSTAIN');assert.equal(calls,1);
+await client.lookup("CAN’T");assert.equal(calls,2);assert.equal(lookupUrl,'https://dict.youdao.com/jsonapi?q='+encodeURIComponent("can't"));
+await assert.rejects(client.lookup('two words'),/单个英文单词/);assert.equal(calls,2);
+client.clear();await client.lookup('sustain');assert.equal(calls,3);
+const bad=new m.YoudaoClient(async()=>{throw new Error('test-secret');});await assert.rejects(bad.lookup('x'),error=>!error.message.includes('test-secret'));
+await assert.rejects(new m.YoudaoClient(async()=>({status:429,text:'secret'})).lookup('sustain'),/429/);
+await assert.rejects(new m.YoudaoClient(async()=>({status:200,text:'<html>captcha</html>'})).lookup('sustain'),/数据无效/);
+let dictionaryRequest;globalThis.qrRequest=async options=>{dictionaryRequest=options;return {status:200,text:JSON.stringify(dictionary)};};
+await new m.YoudaoClient().lookup('sustain');assert.deepEqual(dictionaryRequest,{url:'https://dict.youdao.com/jsonapi?q=sustain',method:'GET',throw:false});
+const now=Date.now;let elapsed=now();Date.now=()=>elapsed;
+try{elapsed+=31*60*1000;await client.lookup('sustain');assert.equal(calls,4);}finally{Date.now=now;}
+let boundedCalls=0;const bounded=new m.YoudaoClient(async()=>{boundedCalls++;return {status:200,text:JSON.stringify(dictionary)};});
+for(let i=0;i<129;i++)await bounded.lookup('word'+String.fromCharCode(97+Math.floor(i/26))+String.fromCharCode(97+i%26));
+await bounded.lookup('wordaa');assert.equal(boundedCalls,130);
 let resolveOld;let started;let freshCalls=0;const entered=new Promise(r=>{started=r;});
-const invalidated=new m.YoudaoClient(async()=>{freshCalls++;if(freshCalls===1){started();await new Promise(r=>{resolveOld=r;});}return {status:200,text:JSON.stringify({errorCode:'0',translation:['译文']})};});
-const oldRequest=invalidated.lookup('pending',settings);await entered;invalidated.clear();await invalidated.lookup('pending',settings);resolveOld();await oldRequest;await invalidated.lookup('pending',settings);assert.equal(freshCalls,2);
+const invalidated=new m.YoudaoClient(async()=>{freshCalls++;if(freshCalls===1){started();await new Promise(r=>{resolveOld=r;});}return {status:200,text:JSON.stringify(dictionary)};});
+const oldRequest=invalidated.lookup('pending');await entered;invalidated.clear();await invalidated.lookup('pending');resolveOld();await oldRequest;await invalidated.lookup('pending');assert.equal(freshCalls,2);
 const files=new Map();let fail=false;
 const fs={queueScope:{},exists:async p=>files.has(p),read:async p=>{if(!files.has(p))throw Error('missing');return files.get(p);},write:async(p,data)=>{if(fail){fail=false;files.set(p,'partial');throw Error('IO');}files.set(p,data);},remove:async p=>{files.delete(p);},mkdir:async()=>{},list:async()=>({files:[],folders:[]})};
 const a=new m.VocabularyStore(fs,'a/vocabulary.json'),a2=new m.VocabularyStore(fs,'a/vocabulary.json'),b=new m.VocabularyStore(fs,'b/vocabulary.json');
@@ -55,4 +62,11 @@ for(const url of ['https://apihub.agnes-ai.com/v1','https://apihub.agnes-ai.com/
 }
 await m.chatCompletion({baseUrl:'https://api.deepseek.com',model:'deepseek-v4-pro',apiKey:'dummy'},[{role:'user',content:'ok'}]);assert.deepEqual(JSON.parse(sent.body).thinking,{type:'disabled'});
 await m.chatCompletion({baseUrl:'https://example.com/v1',model:'deepseek-v4-pro',apiKey:'dummy'},[{role:'user',content:'ok'}]);assert.equal(JSON.parse(sent.body).thinking,undefined);
-console.log(JSON.stringify({pass:'Youdao signing/cache/errors, word rules, default 5, per-book concurrency/rollback/dedup/reset/deletion, AI migration/templates/base and full URLs'}));
+for(const language of ['en','zh-CN']){
+  const result=await m.translateSentence({baseUrl:'https://example.com/v1',model:'chosen',apiKey:'dummy'},' The company must sustain growth. ',language);
+  const payload=JSON.parse(sent.body);assert.equal(payload.model,'chosen');assert.equal(payload.messages[1].content,'The company must sustain growth.');
+  assert.ok(payload.messages[0].content.includes(language==='en'?'Simplified Chinese':'简体中文'));assert.equal(result.translation,'ok');assert.equal(result.phonetic,'');assert.equal(result.audioUrl,'');
+}
+await assert.rejects(m.translateSentence({baseUrl:'https://example.com/v1',model:'chosen',apiKey:''},'A sentence.','en'),/未配置 API Key/);
+await assert.rejects(m.translateSentence({},'x'.repeat(5001),'en'),/5000/);
+console.log(JSON.stringify({pass:'Keyless Youdao GET/parser/audio/cache/errors, legacy key removal, word rules, default 5, per-book concurrency/rollback/dedup/reset/deletion, AI migration/templates/base and full URLs'}));

@@ -24,6 +24,7 @@ import { getAiConfig } from "../ai/providers";
 import { VocabularyStore } from "../core/vocabulary";
 import { VaultFs } from "../core/fs";
 import { singleWord } from "../translation/youdao";
+import { translateSentence } from "../translation/sentence";
 
 export const VIEW_TYPE_READER = "qreader-reader";
 
@@ -390,7 +391,7 @@ export class ReaderView extends ItemView {
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
       onSelect: (sel) => {
         if (generation !== this.generation) return;
-        if (singleWord(sel.text) && this.translationReady()) this.openTranslation(sel.text, sel.paragraphId, sel);
+        if (singleWord(sel.text)) this.openTranslation(sel.text, sel.paragraphId, sel);
         else this.openSelectionMenu(sel);
       },
       onWordLookup: (word, paragraphId) => { if (generation === this.generation) this.openTranslation(word, paragraphId); },
@@ -425,24 +426,21 @@ export class ReaderView extends ItemView {
     }, hooks, entry.reading.annotations, { mode: this.mode });
   }
 
-  private translationReady(): boolean {
-    const settings = this.plugin.settings.translation;
-    return !!(settings.appKey.trim() && settings.appSecret.trim());
-  }
   private updateVocabulary(): void {
     const settings = this.plugin.settings.translation;
-    this.engine?.setVocabulary(this.vocabulary?.words ?? [], settings.highlight, this.translationReady(), settings.deletionThreshold);
+    this.engine?.setVocabulary(this.vocabulary?.words ?? [], settings.highlight, true, settings.deletionThreshold);
   }
   private openTranslation(text: string, paragraphId?: string, selection?: EngineSelection): void {
     if (!this.entry || !this.engine || this.contentHost.inert || this.draft || this.annotationSaving) return;
     const word = singleWord(text);
-    this.engine.noteVocabularyLookup(word ?? text, paragraphId);
+    if (word) this.engine.noteVocabularyLookup(word, paragraphId);
     const generation = this.generation;
     const store = this.vocabulary;
-    const sheet = this.createReadingSheet(word ? text : this.plugin.t("翻译"), "qr-translation-sheet");
+    const sheet = this.createReadingSheet(word ? text : this.plugin.t("AI 翻译"), "qr-translation-sheet");
     const session = this.panelSession;
     const current = (): boolean => this.opened && generation === this.generation && session === this.panelSession && sheet.isConnected;
     const body = el("div", "qr-reading-sheet-body qr-translation-body");
+    if (!word) body.appendChild(el("p", "qr-settings-status", this.plugin.t("使用当前 AI 服务译为中文，不加入生词表。")));
     const status = el("div", "qr-translation-result", this.plugin.t("正在翻译……"));
     status.setAttribute("aria-live", "polite");
     body.appendChild(status); sheet.appendChild(body);
@@ -459,8 +457,9 @@ export class ReaderView extends ItemView {
       body.querySelectorAll("button,.qr-translation-phonetic").forEach((element) => element.remove());
       try {
         const cached = !refresh && word ? store?.words.find((record) => record.word === word) : undefined;
-        const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: cached.audioUrl }
-          : await this.plugin.translation.lookup(text, this.plugin.settings.translation);
+        const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cached.word)}&type=2` }
+          : word ? await this.plugin.translation.lookup(text)
+            : await translateSentence(getAiConfig(this.plugin.settings.ai), text, this.plugin.settings.language);
         if (!current()) return;
         status.setText(result.translation);
         if (result.phonetic) body.prepend(el("div", "qr-translation-phonetic", `/${result.phonetic}/`));
@@ -477,7 +476,7 @@ export class ReaderView extends ItemView {
         }
         const retry = el("button", "qr-icon-btn qr-translation-refresh");
         retry.setAttribute("aria-label", this.plugin.t("刷新翻译")); retry.title = this.plugin.t("刷新翻译"); setIcon(retry, "refresh-cw");
-        retry.onclick = () => { this.plugin.translation.clear(); void request(true); }; body.appendChild(retry);
+        retry.onclick = () => { if (word) this.plugin.translation.clear(); void request(true); }; body.appendChild(retry);
         appendSelectionAction();
         if (word && store) {
           try { await store.lookup(result, paragraphId, this.plugin.settings.translation.autoAdd); }
@@ -1215,7 +1214,7 @@ export class ReaderView extends ItemView {
     } : undefined);
     if (selection) {
       addAction(this.plugin.t("复制"), "copy", () => void this.copySelection(selection, target));
-      addAction(this.plugin.t("翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId));
+      addAction(this.plugin.t(singleWord(selection.text) ? "查词" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId));
     }
     if (record || target.selection) this.appendHighlightControl(menu, target);
     if (record) {

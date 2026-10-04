@@ -1,0 +1,11 @@
+{
+  "id": "reader-direct-dictionary",
+  "name": "reader-direct-dictionary",
+  "title": "参考 englishPodStudy 接入免密有道查词",
+  "status": "in_progress",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-04",
+  "branch": "main",
+  "notes": "用户改为无需密钥的有道接入；只读参考 englishPodStudy 的公开 jsonapi 与 dictvoice。保留按书生词及默认 5 次删除；整句先按已说明的推荐假设使用现有 AI 配置并明确标示。实际有道单词/音频与隔离 Obsidian 验收通过，待远程 Git 和 Release 核验。"
+}
