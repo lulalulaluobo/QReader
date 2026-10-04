@@ -1,4 +1,4 @@
-import { ItemView, Modal, setIcon } from "obsidian";
+import { ItemView, Modal, Platform, setIcon } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
 import type { AnswerRecord, ChapterState, HealthyBookEntry, Question, QuestionType, ReviewRecord } from "../types";
 import { QUESTION_LABELS, isHealthyBook } from "../types";
@@ -36,6 +36,9 @@ export class AnswerView extends ItemView {
   private unsubSettings: (() => void) | null = null;
   private requestedQuestionId: string | undefined;
   private versionModal: Modal | null = null;
+  private viewportCleanup: (() => void) | null = null;
+  private viewportFrame: number | null = null;
+  private viewportWindow: Window | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -111,7 +114,8 @@ export class AnswerView extends ItemView {
     this.opened = true;
     this.contentEl.lang = this.plugin.settings.language;
     this.plugin.syncReadingChrome();
-    this.contentEl.addClass("qr-view");
+    this.contentEl.addClass("qr-view", "qr-answer-view");
+    this.watchViewport();
     this.unsubSettings = this.plugin.onSettingsChanged((reason) => {
       if (reason === "language" && this.opened) this.renderStep();
     });
@@ -127,6 +131,14 @@ export class AnswerView extends ItemView {
   async onClose(): Promise<void> {
     this.plugin.rememberPageState(this.getViewType(), this.getState());
     this.opened = false;
+    this.viewportCleanup?.();
+    this.viewportCleanup = null;
+    if (this.viewportFrame !== null) this.viewportWindow?.cancelAnimationFrame(this.viewportFrame);
+    this.viewportFrame = null;
+    this.viewportWindow = null;
+    this.contentEl.removeClass("qr-answer-view", "qr-answer-writing");
+    this.contentEl.style.removeProperty("--qr-answer-height");
+    this.contentEl.style.removeProperty("--qr-answer-top");
     this.versionModal?.close();
     this.lifetime++;
     this.questionsLoading = false;
@@ -245,10 +257,18 @@ export class AnswerView extends ItemView {
 
   private renderStep(): void {
     if (!this.opened) return;
+    const previousInput = this.contentEl.querySelector<HTMLTextAreaElement>(".qr-answer-input");
+    const wasFocused = previousInput !== null && this.contentEl.ownerDocument.activeElement === previousInput;
+    const continueWriting = this.contentEl.classList.contains("qr-answer-writing");
+    const selectionStart = previousInput?.selectionStart ?? 0;
+    const selectionEnd = previousInput?.selectionEnd ?? 0;
+    const inputScrollTop = previousInput?.scrollTop ?? 0;
+    const previousQuestion = previousInput?.dataset.questionId;
     const entry = this.plugin.library.get(this.bookId);
     this.contentEl.empty();
     const root = el("div", "qr-answer");
     this.contentEl.appendChild(root);
+    this.scheduleViewport();
     const chapter = entry && isHealthyBook(entry) ? entry.reading.chapters[this.chapterId] : undefined;
     if (!entry || !isHealthyBook(entry) || !chapter) {
       root.appendChild(el("div", "qr-muted qr-empty", this.bookId ? this.plugin.t("章节不可用，请返回书架检查书籍。") : this.plugin.t("请从阅读页或笔记页选择章节。")));
@@ -294,6 +314,8 @@ export class AnswerView extends ItemView {
       }
       return;
     }
+    const composer = el("div", "qr-answer-composer");
+    body.appendChild(composer);
     const steps = el("div", "qr-answer-steps");
     steps.setAttribute("aria-label", this.plugin.t("第 {0} 题，共 3 题", this.step + 1));
     for (let index = 0; index < 3; index++) {
@@ -304,17 +326,20 @@ export class AnswerView extends ItemView {
       steps.appendChild(dot);
     }
     const question = this.questions[this.step];
-    body.append(steps, el("div", "qr-question-type", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-answer-question", question.text));
+    const prompt = el("div", "qr-answer-prompt");
+    prompt.append(steps, el("div", "qr-question-type", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-answer-question", question.text));
+    composer.appendChild(prompt);
     const textarea = el("textarea", "qr-textarea qr-answer-input");
     textarea.rows = 7;
     textarea.placeholder = this.plugin.t("用自己的话记一点想法，可以暂时留空");
     textarea.setAttribute("aria-label", this.plugin.t("{0}的阅读想法", this.plugin.t(QUESTION_LABELS[question.type])));
     textarea.value = this.answers[this.step];
-    body.appendChild(textarea);
+    textarea.dataset.questionId = question.id;
+    composer.appendChild(textarea);
     if (this.submissionError) {
       const error = el("div", "qr-inline-error", this.plugin.localizeStatus(this.submissionError));
       error.setAttribute("role", "alert");
-      body.appendChild(error);
+      composer.appendChild(error);
     }
     const actions = el("div", "qr-answer-actions");
     const previous = el("button", "qr-btn", this.step ? this.plugin.t("上一题") : this.mode === "review" ? this.plugin.t("返回笔记") : this.plugin.t("返回阅读"));
@@ -334,10 +359,75 @@ export class AnswerView extends ItemView {
     };
     save.onclick = () => void this.submitStep();
     actions.append(previous, next, save);
-    body.appendChild(actions);
-    body.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("保存不调用 AI。需要时，再主动获取参考评价。")));
+    composer.appendChild(actions);
+    body.appendChild(el("p", "qr-answer-help qr-muted qr-tiny", this.plugin.t("保存不调用 AI。需要时，再主动获取参考评价。")));
     body.appendChild(renderNoteHistory(this.plugin, chapter));
-    if (this.app.workspace.getActiveViewOfType(AnswerView) === this) textarea.focus({ preventScroll: true });
+    if (wasFocused && previousQuestion === question.id) {
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(selectionStart, selectionEnd);
+      textarea.scrollTop = inputScrollTop;
+    } else if (continueWriting || (!Platform.isMobile && this.contentEl.clientWidth >= 600 && this.app.workspace.getActiveViewOfType(AnswerView) === this)) {
+      textarea.focus({ preventScroll: true });
+    }
+    this.syncViewport();
+  }
+
+  private watchViewport(): void {
+    const win = this.contentEl.ownerDocument.defaultView;
+    if (!win) return;
+    this.viewportWindow = win;
+    const viewport = win.visualViewport;
+    const schedule = (): void => this.scheduleViewport();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(this.contentEl);
+    win.addEventListener("resize", schedule);
+    win.addEventListener("scroll", schedule);
+    viewport?.addEventListener("resize", schedule);
+    viewport?.addEventListener("scroll", schedule);
+    this.contentEl.addEventListener("focusin", schedule);
+    this.contentEl.addEventListener("focusout", schedule);
+    this.viewportCleanup = () => {
+      observer.disconnect();
+      win.removeEventListener("resize", schedule);
+      win.removeEventListener("scroll", schedule);
+      viewport?.removeEventListener("resize", schedule);
+      viewport?.removeEventListener("scroll", schedule);
+      this.contentEl.removeEventListener("focusin", schedule);
+      this.contentEl.removeEventListener("focusout", schedule);
+    };
+  }
+
+  private scheduleViewport(): void {
+    const win = this.viewportWindow;
+    if (!win || !this.opened || this.viewportFrame !== null) return;
+    this.viewportFrame = win.requestAnimationFrame(() => { this.viewportFrame = null; this.syncViewport(); });
+  }
+
+  /** Keep the prompt and scrolling textarea inside the actual visible pane. */
+  private syncViewport(): void {
+    const win = this.viewportWindow;
+    const root = this.contentEl.querySelector<HTMLElement>(".qr-answer");
+    if (!this.opened || !win || !root) return;
+    const viewport = win.visualViewport;
+    const top = viewport?.offsetTop ?? 0;
+    const bottom = top + (viewport?.height ?? win.innerHeight);
+    const rect = this.contentEl.getBoundingClientRect();
+    const focused = this.contentEl.ownerDocument.activeElement === this.contentEl.querySelector(".qr-answer-input");
+    const writing = focused && (Platform.isMobile || rect.width < 600 || Math.min(rect.bottom, bottom) - Math.max(rect.top, top) < 500);
+    this.contentEl.classList.toggle("qr-answer-writing", writing);
+    const padding = win.getComputedStyle(this.contentEl);
+    const paneTop = rect.top + (parseFloat(padding.paddingTop) || 0);
+    const paneBottom = rect.bottom - (parseFloat(padding.paddingBottom) || 0);
+    const visibleTop = Math.max(paneTop, top);
+    const height = Math.max(0, Math.min(paneBottom, bottom) - visibleTop);
+    this.contentEl.style.setProperty("--qr-answer-top", `${Math.max(0, visibleTop - paneTop)}px`);
+    this.contentEl.style.setProperty("--qr-answer-height", `${height}px`);
+    if (writing) {
+      this.contentEl.scrollTop = 0;
+      root.scrollTop = 0;
+      const body = root.querySelector<HTMLElement>(".qr-answer-body");
+      if (body) body.scrollTop = 0;
+    }
   }
 
   private async submitStep(): Promise<void> {

@@ -2,7 +2,7 @@
 
 An Obsidian reader with optional reading prompts, personal reflections and AI reference feedback. / 在 Obsidian 中带着问题读书，自由记录想法，按需获取 AI 参考评价。
 
-[Download / 下载 1.1.8](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.8) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.9](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.9) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -19,7 +19,7 @@ An Obsidian reader with optional reading prompts, personal reflections and AI re
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.8.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.9.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -44,7 +44,7 @@ An Obsidian reader with optional reading prompts, personal reflections and AI re
 
 ### 阅读想法与笔记
 
-三问是引导性阅读提示，**不要求答题，也不要求合上书**。点击任一问题或“写下想法”，可以任选一题记录。空白问题可以跳过；“保存想法”只写本地笔记，不调用 AI。需要时，再点击“获取 AI 参考评价”。
+三问是引导性阅读提示，**不要求答题，也不要求合上书**。点击任一问题或“写下想法”，可以任选一题记录。手机点按输入框后，问题、输入区和保存按钮一起保留在输入法上方；长回答在输入框内滚动，长问题可单独滚动查看。空白问题可以跳过；“保存想法”只写本地笔记，不调用 AI。需要时，再点击“获取 AI 参考评价”。
 
 AI 评价只回应已记录的想法，不评分、不将未回答的问题视为遗漏，也不提供标准答案。它可以讨论其他解读、提醒核对原文；读者不需要认同作者或 AI。
 
@@ -89,7 +89,7 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.8.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.9.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -114,7 +114,7 @@ Changing language preserves book text, category names, notes, existing questions
 
 ### Reflections and notes
 
-The three prompts guide your reading; **answering and closing the book are optional**. Choose any prompt or press “Write a reflection.” Leave other prompts blank if you prefer. “Save reflections” writes local notes without calling AI. Afterwards, “Get AI reference feedback” is optional.
+The three prompts guide your reading; **answering and closing the book are optional**. Choose any prompt or press “Write a reflection.” On mobile, tap the input to start writing. The prompt, input and save controls share the visible area above the keyboard. Long answers scroll inside the input; long prompts scroll separately. Leave other prompts blank if you prefer. “Save reflections” writes local notes without calling AI. Afterwards, “Get AI reference feedback” is optional.
 
 AI feedback discusses only the reflections you recorded. It does not score you, treat unanswered prompts as omissions or offer standard answers. It may suggest another interpretation or a source check; you do not need to agree with the author or AI.
 

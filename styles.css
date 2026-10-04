@@ -1403,8 +1403,11 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 /* ----------------------------------------------------------------- answer */
 
 .qr-answer {
-  height: 100%;
-  overflow-y: auto;
+  height: var(--qr-answer-height, 100%);
+  top: var(--qr-answer-top, 0px);
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
@@ -1428,6 +1431,8 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-answer-body {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   max-width: 680px;
   width: 100%;
   margin: 0 auto;
@@ -1465,7 +1470,59 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   line-height: 1.65;
 }
 .qr-answer-input {
-  font-size: 15.5px;
+  font-size: 16px;
+  flex: none;
+}
+.qr-answer-composer,
+.qr-answer-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+/* The prompt stays above the independently scrolling input while typing. */
+.qr-answer-view.qr-answer-writing { padding-bottom: 0; }
+.qr-answer-writing .qr-answer-header,
+.qr-answer-writing .qr-answer-steps,
+.qr-answer-writing .qr-answer-help,
+.qr-answer-writing .qr-answer-body > .qr-history { display: none; }
+.qr-answer-writing .qr-answer-body {
+  padding: 12px 16px;
+  overflow: hidden;
+}
+.qr-answer-writing .qr-answer-composer {
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+.qr-answer-writing .qr-answer-prompt {
+  flex: none;
+  min-height: 0;
+  max-height: 40%;
+  overflow-y: auto;
+  gap: 4px;
+}
+.qr-answer-writing .qr-answer-question { font-size: 17px; line-height: 1.55; }
+.qr-answer-writing .qr-answer-input {
+  flex: 1 1 0;
+  min-height: 3.4em;
+  height: auto;
+  resize: none;
+  overflow-y: auto;
+}
+.qr-answer-writing .qr-answer-actions {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 0;
+}
+.qr-answer-writing .qr-answer-actions .qr-btn {
+  min-width: 0;
+  padding-inline: 6px;
+  white-space: normal;
+  line-height: 1.3;
 }
 .qr-answer-actions {
   display: flex;
