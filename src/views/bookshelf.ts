@@ -342,7 +342,7 @@ export class BookshelfView extends ItemView {
     nav.setAttribute("aria-label", this.plugin.t("QReader 导航"));
     const routes = [
       { label: this.plugin.t("书架"), icon: "library", active: true, go: () => this.plugin.openBookshelf() },
-      { label: this.plugin.t("复习"), icon: "repeat", active: false, go: () => this.plugin.openReview() },
+      { label: this.plugin.t("笔记"), icon: "notebook-pen", active: false, go: () => this.plugin.openNotes() },
       { label: this.plugin.t("设置"), icon: "settings", active: false, go: () => this.plugin.openSettings() },
     ];
     for (const route of routes) {
@@ -531,12 +531,15 @@ export class BookshelfView extends ItemView {
         }));
       }
       menu.addSeparator();
-      menu.addItem((item) => item.setTitle(this.plugin.t("查看批注")).setIcon("file-text").onClick(async () => {
-        const file = this.app.vault.getAbstractFileByPath(`${entry.dir}/${ANNOTATIONS_MD}`);
-        if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
-        else new Notice(this.plugin.t("未找到批注.md"));
+      menu.addItem((item) => item.setTitle(this.plugin.t("打开笔记文件")).setIcon("file-text").onClick(async () => {
+        try {
+          await this.plugin.library.syncAnnotationsMd(entry);
+          const file = this.app.vault.getAbstractFileByPath(`${entry.dir}/${ANNOTATIONS_MD}`);
+          if (file instanceof TFile) await this.app.workspace.getLeaf(false).openFile(file);
+          else new Notice(this.plugin.t("未找到批注.md"));
+        } catch (error) { new Notice(this.plugin.t("打开笔记失败：{0}", this.plugin.errorText(error))); }
       }));
-      menu.addItem((item) => item.setTitle(this.plugin.t("进入复习")).setIcon("repeat").onClick(() => void this.plugin.openReview(entry.id)));
+      menu.addItem((item) => item.setTitle(this.plugin.t("打开笔记")).setIcon("notebook-pen").onClick(() => void this.plugin.openNotes(entry.id)));
     } else {
       menu.addItem((item) => item.setTitle(this.plugin.t("恢复备份")).setIcon("history").onClick(() => void this.recover(entry, false)));
       menu.addItem((item) => item.setTitle(this.plugin.t("重新建立阅读记录")).setIcon("refresh-cw").onClick(() => void this.recover(entry, true)));

@@ -1,23 +1,18 @@
 import { ItemView, Modal, setIcon } from "obsidian";
 import type { ViewStateResult, WorkspaceLeaf } from "obsidian";
-import type { AnswerRecord, ChapterState, Feedback, HealthyBookEntry, Question, QuestionType, ReviewRecord } from "../types";
+import type { AnswerRecord, ChapterState, HealthyBookEntry, Question, QuestionType, ReviewRecord } from "../types";
 import { QUESTION_LABELS, isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
-import { el, fmtDateTime, todayStr } from "../util";
+import { el } from "../util";
 import { generateFeedback } from "../ai/tasks";
 import { getAiConfig } from "../ai/providers";
+import { chapterNotes } from "../core/chapter-notes";
+import { feedbackBlock, noteBlock, renderNoteHistory } from "./note-content";
 
 export const VIEW_TYPE_ANSWER = "qreader-answer";
 export type AnswerMode = "answer" | "review";
 
 type SavedSession = { kind: "answer"; record: AnswerRecord } | { kind: "review"; record: ReviewRecord };
-interface HistoryItem {
-  record: AnswerRecord | ReviewRecord;
-  kind: AnswerMode;
-  at: string;
-  answers: Record<string, string>;
-  version: number;
-}
 
 export class AnswerView extends ItemView {
   private bookId = "";
@@ -47,7 +42,7 @@ export class AnswerView extends ItemView {
     this.navigation = true;
   }
   getViewType(): string { return VIEW_TYPE_ANSWER; }
-  getDisplayText(): string { return this.mode === "review" ? this.plugin.t("QReader · 复习") : this.plugin.t("QReader · 回答"); }
+  getDisplayText(): string { return this.plugin.t("QReader · 阅读想法"); }
   getIcon(): string { return "message-square-quote"; }
 
   getState(): Record<string, unknown> {
@@ -193,7 +188,7 @@ export class AnswerView extends ItemView {
     const modal = new Modal(this.app);
     this.versionModal = modal;
     modal.titleEl.setText(this.plugin.t("切换问题版本？"));
-    modal.contentEl.appendChild(el("p", undefined, this.plugin.t("当前三问尚未提交。切换后会清除本次草稿，并使用刚刚选中的问题版本。已保存的历史回答不受影响。")));
+    modal.contentEl.appendChild(el("p", undefined, this.plugin.t("当前想法尚未保存。切换后会清除本次草稿，并使用选中的问题版本。已保存的笔记不受影响。")));
     const actions = el("div", "qr-answer-actions");
     const cancel = el("button", "qr-btn", this.plugin.t("继续当前回答"));
     const confirm = el("button", "qr-btn qr-btn-primary", this.plugin.t("切换版本"));
@@ -256,14 +251,14 @@ export class AnswerView extends ItemView {
     this.contentEl.appendChild(root);
     const chapter = entry && isHealthyBook(entry) ? entry.reading.chapters[this.chapterId] : undefined;
     if (!entry || !isHealthyBook(entry) || !chapter) {
-      root.appendChild(el("div", "qr-muted qr-empty", this.bookId ? this.plugin.t("章节不可用，请返回书架检查书籍。") : this.plugin.t("请从阅读页或复习页选择章节。")));
+      root.appendChild(el("div", "qr-muted qr-empty", this.bookId ? this.plugin.t("章节不可用，请返回书架检查书籍。") : this.plugin.t("请从阅读页或笔记页选择章节。")));
       const back = el("button", "qr-btn", this.plugin.t("返回书架"));
       back.onclick = () => void this.plugin.openBookshelf();
       root.appendChild(back);
       return;
     }
     if (entry.reading.book.format === "cbz") {
-      root.appendChild(el("div", "qr-muted qr-empty", this.plugin.t("图片书没有文字层，不能进行闭卷回答。")));
+      root.appendChild(el("div", "qr-muted qr-empty", this.plugin.t("图片书没有文字层，不能生成阅读三问。")));
       const back = el("button", "qr-btn", this.plugin.t("返回阅读"));
       back.onclick = () => this.back();
       root.appendChild(back);
@@ -271,19 +266,19 @@ export class AnswerView extends ItemView {
     }
     const header = el("div", "qr-answer-header");
     const back = el("button", "qr-icon-btn");
-    back.setAttribute("aria-label", this.mode === "review" ? this.plugin.t("返回复习") : this.plugin.t("返回阅读"));
+    back.setAttribute("aria-label", this.mode === "review" ? this.plugin.t("返回笔记") : this.plugin.t("返回阅读"));
     setIcon(back, "arrow-left");
     back.disabled = this.phase === "saving";
     back.onclick = () => this.back();
     const titles = el("div", "qr-answer-titles");
-    titles.append(el("div", "qr-answer-book", `${entry.reading.book.title} · ${chapter.title}`), el("div", "qr-muted qr-tiny", this.mode === "review" ? this.plugin.t("复习中 · 只看问题重新回答") : this.plugin.t("回答中 · 原文已隐藏")));
+    titles.append(el("div", "qr-answer-book", `${entry.reading.book.title} · ${chapter.title}`), el("div", "qr-muted qr-tiny", this.plugin.t("写下想法 · 可只记一题，也可以略过")));
     header.append(back, titles);
     root.appendChild(header);
     if (this.phase === "done") { this.renderResult(root, entry, chapter); return; }
     const body = el("div", "qr-answer-body");
     root.appendChild(body);
     if (this.phase === "saving" || this.phase === "feedback-loading") {
-      const status = el("div", "qr-muted qr-pulse", this.phase === "saving" ? this.plugin.t("正在保存三题回答……") : this.plugin.t("回答已保存，正在获取 AI 反馈……"));
+      const status = el("div", "qr-muted qr-pulse", this.phase === "saving" ? this.plugin.t("正在保存笔记……") : this.plugin.t("笔记已保存，正在获取 AI 参考评价……"));
       status.setAttribute("role", "status");
       body.appendChild(status);
       return;
@@ -312,8 +307,8 @@ export class AnswerView extends ItemView {
     body.append(steps, el("div", "qr-question-type", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-answer-question", question.text));
     const textarea = el("textarea", "qr-textarea qr-answer-input");
     textarea.rows = 7;
-    textarea.placeholder = this.plugin.t("合上书，用自己的话回答");
-    textarea.setAttribute("aria-label", this.plugin.t("{0}回答", this.plugin.t(QUESTION_LABELS[question.type])));
+    textarea.placeholder = this.plugin.t("用自己的话记一点想法，可以暂时留空");
+    textarea.setAttribute("aria-label", this.plugin.t("{0}的阅读想法", this.plugin.t(QUESTION_LABELS[question.type])));
     textarea.value = this.answers[this.step];
     body.appendChild(textarea);
     if (this.submissionError) {
@@ -322,35 +317,33 @@ export class AnswerView extends ItemView {
       body.appendChild(error);
     }
     const actions = el("div", "qr-answer-actions");
-    const previous = el("button", "qr-btn", this.step ? this.plugin.t("上一题") : this.mode === "review" ? this.plugin.t("返回复习") : this.plugin.t("返回阅读"));
+    const previous = el("button", "qr-btn", this.step ? this.plugin.t("上一题") : this.mode === "review" ? this.plugin.t("返回笔记") : this.plugin.t("返回阅读"));
     previous.onclick = () => {
       if (!this.step) this.back();
       else { this.step--; this.app.workspace.requestSaveLayout(); this.renderStep(); }
     };
-    const next = el("button", "qr-btn qr-btn-primary");
-    const updateNext = (): void => {
-      next.setText(this.step < 2 ? this.plugin.t("下一题") : this.answers.some((answer) => !answer.trim()) ? this.plugin.t("下一道未答题") : this.plugin.t("提交三题回答"));
-      next.disabled = !this.answers[this.step].trim();
-    };
-    updateNext();
+    const next = el("button", "qr-btn", this.step < 2 ? this.plugin.t("下一题") : this.plugin.t("回到第一题"));
+    next.onclick = () => { this.step = (this.step + 1) % 3; this.app.workspace.requestSaveLayout(); this.renderStep(); };
+    const save = el("button", "qr-btn qr-btn-primary", this.plugin.t("保存想法"));
+    const updateSave = (): void => { save.disabled = !this.answers.some(answer => answer.trim()); };
+    updateSave();
     textarea.oninput = () => {
       this.answers[this.step] = textarea.value;
       this.app.workspace.requestSaveLayout();
-      updateNext();
+      updateSave();
     };
-    next.onclick = () => void this.submitStep();
-    actions.append(previous, next);
+    save.onclick = () => void this.submitStep();
+    actions.append(previous, next, save);
     body.appendChild(actions);
+    body.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("保存不调用 AI。需要时，再主动获取参考评价。")));
+    body.appendChild(renderNoteHistory(this.plugin, chapter));
     if (this.app.workspace.getActiveViewOfType(AnswerView) === this) textarea.focus({ preventScroll: true });
   }
 
   private async submitStep(): Promise<void> {
-    if (this.phase !== "questions" || this.saved || !this.answers[this.step].trim()) return;
-    if (this.step < 2) { this.step++; this.app.workspace.requestSaveLayout(); this.renderStep(); return; }
-    const unanswered = this.answers.findIndex((answer) => !answer.trim());
-    if (unanswered >= 0) { this.step = unanswered; this.app.workspace.requestSaveLayout(); this.renderStep(); return; }
-    if (this.questions.length !== 3 || this.answers.some((answer) => !answer.trim())) {
-      this.submissionError = this.plugin.t("请先完成全部三题，再提交回答。");
+    if (this.phase !== "questions" || this.saved) return;
+    if (this.questions.length !== 3 || !this.answers.some(answer => answer.trim())) {
+      this.submissionError = this.plugin.t("请先记录一点想法，再保存笔记。");
       this.renderStep();
       return;
     }
@@ -358,26 +351,20 @@ export class AnswerView extends ItemView {
     if (!entry || !isHealthyBook(entry)) return;
     const session = this.session;
     const chapterId = this.chapterId;
-    const mode = this.mode;
     const answerMap: Record<string, string> = {};
-    this.questions.forEach((question, index) => { answerMap[question.id] = this.answers[index].trim(); });
+    this.questions.forEach((question, index) => { if (this.answers[index].trim()) answerMap[question.id] = this.answers[index].trim(); });
     this.phase = "saving";
     this.submissionError = "";
     this.renderStep();
     try {
-      const saved: SavedSession = mode === "review"
-        ? { kind: "review", record: await this.plugin.library.completeReview(entry, chapterId, this.questionVersion, answerMap, this.scheduledFor) }
-        : { kind: "answer", record: await this.plugin.library.recordAnswer(entry, chapterId, this.questionVersion, answerMap) };
+      const saved: SavedSession = { kind: "answer", record: await this.plugin.library.recordAnswer(entry, chapterId, this.questionVersion, answerMap) };
       if (session !== this.session) return;
       this.saved = saved;
       this.plugin.rememberPageState(this.getViewType(), this.getState());
       this.app.workspace.requestSaveLayout();
-      if (!this.opened) {
-        this.phase = "done";
-        this.feedbackError = this.plugin.t("回答已保存，重新打开后可获取 AI 反馈。");
-        return;
-      }
-      await this.fetchFeedback(entry, saved);
+      this.phase = "done";
+      this.feedbackError = "";
+      this.renderStep();
     } catch (error) {
       if (session !== this.session) return;
       this.phase = this.saved ? "done" : "questions";
@@ -417,143 +404,42 @@ export class AnswerView extends ItemView {
   private renderResult(root: HTMLElement, entry: HealthyBookEntry, chapter: ChapterState): void {
     const body = el("div", "qr-answer-body");
     root.appendChild(body);
-    body.appendChild(el("div", "qr-answer-question", this.mode === "review" ? this.plugin.t("复习完成") : this.plugin.t("回答已保存")));
+    body.appendChild(el("div", "qr-answer-question", this.plugin.t("笔记已保存")));
     const saved = this.saved;
     if (!saved) return;
-    if (saved.record.feedback) body.appendChild(this.feedbackBlock(saved.record.feedback));
+    const current = chapterNotes(chapter).find(item => item.record === saved.record);
+    if (current) body.appendChild(noteBlock(this.plugin, current, chapter));
+    if (saved.record.feedback) body.appendChild(feedbackBlock(this.plugin, saved.record.feedback));
     else {
-      const error = el("div", "qr-feedback qr-feedback-error");
-      error.append(el("div", "qr-feedback-title", this.plugin.t("三题回答已保存，AI 反馈尚未获取")), el("div", "qr-muted", this.plugin.localizeStatus(this.feedbackError)));
-      const retry = el("button", "qr-btn", this.plugin.t("重试获取反馈"));
-      retry.onclick = () => void this.fetchFeedback(entry, saved);
-      error.appendChild(retry);
-      body.appendChild(error);
-    }
-    const timeline = this.timeline(chapter);
-    const current = timeline.find((item) => item.record === saved.record);
-    if (current) body.appendChild(this.answerBlock(this.plugin.t("本次回答"), current, chapter));
-    const history = timeline.filter((item) => item.record !== saved.record);
-    const previous = history.at(-1);
-    if (previous) body.appendChild(this.answerBlock(this.plugin.t("上一次回答"), previous, chapter));
-    if (history.length) {
-      const section = el("section", "qr-history");
-      section.appendChild(el("h2", "qr-question-type", this.plugin.t("历次回答")));
-      for (const item of [...history].reverse()) {
-        const details = el("details", "qr-history-item");
-        details.appendChild(el("summary", "qr-history-row", this.plugin.t("{0} · {1} · 问题版本 {2}", item.kind === "review" ? this.plugin.t("复习") : this.plugin.t("阅读回答"), fmtDateTime(item.at), item.version)));
-        details.appendChild(this.answerBlock("", item, chapter));
-        if (item.record.feedback) details.appendChild(this.feedbackBlock(item.record.feedback));
-        section.appendChild(details);
+      body.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("可以到这里结束，也可以请 AI 提供参考评价。")));
+      if (this.feedbackError) {
+        const error = el("div", "qr-inline-error", this.plugin.localizeStatus(this.feedbackError));
+        error.setAttribute("role", "alert");
+        body.appendChild(error);
       }
-      body.appendChild(section);
+      const evaluate = el("button", "qr-btn", this.plugin.t("获取 AI 参考评价"));
+      evaluate.onclick = () => void this.fetchFeedback(entry, saved);
+      body.appendChild(evaluate);
     }
-    body.appendChild(this.reviewScheduler(entry, chapter));
-    const done = el("button", "qr-btn qr-btn-primary", this.plugin.t("完成（可跳过复习日期）"));
-    done.onclick = () => this.back();
-    body.appendChild(done);
-  }
-
-  private timeline(chapter: ChapterState): HistoryItem[] {
-    const history: HistoryItem[] = chapter.answers.map((record) => ({ record, kind: "answer", at: record.answeredAt, answers: record.answers, version: record.questionVersion }));
-    for (const record of chapter.reviews) {
-      if (record.completedAt && record.answers) history.push({ record, kind: "review", at: record.completedAt, answers: record.answers, version: record.questionVersion ?? 0 });
-    }
-    return history.sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
-  }
-
-  private answerBlock(title: string, item: HistoryItem, chapter: ChapterState): HTMLElement {
-    const box = el("div", "qr-compare");
-    if (title) box.appendChild(el("div", "qr-question-type", title));
-    box.appendChild(el("div", "qr-muted qr-tiny", this.plugin.t("{0} · 问题版本 {1}", fmtDateTime(item.at), item.version)));
-    const version = chapter.questionVersions.find((questionVersion) => questionVersion.version === item.version);
-    if (!version) {
-      box.appendChild(el("div", "qr-inline-error", this.plugin.t("该次问题版本不可用；以下保留原回答及问题编号。")));
-      for (const [id, answer] of Object.entries(item.answers)) {
-        box.append(el("div", "qr-muted qr-tiny", id), el("div", "qr-compare-text", answer));
-      }
-      return box;
-    }
-    for (const question of version.questions) {
-      const row = el("div", "qr-compare-item");
-      row.append(el("div", "qr-muted qr-tiny", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-compare-question", question.text), el("div", "qr-compare-text", item.answers[question.id] || this.plugin.t("（未作答）")));
-      box.appendChild(row);
-    }
-    return box;
-  }
-
-  private feedbackBlock(feedback: Feedback): HTMLElement {
-    const box = el("div", "qr-feedback");
-    const sections = [
-      { title: this.plugin.t("作者观点"), content: feedback.authorView },
-      { title: this.plugin.t("值得再想想"), content: feedback.rethink },
-      { title: this.plugin.t("事实错误"), content: feedback.factualErrors },
-    ];
-    for (const section of sections) {
-      if (!section.content) continue;
-      const row = el("div", "qr-feedback-section");
-      row.append(el("div", "qr-feedback-title", section.title), el("div", "qr-feedback-text", section.content));
-      box.appendChild(row);
-    }
-    box.appendChild(el("div", "qr-muted qr-tiny qr-feedback-motto", this.plugin.t("理解作者，不等于认同作者。")));
-    return box;
-  }
-
-  private reviewScheduler(entry: HealthyBookEntry, chapter: ChapterState): HTMLElement {
-    const box = el("div", "qr-review-scheduler");
-    box.append(el("div", "qr-question-type", this.plugin.t("复习日期（可选）")), el("div", "qr-muted qr-tiny", this.plugin.t("自由选择未来某天，也可以直接完成，不设置日期。")));
-    const pending = chapter.reviews.filter((review) => review.scheduledFor && !review.completedAt);
-    if (pending.length) box.appendChild(el("div", "qr-muted", this.plugin.t("已安排：{0}", pending.map((review) => review.scheduledFor).join("、"))));
-    const row = el("div", "qr-form-row");
-    const date = el("input", "qr-input");
-    date.type = "date";
-    date.setAttribute("aria-label", this.plugin.t("未来复习日期"));
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    date.min = fmtDateTime(tomorrow.toISOString()).slice(0, 10);
-    const set = el("button", "qr-btn", this.plugin.t("设置复习日期"));
-    set.disabled = true;
-    date.oninput = () => { set.disabled = !date.value || date.value <= todayStr(); };
-    const message = el("div", "qr-status qr-muted");
-    message.setAttribute("role", "status");
-    const session = this.session;
-    const lifetime = this.lifetime;
-    const chapterId = this.chapterId;
-    set.onclick = async () => {
-      if (!date.value || date.value <= todayStr()) { message.setText(this.plugin.t("请选择未来的日期。")); return; }
-      const selected = date.value;
-      set.disabled = true;
-      date.disabled = true;
-      set.setText(this.plugin.t("正在保存……"));
-      try {
-        await this.plugin.library.scheduleReview(entry, chapterId, selected);
-        if (session !== this.session || lifetime !== this.lifetime || !this.opened) return;
-        message.setText(this.plugin.t("已安排在 {0} 复习。", selected));
-        set.setText(this.plugin.t("已设置"));
-      } catch (error) {
-        if (session !== this.session || lifetime !== this.lifetime || !this.opened) return;
-        message.setText(this.plugin.t("设置失败：{0}", this.plugin.errorText(error)));
-        set.disabled = false;
-        date.disabled = false;
-        set.setText(this.plugin.t("设置复习日期"));
-      }
+    body.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("AI 评价只供参考，不是标准答案。理解作者不等于认同作者。")));
+    const actions = el("div", "qr-answer-actions");
+    const add = el("button", "qr-btn", this.plugin.t("补充想法"));
+    add.onclick = () => {
+      this.answers = this.questions.map(question => saved.record.answers?.[question.id] ?? "");
+      this.saved = null; this.phase = "questions"; this.feedbackError = ""; this.submissionError = "";
+      this.plugin.rememberPageState(this.getViewType(), this.getState());
+      this.app.workspace.requestSaveLayout(); this.renderStep();
     };
-    row.append(date, set);
-    box.append(row, message);
-    return box;
+    const notes = el("button", "qr-btn", this.plugin.t("查看本章笔记"));
+    notes.onclick = () => void this.plugin.openNotes(entry.id, this.chapterId);
+    const done = el("button", "qr-btn qr-btn-primary", this.mode === "review" ? this.plugin.t("返回笔记") : this.plugin.t("返回阅读"));
+    done.onclick = () => this.back();
+    actions.append(add, notes, done); body.appendChild(actions);
+    body.appendChild(renderNoteHistory(this.plugin, chapter, saved.record));
   }
 
   private back(): void {
-    if (this.mode === "review") void this.plugin.openReview();
+    if (this.mode === "review") void this.plugin.openNotes(this.bookId, this.chapterId);
     else void this.plugin.openReader(this.bookId);
   }
-}
-
-export function pendingReviewsOf(entry: HealthyBookEntry): { chapterId: string; ch: ChapterState; r: ReviewRecord }[] {
-  const pending: { chapterId: string; ch: ChapterState; r: ReviewRecord }[] = [];
-  for (const [chapterId, chapter] of Object.entries(entry.reading.chapters)) {
-    for (const review of chapter.reviews) {
-      if (review.scheduledFor && !review.completedAt) pending.push({ chapterId, ch: chapter, r: review });
-    }
-  }
-  return pending;
 }

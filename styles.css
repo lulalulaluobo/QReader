@@ -1548,7 +1548,31 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   line-height: 1.6;
 }
 
-/* ----------------------------------------------------------------- review */
+/* ------------------------------------------------------------------ notes */
+
+.qr-notes-page {
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px 16px 0;
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.qr-notes-page-body { flex: 1; min-width: 0; }
+.qr-notes-book-select { width: 100%; max-width: 100%; }
+.qr-notes-chapter {
+  margin: 16px 0;
+  border: 1px solid var(--qr-border);
+  border-radius: 12px;
+  overflow-wrap: anywhere;
+}
+.qr-notes-chapter > summary { padding: 16px; cursor: pointer; }
+.qr-notes-chapter-body { padding: 0 16px 16px; }
+.qr-notes-chapter-body > .qr-btn { margin-block: 12px; }
+.qr-notes-chapter .qr-history-row { white-space: normal; }
 
 .qr-review {
   height: 100%;
@@ -1757,7 +1781,8 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 /* Wide Obsidian panes retain the same hierarchy, with more reading space. */
 @media (min-width: 600px) {
   .qr-bookshelf,
-  .qr-review {
+  .qr-review,
+  .qr-notes-page {
     padding-inline: 32px;
   }
   .qr-answer-body {

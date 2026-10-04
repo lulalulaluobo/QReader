@@ -18,6 +18,7 @@ import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, Select
 import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
 import { el, genId, fmtDateTime } from "../util";
+import { renderNoteHistory } from "./note-content";
 import { explainSelection } from "../ai/tasks";
 import { HIGHLIGHT_COLORS, READING_PALETTES } from "../settings";
 import { getAiConfig } from "../ai/providers";
@@ -239,9 +240,9 @@ export class ReaderView extends ItemView {
     const chapters = el("div", "qr-reader-chapter-actions");
     const prevCh = el("button", "qr-btn", this.plugin.t("上一章"));
     prevCh.onclick = () => void this.stepChapter(-1);
-    const done = el("button", "qr-btn qr-btn-primary", this.plugin.t("完成本章"));
+    const done = el("button", "qr-btn qr-btn-primary", this.plugin.t("写下想法"));
     done.disabled = this.entry?.reading.book.format === "cbz";
-    if (done.disabled) done.title = this.plugin.t("图片书没有文字层，不能闭卷回答");
+    if (done.disabled) done.title = this.plugin.t("图片书没有文字层，不能生成阅读三问。");
     done.onclick = () => void this.finishChapter();
     const nextCh = el("button", "qr-btn", this.plugin.t("下一章"));
     nextCh.onclick = () => void this.stepChapter(1);
@@ -800,11 +801,11 @@ export class ReaderView extends ItemView {
       const item = el("button", "qr-question-item qr-question-link");
       item.appendChild(el("span", "qr-question-type", this.plugin.t(QUESTION_LABELS[q.type])));
       item.appendChild(el("span", "qr-question-text", q.text));
-      item.setAttribute("aria-label", this.plugin.t("{0}：{1}，进入闭卷回答", this.plugin.t(QUESTION_LABELS[q.type]), q.text));
+      item.setAttribute("aria-label", this.plugin.t("{0}：{1}，记录阅读想法", this.plugin.t(QUESTION_LABELS[q.type]), q.text));
       item.onclick = () => { if (chapterId) void this.answerQuestion(chapterId, q.id, latest.version, item); };
       body.appendChild(item);
     }
-    body.appendChild(el("p", "qr-reading-help", this.plugin.t("点击任一问题开始闭卷回答；三题全部完成后一起提交。")));
+    body.appendChild(el("p", "qr-reading-help", this.plugin.t("三问是阅读提示，可以略过，也可以任选一题记录想法。")));
     if (versions.length > 1) {
       body.appendChild(el("div", "qr-muted", this.plugin.t("第 {0} 版 · 共 {1} 个版本", latest.version, versions.length)));
     }
@@ -1043,10 +1044,35 @@ export class ReaderView extends ItemView {
     const entry = this.entry;
     if (!body || !entry) return;
     body.empty();
+    const all = el("button", "qr-btn qr-btn-sm", this.plugin.t("查看全部笔记"));
+    all.onclick = async () => {
+      const generation = this.generation;
+      const panelSession = this.panelSession;
+      all.disabled = true;
+      try {
+        await this.persistProgress(true);
+        if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
+        this.closePanels();
+        await this.plugin.openNotes(entry.id, this.currentChapterId ?? undefined);
+      } catch (error) { if (this.opened) new Notice(this.plugin.t("打开笔记失败：{0}", this.plugin.errorText(error))); }
+      finally { all.disabled = false; }
+    };
+    body.appendChild(all);
+    const currentChapter = this.currentChapterId ? entry.reading.chapters[this.currentChapterId] : undefined;
+    if (currentChapter?.questionVersions.length) {
+      body.appendChild(el("h3", "qr-note-chapter", currentChapter.title));
+      const version = currentChapter.questionVersions.at(-1);
+      if (version) for (const question of version.questions) {
+        const item = el("div", "qr-compare-item");
+        item.append(el("div", "qr-question-type", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-compare-question", question.text));
+        body.appendChild(item);
+      }
+      body.appendChild(renderNoteHistory(this.plugin, currentChapter));
+    }
     const records = entry.reading.annotations.slice().sort((a, b) =>
       (entry.reading.chapters[a.chapterId]?.index ?? 0) - (entry.reading.chapters[b.chapterId]?.index ?? 0) ||
       a.sortKey - b.sortKey);
-    if (records.length === 0) {
+    if (records.length === 0 && !currentChapter?.questionVersions.length) {
       body.appendChild(el("div", "qr-empty", entry.reading.book.format === "cbz"
         ? this.plugin.t("图片书没有文字层，不能添加文字批注。")
         : this.plugin.t("还没有笔记。选择正文可以划线，也可以写下自己的理解。")));
@@ -1163,7 +1189,7 @@ export class ReaderView extends ItemView {
     const entry = this.entry;
     if (!entry) return;
     if (entry.reading.book.format === "cbz") {
-      new Notice(this.plugin.t("图片书没有文字层，不能闭卷回答"));
+      new Notice(this.plugin.t("图片书没有文字层，不能生成阅读三问。"));
       return;
     }
     if (!this.currentChapterId) {

@@ -211,7 +211,11 @@ function answers(value: unknown): void {
 }
 function feedback(value: unknown): void {
   const f = requireRecord(value, "feedback");
-  string(f.authorView, "authorView"); optionalString(f.rethink, "rethink"); optionalString(f.factualErrors, "factualErrors");
+  if (f.kind === "reference") {
+    string(f.comment, "comment"); optionalString(f.perspectives, "perspectives"); optionalString(f.evidenceNotes, "evidenceNotes");
+  } else if (f.kind === undefined) {
+    string(f.authorView, "authorView"); optionalString(f.rethink, "rethink"); optionalString(f.factualErrors, "factualErrors");
+  } else throw new Error("reading.json feedback.kind 无效");
 }
 
 /** Strict boundary validation. Never repair missing histories by replacing them. */

@@ -10,7 +10,7 @@ import { LibraryManager } from "./core/library";
 import { BookshelfView, VIEW_TYPE_BOOKSHELF } from "./views/bookshelf";
 import { ReaderView, VIEW_TYPE_READER } from "./views/reader";
 import { AnswerView, VIEW_TYPE_ANSWER } from "./views/answer";
-import { ReviewView, VIEW_TYPE_REVIEW } from "./views/review";
+import { NotesView, VIEW_TYPE_NOTES, LEGACY_REVIEW_VIEW } from "./views/notes";
 import { QReaderSettingTab } from "./settings-tab";
 import { localizeMessage, localizedError, normalizeLanguage, translate } from "./i18n";
 import type { MessageKey } from "./i18n";
@@ -59,7 +59,8 @@ export class QReaderPlugin extends Plugin {
     this.registerView(VIEW_TYPE_BOOKSHELF, (leaf) => new BookshelfView(leaf, this));
     this.registerView(VIEW_TYPE_READER, (leaf) => new ReaderView(leaf, this));
     this.registerView(VIEW_TYPE_ANSWER, (leaf) => new AnswerView(leaf, this));
-    this.registerView(VIEW_TYPE_REVIEW, (leaf) => new ReviewView(leaf, this));
+    this.registerView(VIEW_TYPE_NOTES, (leaf) => new NotesView(leaf, this));
+    this.registerView(LEGACY_REVIEW_VIEW, (leaf) => new NotesView(leaf, this, LEGACY_REVIEW_VIEW));
 
     this.ribbon = this.addRibbonIcon("book-open", this.t("QReader 书架"), () => void this.openBookshelf());
     this.registerCommands();
@@ -89,8 +90,8 @@ export class QReaderPlugin extends Plugin {
     });
     this.addCommand({
       id: "open-review",
-      name: this.t("进入复习"),
-      callback: () => void this.openReview(),
+      name: this.t("打开笔记"),
+      callback: () => void this.openNotes(),
     });
 
   }
@@ -107,7 +108,8 @@ export class QReaderPlugin extends Plugin {
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_READER);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_ANSWER);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_BOOKSHELF);
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_REVIEW);
+    this.app.workspace.detachLeavesOfType(VIEW_TYPE_NOTES);
+    this.app.workspace.detachLeavesOfType(LEGACY_REVIEW_VIEW);
     void this.cache.dispose();
     this.libraryListeners.clear();
     this.settingsListeners.clear();
@@ -173,7 +175,7 @@ export class QReaderPlugin extends Plugin {
       this.registerCommands();
       this.ribbon?.setAttribute("aria-label", this.t("QReader 书架"));
       this.app.workspace.iterateAllLeaves((leaf) => {
-        if (leaf.view instanceof ReaderView || leaf.view instanceof BookshelfView || leaf.view instanceof AnswerView || leaf.view instanceof ReviewView) {
+        if (leaf.view instanceof ReaderView || leaf.view instanceof BookshelfView || leaf.view instanceof AnswerView || leaf.view instanceof NotesView) {
           leaf.view.contentEl.lang = this.settings.language;
           const header = leaf as LeafHeaderAccess;
           if (typeof header.updateHeader === "function") header.updateHeader();
@@ -219,10 +221,10 @@ export class QReaderPlugin extends Plugin {
     if (question && leaf.view instanceof AnswerView) await leaf.view.openFor(bookId, chapterId, mode, scheduledFor, question);
   }
 
-  async openReview(bookId?: string): Promise<void> {
-    if (!bookId && this.app.workspace.getActiveViewOfType(ReviewView)) return;
-    const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_REVIEW, {})) ?? {};
-    await this.activateLeaf(VIEW_TYPE_REVIEW, bookId ? { ...previous, tab: "all", selectedBook: bookId } : previous);
+  async openNotes(bookId?: string, chapterId?: string): Promise<void> {
+    if (!bookId && this.app.workspace.getActiveViewOfType(NotesView)) return;
+    const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_NOTES, {})) ?? {};
+    await this.activateLeaf(VIEW_TYPE_NOTES, bookId ? { ...previous, selectedBook: bookId, selectedChapter: chapterId ?? null } : previous);
   }
 
   rememberPageState(viewType: string, state: Record<string, unknown>): void {

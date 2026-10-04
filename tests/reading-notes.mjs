@@ -1,0 +1,59 @@
+import assert from 'node:assert/strict';
+import {build} from 'esbuild';
+process.on('uncaughtException',error=>{console.error(error.message);console.error(error.stack?.split('\n').filter(line=>!line.includes('data:text/')).join('\n'));process.exitCode=1;});
+const bundle = await build({stdin:{contents:`export * from './src/core/chapter-notes'; export * from './src/core/md-notes'; export * from './src/core/json-store'; export * from './src/ai/tasks';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'host-test',setup(b){
+  b.onResolve({filter:/^(obsidian|epubjs)$/},args=>({path:args.path,namespace:'test'}));
+  b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:args.path==='obsidian'?'export const requestUrl = async options => globalThis.qrRequest(options);':'export class EpubCFI { compare(){ throw new Error("Unexpected CFI fixture"); } }',loader:'js'}));
+}}]});
+const m = await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
+const questions = [{id:'q1',type:'core',text:'核心旧问题'},{id:'q2',type:'logic',text:'推理旧问题'},{id:'q3',type:'retell',text:'复述旧问题'}];
+const legacyFeedback = {authorView:'旧评价原文',rethink:'另一种看法',factualErrors:'原事实提醒'};
+const legacy = {questionVersion:1,answers:{q1:'原阅读回答'},answeredAt:'2026-10-01T01:00:00Z',feedback:legacyFeedback};
+const reviews = [{scheduledFor:'2026-10-02',questionVersion:1,answers:{q2:'原复习回答'},completedAt:'2026-10-02T01:00:00Z',feedback:legacyFeedback},{scheduledFor:'2099-10-03'}];
+const chapter = {title:'第一章',index:0,questionVersions:[{version:1,createdAt:'2026-10-01T00:00:00Z',questions},{version:2,createdAt:'2026-10-03T00:00:00Z',questions:questions.map(q=>({...q,text:q.text.replace('旧','新')}))}],answers:[legacy],reviews};
+const reading = {version:1,book:{title:'隔离测试书',author:'读者',format:'epub',fileName:'book.epub'},progress:{chapterId:'c1',percent:0,lastReadAt:'2026-10-01T00:00:00Z'},chapters:{c1:chapter},annotations:[],importedAt:'2026-10-01T00:00:00Z'};
+assert.equal(m.validateReading(structuredClone(reading)).chapters.c1.reviews.length,2);
+const originalHistory = JSON.stringify({answers:chapter.answers,reviews:chapter.reviews});
+const partial = {questionVersion:2,answers:{q3:'只记录第三题，与作者观点不同'},answeredAt:'2026-10-04T01:00:00Z'};
+chapter.answers.push(partial);
+assert.deepEqual(m.chapterNotes(chapter).map(n=>[n.version,n.legacyReview]),[[1,false],[1,true],[2,false]]);
+const reference = {kind:'reference',comment:'这是一种有原文依据的阅读理解。',perspectives:'也可以从叙述视角思考。',evidenceNotes:undefined};
+partial.feedback = reference;
+m.validateReading(structuredClone(reading));
+for (const feedback of [{kind:'score',comment:'bad'},{kind:'reference',comment:2},{kind:'reference',comment:'ok',evidenceNotes:[]}]) {
+  const invalid=structuredClone(reading);invalid.chapters.c1.answers.at(-1).feedback=feedback;assert.throws(()=>m.validateReading(invalid));
+}
+const md=m.renderAnnotationsMd(reading);
+for(const text of ['核心旧问题','核心新问题','原阅读回答','原复习回答','只记录第三题','历史复习记录','旧评价原文','其他理解角度','不是标准答案','（未记录，可略过）'])assert.ok(md.includes(text),text);
+assert.ok(!md.includes('2099-10-03'));
+assert.equal(JSON.stringify({answers:chapter.answers.slice(0,-1),reviews:chapter.reviews}),originalHistory);
+assert.deepEqual(m.feedbackSections(legacyFeedback).map(s=>s.content),['旧评价原文','另一种看法','原事实提醒']);
+let calls=0,lastRequest;
+globalThis.qrRequest=async options=>{calls++;lastRequest=JSON.parse(options.body);return {status:200,text:JSON.stringify({choices:[{message:{content:JSON.stringify({comment:'参考讨论',perspectives:'',evidenceNotes:''})}}]})};};
+const cfg={baseUrl:'https://example.test/v1',apiKey:'fixture-only',model:'fixture-model'};
+for(const language of ['zh-CN','en']) {
+  const feedback=await m.generateFeedback(cfg,'测试书','第一章','真实原文片段',questions,{q2:'只记录第二题'},language);
+  assert.equal(feedback.kind,'reference');
+  assert.ok(lastRequest.messages[1].content.includes('只记录第二题'));
+  assert.ok(lastRequest.messages[1].content.includes('推理旧问题'));
+  assert.ok(!lastRequest.messages[1].content.includes('核心旧问题'));
+  assert.ok(!lastRequest.messages[1].content.includes('复述旧问题'));
+}
+await assert.rejects(()=>m.generateFeedback(cfg,'书','章','原文',questions,{}),/请先记录/);assert.equal(calls,2);
+for(const raw of ['[]','{}','{"comment":""}','{"comment":"ok","score":"10"}','{"authorView":"legacy output"}','{"comment":"ok","perspectives":null}'])assert.throws(()=>m.parseFeedback(raw));
+const files=new Map();let failMd=false;
+const fs={exists:async p=>files.has(p),read:async p=>files.get(p),write:async(p,v)=>{if(p==='批注.md'&&failMd){failMd=false;throw Error('disk-full');}files.set(p,v);},remove:async p=>files.delete(p)};
+const store=m.JsonStore.forNew(fs,'reading.json',m.validateReading,structuredClone(reading));await m.JsonStore.persistNew(store);
+const sync=async value=>fs.write('批注.md',m.renderAnnotationsMd(value));await store.mutate(()=>{},sync);
+const before=files.get('reading.json');const beforeMd=files.get('批注.md');
+const newRecord={questionVersion:2,answers:{q1:'写入失败后重试的想法'},answeredAt:'2026-10-04T02:00:00Z'};
+failMd=true;await assert.rejects(()=>store.mutate(value=>value.chapters.c1.answers.push(newRecord),sync),/disk-full/);
+assert.equal(files.get('reading.json'),before);assert.equal(files.get('批注.md'),beforeMd);assert.equal(store.value.chapters.c1.answers.length,2);
+await store.mutate(value=>value.chapters.c1.answers.push(newRecord),sync);
+assert.equal(store.value.chapters.c1.answers.length,3);assert.ok(files.get('批注.md').includes(newRecord.answers.q1));
+const sameRecord=store.value.chapters.c1.answers.at(-1);
+failMd=true;await assert.rejects(()=>store.mutate(value=>{value.chapters.c1.answers.at(-1).feedback=reference;},sync),/disk-full/);
+assert.equal(sameRecord.feedback,undefined);assert.equal(sameRecord,store.value.chapters.c1.answers.at(-1));
+await store.mutate(()=>{sameRecord.feedback=reference;},sync);assert.equal(store.value.chapters.c1.answers.length,3);
+assert.deepEqual(store.value.chapters.c1.reviews,reviews);
+console.log('Reading notes: partial reflections, versions, legacy history, reference protocol, Markdown and rollback passed.');

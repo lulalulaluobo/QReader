@@ -20,11 +20,17 @@ export interface QuestionVersion {
   questions: Question[]; // exactly 3, ordered core/logic/retell
 }
 
-export interface Feedback {
+export type Feedback = {
+  kind: "reference";
+  comment: string;
+  perspectives?: string;
+  evidenceNotes?: string;
+} | {
+  kind?: undefined; // Preserve feedback from earlier releases unchanged.
   authorView: string;
   rethink?: string; // empty => omit section
   factualErrors?: string; // empty => omit section
-}
+};
 
 export interface AnswerRecord {
   questionVersion: number;

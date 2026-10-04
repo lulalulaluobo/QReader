@@ -1,13 +1,14 @@
 {
   "name": "qreader",
-  "version": "1.1.7",
+  "version": "1.1.8",
   "description": "Read with Questions — six-format, question-driven reader for Obsidian",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
     "check": "tsc -noEmit -skipLibCheck",
-    "test:translation": "node tests/translation.mjs"
+  "test:translation": "node tests/translation.mjs",
+  "test:notes": "node tests/reading-notes.mjs"
   },
   "keywords": [],
   "author": "",

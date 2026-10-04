@@ -3,7 +3,7 @@ import { Book } from "epubjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { AiConfig, AnnotationRecord, AnswerRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, Feedback, HealthyBookEntry, ReadingFile, ReviewRecord, TocNode } from "../types";
 import { isHealthyBook, pdfChapterId } from "../types";
-import { sanitizeFolderName, todayStr } from "../util";
+import { sanitizeFolderName } from "../util";
 import { JsonStore, validateReading } from "./json-store";
 import { VaultFs } from "./fs";
 import { renderAnnotationsMd } from "./md-notes";
@@ -295,7 +295,7 @@ export class LibraryManager {
         const version = Math.max(0, ...target.questionVersions.map((item) => item.version)) + 1;
         const next = { version, createdAt: new Date().toISOString(), questions };
         target.questionVersions.push(next);
-      });
+      }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
       this.deps.notifyChanged();
     })().finally(() => this.questionJobs.delete(key));
     this.questionJobs.set(key, job);
@@ -308,9 +308,12 @@ export class LibraryManager {
     const record: AnswerRecord = { questionVersion, answers: { ...answerMap }, answeredAt: new Date().toISOString() };
     await healthy.store.mutate((value) => {
       const chapter = value.chapters[chapterId];
-      if (!chapter || !chapter.questionVersions.some((version) => version.version === questionVersion)) throw new Error("回答关联的问题版本不存在");
+      const version = chapter?.questionVersions.find(item => item.version === questionVersion);
+      if (!chapter || !version) throw new Error("回答关联的问题版本不存在");
+      if (!Object.values(answerMap).some(answer => answer.trim())) throw new Error("请先记录一点想法，再保存笔记。");
+      if (Object.keys(answerMap).some(id => !version.questions.some(question => question.id === id))) throw new Error("回答关联的问题编号不存在");
       chapter.answers.push(record);
-    });
+    }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged(); return record;
   }
   async attachFeedback(entry: BookEntry, chapterId: string, feedback: Feedback, record: AnswerRecord | ReviewRecord): Promise<void> {
@@ -319,34 +322,8 @@ export class LibraryManager {
       const chapter = value.chapters[chapterId];
       if (!chapter || ![...chapter.answers, ...chapter.reviews].includes(record)) throw new Error("原回答已不存在，反馈未附加");
       record.feedback = feedback;
-    });
+    }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged();
-  }
-  async scheduleReview(entry: BookEntry, chapterId: string, date: string | null): Promise<void> {
-    const healthy = this.healthy(entry);
-    if (date !== null && (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date <= todayStr() || new Date(`${date}T00:00:00Z`).toISOString().slice(0, 10) !== date)) throw new Error("复习日期必须是有效的未来日期");
-    await healthy.store.mutate((value) => {
-      const chapter = value.chapters[chapterId];
-      if (!chapter) throw new Error("章节不存在");
-      chapter.reviews = chapter.reviews.filter((review) => !!review.completedAt);
-      if (date) chapter.reviews.push({ scheduledFor: date });
-    });
-    this.deps.notifyChanged();
-  }
-  async completeReview(entry: BookEntry, chapterId: string, questionVersion: number, answerMap: Record<string, string>, scheduledFor?: string): Promise<ReviewRecord> {
-    const healthy = this.healthy(entry);
-    let saved: ReviewRecord | undefined;
-    await healthy.store.mutate((value) => {
-      const chapter = value.chapters[chapterId];
-      if (!chapter || !chapter.questionVersions.some((version) => version.version === questionVersion)) throw new Error("复习关联的问题版本不存在");
-      const pending = chapter.reviews.filter((review) => !review.completedAt && review.scheduledFor && (scheduledFor ? review.scheduledFor === scheduledFor : review.scheduledFor <= todayStr())).sort((a, b) => (a.scheduledFor ?? "").localeCompare(b.scheduledFor ?? ""))[0];
-      if (scheduledFor && !pending) throw new Error("所选复习预约已不存在或已经完成");
-      saved = pending ?? {};
-      Object.assign(saved, { questionVersion, answers: { ...answerMap }, completedAt: new Date().toISOString() });
-      if (!pending) chapter.reviews.push(saved);
-    });
-    if (!saved) throw new Error("复习未保存");
-    this.deps.notifyChanged(); return saved;
   }
 
   async saveProgress(entry: BookEntry, progress: Partial<ReadingFile["progress"]> & { chapterId: string | null }): Promise<void> {

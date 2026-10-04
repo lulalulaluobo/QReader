@@ -1,8 +1,8 @@
 # QReader · 带着问题读书
 
-An Obsidian reader that helps you understand an author's ideas and reasoning, then recall them in your own words. / 在 Obsidian 中阅读，理解作者的表达与推理，再合上书用自己的话复述。
+An Obsidian reader with optional reading prompts, personal reflections and AI reference feedback. / 在 Obsidian 中带着问题读书，自由记录想法，按需获取 AI 参考评价。
 
-[Download / 下载 1.1.7](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.7) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.8](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.8) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -14,12 +14,12 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
 - 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
 - 每章三问分别检查核心观点、关键推理和自己的复述，一题只问一件事。
-- 闭卷回答、简短 AI 反馈、历史答案对比和自行安排复习日期。
-- 书架、阅读、回答、复习在当前标签页跳转，使用 Obsidian 原生回退。
+- 三问可以略过、只记一题或几题；保存为笔记后，按需获取 AI 参考评价。
+- 书架、阅读、阅读想法、笔记在当前标签页跳转，使用 Obsidian 原生回退。
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.7.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.8.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -41,6 +41,16 @@ An Obsidian reader that helps you understand an author's ideas and reasoning, th
 **每章三问提示词**留空时，使用当前语言的默认模板。自定义提示词按原文保存；用 `{{chapter_content}}` 插入章节正文，不写占位符时会自动追加正文。三问输出可用中文标签“核心问题/逻辑问题/复述问题”、英文标签“Core question/Logic question/Retelling question”，或 `questions` JSON 数组。
 
 切换语言不会翻译原书、分类名称、笔记、旧问题、答案或反馈，也不会重置阅读位置和未提交回答。新生成的默认三问、AI 解读和反馈使用当前语言；已有问题保留，需要新语言时可重新生成。自定义出题模板保留自己的语言和要求。
+
+### 阅读想法与笔记
+
+三问是引导性阅读提示，**不要求答题，也不要求合上书**。点击任一问题或“写下想法”，可以任选一题记录。空白问题可以跳过；“保存想法”只写本地笔记，不调用 AI。需要时，再点击“获取 AI 参考评价”。
+
+AI 评价只回应已记录的想法，不评分、不将未回答的问题视为遗漏，也不提供标准答案。它可以讨论其他解读、提醒核对原文；读者不需要认同作者或 AI。
+
+书架的 **笔记** 入口直接查看各书各章的问题、历次阅读想法、AI 参考评价和批注。阅读页的笔记面板也可回看本章想法。每本书沿用 `reading.json` 和 `批注.md`；`批注.md` 现在包含完整阅读笔记，保留问题版本与对应回答。点击“打开笔记文件”可在 Obsidian 查看。
+
+复习页和预约复习已取消。升级保留旧回答、旧 AI 评价、已完成复习以及原预约数据；已完成的复习作为历史笔记显示，原预约不会再形成阅读任务。
 
 ### 翻译与动态生词
 
@@ -74,12 +84,12 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
 - Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
 - Three chapter questions focus on the core idea, one key reasoning link and retelling in your own words. Each question has one clear target.
-- Closed-book answers, brief AI feedback, complete answer history and review dates you choose.
-- Library, reader, answers and review share the current tab and support Obsidian's native back navigation.
+- Skip the prompts or reflect on any of them. Save your notes, then optionally request AI reference feedback.
+- Library, reader, reflections and notes share the current tab and support Obsidian's native back navigation.
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.7.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.8.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -101,6 +111,16 @@ Verified on 2026-10-04 against the [official DeepSeek integration guide](https:/
 Leave **Chapter question prompt** empty to use the built-in template in the selected language. Custom prompts are preserved exactly. Insert `{{chapter_content}}` where the chapter belongs; without this placeholder, QReader appends the chapter automatically. Question output accepts the labels `Core question`, `Logic question`, `Retelling question`, their Chinese equivalents, or a `questions` JSON array.
 
 Changing language preserves book text, category names, notes, existing questions, answers and feedback, as well as reading positions and unsubmitted answers. New questions from the default template, explanations and feedback use the selected language. Regenerate existing questions if you want them in the new language. Custom question templates retain their own language and instructions.
+
+### Reflections and notes
+
+The three prompts guide your reading; **answering and closing the book are optional**. Choose any prompt or press “Write a reflection.” Leave other prompts blank if you prefer. “Save reflections” writes local notes without calling AI. Afterwards, “Get AI reference feedback” is optional.
+
+AI feedback discusses only the reflections you recorded. It does not score you, treat unanswered prompts as omissions or offer standard answers. It may suggest another interpretation or a source check; you do not need to agree with the author or AI.
+
+The **Notes** entry shows each book's prompts, past reflections, AI reference feedback and annotations directly. The reader's notes panel also shows chapter reflections. Each book keeps its existing `reading.json` and `批注.md`; the latter now includes complete reading notes with the corresponding prompt versions. “Open notes file” opens it in Obsidian.
+
+The review page and scheduling have been removed. Upgrades retain earlier answers, AI comments, completed reviews and appointment data. Completed reviews appear as historical notes; old appointments no longer create reading tasks.
 
 ### Translation and dynamic vocabulary
 

@@ -1,5 +1,7 @@
 /** Known QReader errors; external errors and quoted book/user text remain intact. */
 export const ERROR_EN = {
+  "AI 反馈缺少 comment": "AI feedback is missing its reference comment",
+  "回答关联的问题编号不存在": "The note refers to a prompt that does not exist",
   "vocabulary.json 数据无效，已停止写入": "Invalid vocabulary.json. Writes have been stopped.",
   "vocabulary.json 单词记录无效": "Invalid word record in vocabulary.json",
   "生词保存校验失败": "Vocabulary write verification failed",
