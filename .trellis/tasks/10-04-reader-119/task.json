@@ -2,9 +2,12 @@
   "id": "reader-119",
   "name": "reader-119",
   "title": "手机输入时保持阅读问题可见",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-04",
+  "commit": "0db82bcb7a52a50192e732a6c0bb99845c98dcda",
+  "notes": "手机不自动聚焦，输入时题目/输入框/按钮适配实际可视区，长文本独立滚动。构建、笔记/翻译测试、84 组键盘模拟布局、56 组原笔记回归及 17 本书历史/字节验收通过。main 与注解标签 1.1.9 推送，latest 正式 Release 四附件公开 HTTP 200/字节/SHA-256/digest/ZIP 一致；手机原生输入法未验收，隔离 GUI/服务器已退出。"
 }

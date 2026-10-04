@@ -17,4 +17,15 @@
 
 ## 发布
 
-待注解标签 1.1.9、正式 Release 和公开附件逐字节验证。
+源码 `0db82bcb7a52a50192e732a6c0bb99845c98dcda` 与注解标签 1.1.9 已原子推送；正式 [latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.9) 发布。
+
+`tmp/verify-release.mjs 1.1.9` 验证四个公开附件 HTTP 200、字节/SHA-256/GitHub digest 与实测构建一致，远程 main 与 peeled tag 指向源码；ZIP 仅含三安装文件，内容逐字节匹配。
+
+| 附件 | 字节 | SHA-256 |
+|---|---:|---|
+| main.js | 6420566 | `8dc3bd0a8c99304f47453d73277561b9c84e33312639529d692bee919c3e3439` |
+| manifest.json | 257 | `9edbc96ef735476baf885001280e5f4a655bde749db4c7bff6af09162340ddad` |
+| styles.css | 38428 | `61b4a279300a27075d82bd8ae2aa6706b3a804db08d10fd5af41cf10a2ba28cb` |
+| QReader-1.1.9.zip | 2937280 | `efb6058aeffe2133f90685b99110fb3b1683084339838a80037cb85893370328` |
+
+独立测试 GUI 与协议服务器已退出，未操作用户实际阅读库。
