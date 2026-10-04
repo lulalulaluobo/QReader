@@ -17,4 +17,13 @@
 
 ## 发布
 
-待源代码提交、注解标签 1.1.8、正式 Release 附件与公开下载验收。
+源码 `c4668441f697db2c7d69e72bb9b4bbe50de41826` 与注解标签 1.1.8 已原子推送。正式 [latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.8) 已发布；`tmp/verify-release.mjs 1.1.8` 验证四个公开附件 HTTP 200、下载字节/SHA-256/GitHub digest 与实测安装文件一致，远程 main 与 peeled tag 指向源码提交。ZIP 仅含三个安装文件，逐字节匹配。
+
+| 附件 | 字节 | SHA-256 |
+|---|---:|---|
+| main.js | 6417762 | `78a3f296fa0a47278cdf13fa5d339d552deb392f4b8ee7f0705e7818946f0d41` |
+| manifest.json | 257 | `9be966081a7dad0100bc49a64b39f425836172e24c0b295692efcde534a573ab` |
+| styles.css | 37072 | `e95f5fe3a4565b18fe874445745da621fa3eb636f15b27661412d89fb17e0d25` |
+| QReader-1.1.8.zip | 2936239 | `3a30e97cb7ddf7a4bd27a9020264f790481ae71f8b2a733e3054e31a4684723a` |
+
+独立验收 GUI 和协议服务器均已退出，未操作用户实际阅读库。

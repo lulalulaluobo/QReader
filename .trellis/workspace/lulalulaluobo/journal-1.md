@@ -183,3 +183,13 @@
 - 构建、协议/存储测试、独立 Obsidian 的 EPUB/PDF 短击无查询、原生单词选区、删除/失败/刷新/重查、正文/批注/CFI、曝光与默认 5 次、长段、覆盖层、双语布局及 AI 整句回归通过，未处理错误为空。macOS 触摸模拟未产生原生选区，不宣称手机长按真机通过；手机沿用系统原生选词，Android/iOS 真机未验收。
 - 源码 `a1dfea8a58ad649ac44297cae319108e741f970f`、main 与注解标签 1.1.7 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.7) 四个公开附件 HTTP 200，字节、SHA-256 和 GitHub digest 与实测构建一致，ZIP 只含三个安装文件。
 - ZIP SHA-256：`33b006930bd6b003bb735f0b303112d796fefce40cc2856cd071e162e07c245b`；详情见 `.trellis/tasks/10-04-reader-117/verification.md`。独立测试 GUI 与服务器关闭。
+
+## 会话 12：三问可选笔记与 AI 参考评价，发布 1.1.8
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 用户确认取消复习入口，改为笔记；三问是引导性阅读，不强制闭卷或答完。任意一题有想法即可保存，保存不请求 AI；读者自愿获取参考评价，不评分、不作为标准答案，支持不同解读。
+- 新 NotesView 直接回看问题、想法、AI 参考意见及批注；较早问题版本折叠，最近想法展开，阅读笔记面板也展示本章记录。兼容旧复习 View/快捷键，旧回答/评价/复习/预约原样保留，预约不再形成任务。
+- 沿用每书 reading.json 和批注.md，生成三问、保存想法、附加参考评价在 JsonStore 队列中同步 Markdown，附属文件失败回滚并可重试。新评价使用 reference 类型，旧反馈字段保留兼容。
+- 构建、笔记/翻译测试与最终独立 Obsidian 验收通过：部分保存无 AI、评价失败不重复、Markdown 失败/重试、迟到关闭、原生后退草稿/CFI、旧布局、56 组双语主题宽度；17 本书原文件与旧历史均保持，未处理错误为空。固定 AI 协议回复不作为外部模型质量证明，Android/iOS 真机未验收。
+- 源码 `c4668441f697db2c7d69e72bb9b4bbe50de41826`、main 与注解标签 1.1.8 原子推送；正式 latest Release 四附件公开 HTTP 200，字节/SHA-256/digest/ZIP 与实测构建匹配。ZIP SHA-256：`3a30e97cb7ddf7a4bd27a9020264f790481ae71f8b2a733e3054e31a4684723a`；完整回执见 `.trellis/tasks/10-04-reader-118/verification.md`。隔离 GUI 与服务器已关闭。

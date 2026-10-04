@@ -2,9 +2,12 @@
   "id": "reader-118",
   "name": "reader-118",
   "title": "三问可选记录、AI 参考评价与笔记入口",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-04",
+  "commit": "c4668441f697db2c7d69e72bb9b4bbe50de41826",
+  "notes": "三问可选记录、独立 AI 参考评价、笔记入口与 Markdown 同步完成。构建/测试/独立 Obsidian 56 组双语布局及 17 本书历史/字节验收通过。main 与注解标签 1.1.8 推送，正式 latest Release 四附件 HTTP 200、字节/SHA-256/digest/ZIP 验证一致；隔离 GUI 与服务器已关闭。"
 }
