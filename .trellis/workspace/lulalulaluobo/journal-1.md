@@ -150,3 +150,15 @@
 - 实际独立 Obsidian 1.13.7 验收原生设置保存/重开/回退、3 条命令与标签页刷新、112 组中英/浅深色/宽度/四页布局、英文菜单 5 宽度、三问/解释/反馈请求与无效响应、复制/批注/闭卷三题/复习反馈。16 本原文件 SHA-256 不变、旧历史不变、未处理错误为空。移动 CSS 与固定协议回复不代表真机或真实模型质量。
 - 源码 `73b355a5db8cd031db64001d5c986b1adcb72bdc`、main/注解标签 1.1.4 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.4) 四个公开附件逐字节/SHA-256/digest 与本地实测构建一致，ZIP 只含三个安装文件。
 - ZIP SHA-256：`2dc48cdbcfd6671ba3fbcbba2fd9d923eaefff9f6350544757f9cf2573bb265f`；详情见 `.trellis/tasks/10-04-reader-114/verification.md`。独立验收 GUI 与服务器已关闭。
+
+## Session 9: 动态翻译、按书生词、可编辑模型模板，发布 1.1.5
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 用户提供动态翻译 PRD，确认段落真正进入视口、离开/翻页结算，同段不重复、重查新一轮；后续改默认 5 次，可自定义。确认有道首版采用允许当前缓存方案的文本翻译接口，不用独立词典，不保证音标。
+- 只多一份按书 vocabulary.json，活跃词保存释义/计数/段落去重；句子不加词，无词史、背诵或复习。128 条/30 分钟会话缓存、并发合并、清空代次保护；损坏文件不覆盖，失败恢复旧数据，同书视图同步。
+- 原文本节点不包装，CSS Highlight 与独立视口覆盖层支持渐淡蓝色高亮；显式查词轻卡、主动发音、关闭停止、迟到不写错书。长段的单词先滚出不提前结算；重查后的旧段落抑制按轮次失效。
+- DeepSeek/Agnes URL/model/key 都独立可改，多个官方模板；用户修正完整 Agnes URL，真实 agnes-3.0-flash 探针 HTTP 200/ok，测试密钥未入文件或 Git。旧模型保留，新安装默认 3.0；基础/完整地址不重复拼接。
+- 生产构建、可复现协议/状态测试、独立 Obsidian 的 EPUB/PDF 查询、同段去重、5 次删除、长段结算、字体重排、关闭/换书保护、发音生命周期、CFI/人工批注与双语卡片通过；旧语言/112 布局回归通过，最终未处理错误为空。有道真实账户与手机真机尚未验证。
+- 源码 `d7cca8567f54a96882414da5d5c06593d510b7f3`、main/注解标签 1.1.5 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.5) 四个公开附件 HTTP 200，字节、SHA-256、GitHub digest 与实测产物一致，ZIP 只含三个安装文件。
+- ZIP SHA-256：`e07b4791b3e3b0b8148a4e9a9201b4ae192a497ff6132f848889821bc25f1d80`；详细证据见 `.trellis/tasks/10-04-reader-vocabulary/verification.md`。独立验收 GUI 与服务器已关闭。

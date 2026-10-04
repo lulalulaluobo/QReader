@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 8
+- **Total Sessions**: 9
 - **Last Active**: 2026-10-04
 <!-- @@@/auto:current-status -->
 
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~154 | Active |
+| `journal-1.md` | ~167 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 9 | 2026-10-04 | 动态翻译、按书生词、可编辑模型模板，发布 1.1.5 | `d7cca8567f54a96882414da5d5c06593d510b7f3` | `main` |
 | 8 | 2026-10-04 | 中英文界面、语言提示词与双语 README，发布 1.1.4 | `73b355a5db8cd031db64001d5c986b1adcb72bdc` | `main` |
 | 7 | 2026-10-04 | 修正封面书卡、单行图标与无边框高亮并发布 1.1.3 | `c08b1158702b0b809a89f104ae91ca47b22603f0` | `main` |
 | 6 | 2026-10-04 | 优化三问、单页导航、高亮和分类并发布 1.1.2 | `3443459ec202979c6c039e47bb4350ca7533c772` | `main` |

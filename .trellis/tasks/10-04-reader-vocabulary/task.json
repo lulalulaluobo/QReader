@@ -2,12 +2,12 @@
   "id": "reader-vocabulary",
   "name": "reader-vocabulary",
   "title": "动态翻译、按书生词高亮与可编辑模型模板",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
-  "completedAt": null,
+  "completedAt": "2026-10-04",
   "branch": "main",
-  "commit": null,
-  "notes": "用户提供动态生词 PRD，明确同段落回看不重复计数、离开段落/翻页结算；DeepSeek/Agnes URL 与模型也需可改，模板提供多个当前模型。"
+  "commit": "d7cca8567f54a96882414da5d5c06593d510b7f3",
+  "notes": "动态生词默认 5 次，可自定义；用户确认段落视口曝光、离开结算和文本翻译 API。DeepSeek/Agnes URL、模型、密钥独立可改，多个模板。Agnes 3.0 真实探针通过；1.1.5 源码、标签、正式 latest Release 已推送，四个公开附件与本地验收构建逐字节一致。"
 }
