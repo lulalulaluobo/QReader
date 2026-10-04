@@ -27,4 +27,10 @@
 | styles.css | 36404 | ebdf241918ba8caa92f4c94cebf742ecda293545e97f8e366100eb78104f3ee8 |
 | QReader-1.1.7.zip | 2934785 | 33b006930bd6b003bb735f0b303112d796fefce40cc2856cd071e162e07c245b |
 
-ZIP 恰好三个安装文件，解压字节与独立 Vault 实测构建一致。JS 凭据模式命中数 0。远程发布待补记。
+ZIP 恰好三个安装文件，解压字节与独立 Vault 实测构建一致。JS 和暂存源码凭据模式命中数均为 0。
+
+## 发布
+
+- 源码提交 `a1dfea8a58ad649ac44297cae319108e741f970f`，main 和注解标签 1.1.7 原子推送，远程标签 peeled commit 与源码一致；后续提交只补记录。
+- [正式 latest Release 1.1.7](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.7)，draft=false、prerelease=false。四个公开附件 HTTP 200，下载内容、字节数、SHA-256 与 GitHub digest 全部匹配上表。
+- `node tmp/verify-release.mjs 1.1.7` 验证 ZIP/字节与远程。未发布配置、密钥、书籍或夹具。独立测试 GUI/服务器关闭。

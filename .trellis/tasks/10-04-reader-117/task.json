@@ -2,10 +2,12 @@
   "id": "reader-117",
   "name": "reader-117",
   "title": "长按选词查译与卡片手动删除生词",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-04",
+  "completedAt": "2026-10-04",
   "branch": "main",
-  "notes": "用户反馈英文单击误触，改为原生长按选词查询；翻译卡片提供图标删除当前书生词与高亮。沿用补丁 Git/Release 交付。"
+  "commit": "a1dfea8a58ad649ac44297cae319108e741f970f",
+  "notes": "完成单击不查词、原生选词查询与卡片纯图标删除。存储/EPUB/PDF/刷新/重查/失败/曝光/双语窄屏回归通过。main 与注解标签 1.1.7 推送，正式 latest Release 四个公开附件 HTTP 200，下载字节/SHA-256/digest/ZIP 与实测构建一致；手机原生长按选词，Android/iOS 真机未验收。"
 }

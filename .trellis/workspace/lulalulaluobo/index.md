@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 10
+- **Total Sessions**: 11
 - **Last Active**: 2026-10-04
 <!-- @@@/auto:current-status -->
 
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~180 | Active |
+| `journal-1.md` | ~190 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 11 | 2026-10-04 | 长按选词与卡片手动删除生词，发布 1.1.7 | `a1dfea8a58ad649ac44297cae319108e741f970f` | `main` |
 | 10 | 2026-10-04 | 参考 englishPodStudy 接入免密有道查词，发布 1.1.6 | `b384ed0a97676ece3c81ae26aed16e5ffa91cba8` | `main` |
 | 9 | 2026-10-04 | 动态翻译、按书生词、可编辑模型模板，发布 1.1.5 | `d7cca8567f54a96882414da5d5c06593d510b7f3` | `main` |
 | 8 | 2026-10-04 | 中英文界面、语言提示词与双语 README，发布 1.1.4 | `73b355a5db8cd031db64001d5c986b1adcb72bdc` | `main` |

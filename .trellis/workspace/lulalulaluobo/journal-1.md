@@ -173,3 +173,13 @@
 - 构建/协议/状态测试通过，最终 1.1.6 在独立 Obsidian 验证真实词典、双语无密钥设置、EPUB/PDF 点击与 CFI、曝光/重查/5 次删除、长段不提前计数、12 卡片布局、发音生命周期和迟到保护。整句明确入口/双语提示词/当前模型/错误/关闭/旧凭据移除通过；未处理错误为空。AI 译文质量与手机真机未验证。
 - 源码 `b384ed0a97676ece3c81ae26aed16e5ffa91cba8`、main/注解标签 1.1.6 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.6) 四个公开附件 HTTP 200，字节、SHA-256、GitHub digest 与实测产物一致，ZIP 只含三个安装文件。
 - ZIP SHA-256：`902667a005df788275c3565f9399b75326d94a64b0019bd5e6568eb6feb52616`；详情见 `.trellis/tasks/10-04-reader-direct-dictionary/verification.md`。独立验收 GUI 与服务器关闭。
+
+## Session 11: 长按选词与卡片手动删除生词，发布 1.1.7
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 用户反馈英文单击误触，要求長按才查询，卡片可手动删词。移除 EPUB/PDF 点击查词与词层命中逻辑，保留手机原生长按选词/桌面原生选词查询及 CFI 更多操作。
+- 卡片增加纯垃圾桶图标，按书串行删除并即时清理高亮；保持译文，本卡刷新不重新加词，以后新查询重建计数。写入失败保留旧文件/内存并可重试；新查询写完才显示按钮，删除或重查清理旧曝光/过期请求。
+- 构建、协议/存储测试、独立 Obsidian 的 EPUB/PDF 短击无查询、原生单词选区、删除/失败/刷新/重查、正文/批注/CFI、曝光与默认 5 次、长段、覆盖层、双语布局及 AI 整句回归通过，未处理错误为空。macOS 触摸模拟未产生原生选区，不宣称手机长按真机通过；手机沿用系统原生选词，Android/iOS 真机未验收。
+- 源码 `a1dfea8a58ad649ac44297cae319108e741f970f`、main 与注解标签 1.1.7 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.7) 四个公开附件 HTTP 200，字节、SHA-256 和 GitHub digest 与实测构建一致，ZIP 只含三个安装文件。
+- ZIP SHA-256：`33b006930bd6b003bb735f0b303112d796fefce40cc2856cd071e162e07c245b`；详情见 `.trellis/tasks/10-04-reader-117/verification.md`。独立测试 GUI 与服务器关闭。
