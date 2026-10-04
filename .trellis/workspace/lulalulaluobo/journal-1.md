@@ -162,3 +162,14 @@
 - 生产构建、可复现协议/状态测试、独立 Obsidian 的 EPUB/PDF 查询、同段去重、5 次删除、长段结算、字体重排、关闭/换书保护、发音生命周期、CFI/人工批注与双语卡片通过；旧语言/112 布局回归通过，最终未处理错误为空。有道真实账户与手机真机尚未验证。
 - 源码 `d7cca8567f54a96882414da5d5c06593d510b7f3`、main/注解标签 1.1.5 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.5) 四个公开附件 HTTP 200，字节、SHA-256、GitHub digest 与实测产物一致，ZIP 只含三个安装文件。
 - ZIP SHA-256：`e07b4791b3e3b0b8148a4e9a9201b4ae192a497ff6132f848889821bc25f1d80`；详细证据见 `.trellis/tasks/10-04-reader-vocabulary/verification.md`。独立验收 GUI 与服务器已关闭。
+
+## Session 10: 参考 englishPodStudy 接入免密有道查词，发布 1.1.6
+
+**日期**：2026-10-04；**分支**：main；**状态**：已完成。
+
+- 用户改为无需有道凭据，指定只读参考 englishPodStudy。采用公开 jsonapi 单词查询与 dictvoice 发音；移除 App Key/App Secret 控件和签名逻辑，旧配置归一丢弃并在保存时移除。默认可点词，单词不使用 AI。
+- 真实有道单词 sustain 返回 HTTP 200、中文释义和音标；发音 HTTP 200/audio/mpeg/11949 字节。公开查询不返回句子译文；已提出可选偏好，按明确告知的推荐假设保留整句能力，使用现有 AI 配置并在图标名称/卡片/设置标示 AI 翻译。未宣称用户确认这一假设。
+- 原书、reading.json、批注.md 和 vocabulary.json 不迁移。保留活跃词释义缓存、渐淡高亮、视口离段结算、默认 5 次删除、自定义阈值。旧词发音升级为公开地址，整句不新增或重置生词。
+- 构建/协议/状态测试通过，最终 1.1.6 在独立 Obsidian 验证真实词典、双语无密钥设置、EPUB/PDF 点击与 CFI、曝光/重查/5 次删除、长段不提前计数、12 卡片布局、发音生命周期和迟到保护。整句明确入口/双语提示词/当前模型/错误/关闭/旧凭据移除通过；未处理错误为空。AI 译文质量与手机真机未验证。
+- 源码 `b384ed0a97676ece3c81ae26aed16e5ffa91cba8`、main/注解标签 1.1.6 已推送；[正式 latest Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.6) 四个公开附件 HTTP 200，字节、SHA-256、GitHub digest 与实测产物一致，ZIP 只含三个安装文件。
+- ZIP SHA-256：`902667a005df788275c3565f9399b75326d94a64b0019bd5e6568eb6feb52616`；详情见 `.trellis/tasks/10-04-reader-direct-dictionary/verification.md`。独立验收 GUI 与服务器关闭。

@@ -31,4 +31,10 @@
 | styles.css | 36404 | ebdf241918ba8caa92f4c94cebf742ecda293545e97f8e366100eb78104f3ee8 |
 | QReader-1.1.6.zip | 2934782 | 902667a005df788275c3565f9399b75326d94a64b0019bd5e6568eb6feb52616 |
 
-ZIP 恰好包含 qreader/main.js、qreader/manifest.json、qreader/styles.css，解压字节与最终独立 Vault 验收构建一致。生产 JS 密钥模式命中数 0。远程发布核验结果待补记。
+ZIP 恰好包含 qreader/main.js、qreader/manifest.json、qreader/styles.css，解压字节与最终独立 Vault 验收构建一致。生产 JS 和暂存源码密钥模式命中数均为 0。
+
+## 远程发布
+
+- 源码提交 `b384ed0a97676ece3c81ae26aed16e5ffa91cba8`；main 与注解标签 1.1.6 原子推送，远程 tag peeled commit 与源码一致。后续文档提交只补记发布证据。
+- [1.1.6 正式 Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.6) 为 latest，draft=false、prerelease=false。四个公开下载地址均 HTTP 200，字节数、下载内容、SHA-256 和 GitHub digest 全部与上述实测产物一致。
+- `tmp/verify-release-116.mjs` 完成公开附件与 ZIP 核验；没有发布配置、凭据、书籍或测试夹具。独立测试 GUI 与服务器关闭。
