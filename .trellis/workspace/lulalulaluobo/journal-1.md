@@ -235,3 +235,14 @@
 - 旧思考 JSON 不改，普通归档保存判断、疑问、理由及来源版本，缺失来源明确显示，碰撞避让/重扫不覆盖；修正来源协议空格和原书特殊文件名编码。双语 README/文档与日期区分完成。
 - build、documents/notes/translation 测试通过；原生隔离 Obsidian 验证编辑、合并、EPUB/PDF 协议、历史版本、归档/草稿、六格式和 112 组语言/主题/七宽度。17 本原书/历史/批注/vocabulary.json 完整，被动 AI 0、明确解读固定回复 1、异步错误为空。手机为视口模拟。
 - 源码 `aa7622dc0c171b53b0275ee154cdfdddec973b66`、main 与注解标签 1.2.1 已推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/三文件 ZIP 一致。ZIP SHA-256：`ec9521c84154b2ee63a4507efd9cdb71a50adeb48e2b76ee570ca3e2120b045b`。详情见 .trellis/tasks/10-05-book-documents/verification.md；隔离 GUI/服务器均退出。
+
+
+## 会话 17：阅读页听书、正文跟随与简洁播放栏，发布 1.2.2
+
+**日期**：2026-10-05；**分支**：main；**状态**：已完成。
+
+- 用户要求在阅读页听书，朗读跟随原文，主用 Android 并必须在 Obsidian 内播放；进一步要求简洁播放界面。默认单行四项控制：播放/暂停、语速、声音设置、停止。控制栏预留独立空间，不覆盖正文；服务和声音藏在按需打开的二级设置。
+- 桌面自动采用系统 SpeechSynthesis；不可用时使用 Bing 网页短句语音与 HTMLAudio，不需 API Key。参考 GTranslate 的公开协议，Edge 请求头和每次新 IG，401/403 刷新重试并校验真实 MP3；令牌仅内存保留，最多预取下一句，无持久音频缓存。
+- 从当前可见位置按短句朗读，自动跨章节/页，临时标色不写入批注。EPUB 用 CFI 定位并在 resize/relocated 保留当前句子，PDF TextLayer 重绘恢复标色；旧阅读页销毁、停止、手动翻页和迟到请求均不会重启播放。保留每个 Window 单一播放器所有权。
+- build 与 speech/translation/notes/documents 测试通过；原生隔离 Obsidian 实际系统播放、requestUrl 在线合成/解码、HTMLAudio 暂停续播、语速持久化、六格式及 56 组双语/主题/七宽度布局通过。17 本原书与旧个人内容完整，隔离 Obsidian 已退出。手机为桌面视口模拟，Android 尚无真机验收；首版不保证锁屏后台连续播放。
+- 双语 README、规格和发布说明同步至 1.2.2。源码 `830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba`、main 与注解标签 1.2.2 已原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`96f17a2a9c14c0b697ebfa441a6353d5a139ac4349acbbb1efc3f7bf80e9561d`。详情见 .trellis/tasks/10-05-reader-audio/verification.md。

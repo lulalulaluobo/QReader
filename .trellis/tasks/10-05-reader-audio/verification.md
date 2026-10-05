@@ -32,4 +32,8 @@ ZIP 精确包含 qreader/main.js、qreader/manifest.json、qreader/styles.css，
 | styles.css | 39112 | 8ec12a6efc12663fd019b2e871840429e8952f40ff1ac9f5e22bf9526effa99b |
 | QReader-1.2.2.zip | 2943131 | 96f17a2a9c14c0b697ebfa441a6353d5a139ac4349acbbb1efc3f7bf80e9561d |
 
-远程 Release 回执待发布后补充。
+## 远程发布回执
+
+源码提交 `830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba`，main 与注解标签 1.2.2 已原子推送；公开远程 main 和剥离后的标签均对应此提交。
+
+[正式 Release 1.2.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.2) 已发布并设为 latest，非草稿、非预发布。四个公开附件均 HTTP 200，下载后的字节数、SHA-256 与本地及 GitHub digest 一致；ZIP 精确三文件，逐项字节一致。后续发布日志提交只修改 Trellis 文档，不更换源码标签与附件。

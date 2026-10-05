@@ -2,9 +2,12 @@
   "id": "reader-audio",
   "name": "reader-audio",
   "title": "阅读页听书与正文跟随",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-05",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-05",
+  "sourceCommit": "830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba",
+  "release": "https://github.com/lulalulaluobo/QReader/releases/tag/1.2.2"
 }
