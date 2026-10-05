@@ -51,7 +51,11 @@ export interface EngineHooks {
   onSurfaceClick(): void;
   /** Background rendering failures, never a fabricated successful blank page. */
   onError?(error: Error): void;
+  onManualNavigation?(): void;
 }
+
+export interface SpeechSegment { text: string; cfi?: string; pdfPage?: number; itemRanges?: PdfItemRange[] }
+export interface SpeechBatch { segments: SpeechSegment[]; next: number | null }
 
 export interface ReaderEngine {
   readonly format: BookFormat;
@@ -73,5 +77,8 @@ export interface ReaderEngine {
   setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void;
   noteVocabularyLookup(word: string, paragraphId?: string): void;
   flushVocabulary(): void;
+  speechText(unit?: number): Promise<SpeechBatch>;
+  followSpeech(segment: SpeechSegment): Promise<void>;
+  clearSpeech(): void;
   updateChapters?(chapters: ChapterState[]): void;
 }

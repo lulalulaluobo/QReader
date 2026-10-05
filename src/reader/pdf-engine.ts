@@ -5,7 +5,9 @@ import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "pdfjs-dist";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import { pdfChapterId } from "../types";
-import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine } from "./engine";
+import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment } from "./engine";
+import { sentenceSlices } from "./speech-text";
+import { speechHighlight } from "./speech-highlight";
 import { HIGHLIGHT_COLORS } from "../settings";
 import { WordLayer } from "./word-layer";
 import type { VocabularyWord } from "../core/vocabulary";
@@ -46,6 +48,9 @@ export class PdfEngine implements ReaderEngine {
   private resizeTimer: number | undefined;
   private selectionTimer: number | undefined;
   private selectionSignature = "";
+  private speechGeneration = 0;
+  private speechSegment: SpeechSegment | null = null;
+  private removeSpeechMark: (() => void) | null = null;
   private ro: ResizeObserver | null = null;
   private touchStart: { x: number; y: number; time: number } | null = null;
   private swiped = false;
@@ -297,6 +302,7 @@ export class PdfEngine implements ReaderEngine {
       });
       for (const br of layer.querySelectorAll("br")) { br.style.position = "absolute"; br.style.color = "transparent"; }
       wrapper.dataset.rendered = "true";
+      if (this.speechSegment?.pdfPage === number) this.paintSpeech();
       if (this.scroller) {
         const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordExposure, true);
         this.wordLayers.set(number, words);
@@ -398,6 +404,73 @@ export class PdfEngine implements ReaderEngine {
     const selection = window.getSelection();
     if (selection?.rangeCount && this.scroller?.contains(selection.getRangeAt(0).commonAncestorContainer)) selection.removeAllRanges();
     this.selectionSignature = "";
+  }
+
+  async speechText(unit?: number): Promise<SpeechBatch> {
+    if (this.destroyed) return { segments: [], next: null };
+    const pageNumber = unit ?? this.readLocation().page;
+    const page = await this.doc.getPage(pageNumber);
+    const content = await page.getTextContent();
+    const items = content.items.filter((item): item is TextItem => "str" in item);
+    let first = 0;
+    if (unit === undefined && this.scroller) {
+      const viewport = this.scroller.getBoundingClientRect();
+      const spans = this.wrappers.get(pageNumber)?.querySelectorAll<HTMLElement>(".qr-pdf-text [data-i]");
+      const visible = Array.from(spans ?? []).find((span) => {
+        const r = span.getBoundingClientRect(); return r.bottom > viewport.top && r.top < viewport.bottom && span.textContent?.trim();
+      });
+      first = Number(visible?.dataset.i ?? 0);
+    }
+    const segments: SpeechSegment[] = [];
+    // PDF text items retain their own glyph geometry, even when a sentence spans several items.
+    let text = "";
+    const offsets: { item: number; start: number; end: number }[] = [];
+    items.forEach((item, index) => {
+      if (index < first || !item.str.trim()) return;
+      const start = text.length; text += item.str;
+      offsets.push({ item: index, start, end: text.length });
+      text += item.hasEOL ? "\n" : " ";
+    });
+    for (const slice of sentenceSlices(text)) {
+      const itemRanges = offsets.filter((o) => o.end > slice.start && o.start < slice.end)
+        .map((o) => ({ item: o.item, start: Math.max(0, slice.start - o.start), end: Math.min(o.end, slice.end) - o.start }));
+      segments.push({ text: slice.text, pdfPage: pageNumber, itemRanges });
+    }
+    return { segments, next: pageNumber < this.doc.numPages ? pageNumber + 1 : null };
+  }
+  async followSpeech(segment: SpeechSegment): Promise<void> {
+    if (!segment.pdfPage || this.destroyed) return;
+    this.speechSegment = segment;
+    const generation = ++this.speechGeneration;
+    this.removeSpeechMark?.(); this.removeSpeechMark = null;
+    if (this.currentPage !== segment.pdfPage || !this.wrappers.get(segment.pdfPage)?.dataset.rendered) await this.setPage(segment.pdfPage);
+    if (generation !== this.speechGeneration || this.destroyed) return;
+    this.paintSpeech();
+  }
+  private paintSpeech(): void {
+    const segment = this.speechSegment;
+    if (!segment?.pdfPage || this.destroyed) return;
+    this.removeSpeechMark?.(); this.removeSpeechMark = null;
+    const wrapper = this.wrappers.get(segment.pdfPage);
+    const ranges: Range[] = [];
+    for (const item of segment.itemRanges ?? []) {
+      const span = wrapper?.querySelector<HTMLElement>(`.qr-pdf-text [data-i='${item.item}']`);
+      const text = span?.firstChild;
+      if (!text || text.nodeType !== 3) continue;
+      const range = text.ownerDocument!.createRange();
+      range.setStart(text, Math.min(item.start, text.textContent!.length));
+      range.setEnd(text, Math.min(item.end, text.textContent!.length));
+      ranges.push(range);
+    }
+    if (ranges[0] && this.scroller) {
+      const r = ranges[0].getBoundingClientRect(); const viewport = this.scroller.getBoundingClientRect();
+      if (r.top < viewport.top || r.bottom > viewport.bottom) this.scroller.scrollTop += r.top - viewport.top - 24;
+    }
+    if (ranges.length && wrapper) this.removeSpeechMark = speechHighlight(wrapper.ownerDocument, ranges);
+  }
+  clearSpeech(): void {
+    this.speechSegment = null;
+    ++this.speechGeneration; this.removeSpeechMark?.(); this.removeSpeechMark = null;
   }
 
 
@@ -534,20 +607,24 @@ export class PdfEngine implements ReaderEngine {
     }
   }
   async goToChapter(chapterId: string): Promise<void> {
+    this.hooks.onManualNavigation?.();
     const chapter = this.chapters.find((item) => item.pdfStartPage && pdfChapterId(item.pdfStartPage) === chapterId);
     if (chapter?.pdfStartPage) await this.setPage(chapter.pdfStartPage);
   }
   async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
+    this.hooks.onManualNavigation?.();
     if (!annotation.pdfPage) throw new Error("这条批注没有可用的原文页码");
     const fraction = annotation.itemRanges?.[0]?.rects?.[0]?.y ?? 0;
     await this.setPage(annotation.pdfPage, Math.max(0, Math.min(1, fraction)));
   }
   async next(): Promise<void> {
+    this.hooks.onManualNavigation?.();
     this.flushVocabulary();
     if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
     else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "smooth" });
   }
   async prev(): Promise<void> {
+    this.hooks.onManualNavigation?.();
     this.flushVocabulary();
     if (this.mode === "paginated") { if (this.currentPage > 1) await this.setPage(this.currentPage - 1); }
     else this.scroller?.scrollBy({ top: -this.scroller.clientHeight * 0.85, behavior: "smooth" });
@@ -584,6 +661,7 @@ export class PdfEngine implements ReaderEngine {
     void this.rebuild().catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))));
   }
   destroy(): void {
+    this.clearSpeech();
     for (const layer of this.wordLayers.values()) layer.destroy(); this.wordLayers.clear();
     if (this.destroyed) return;
     this.destroyed = true;

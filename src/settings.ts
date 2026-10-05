@@ -5,10 +5,12 @@ import type { AiSettings } from "./ai/providers";
 import type { AppLanguage, MessageKey } from "./i18n";
 import { loadAiSettings } from "./ai/providers";
 import { DEFAULT_TRANSLATION_SETTINGS, type TranslationSettings } from "./translation/youdao";
+import { DEFAULT_SPEECH, type SpeechSettings } from "./reader/speech";
 
 export interface QReaderSettings {
   language: AppLanguage;
   translation: TranslationSettings;
+  speech: SpeechSettings;
   libraryPath: string; // vault-relative, e.g. "Books"
   ai: AiSettings;
   questionPrompt: string; // Archived setting, retained for upgrade compatibility only.
@@ -23,6 +25,7 @@ export interface QReaderSettings {
 export const DEFAULT_SETTINGS: QReaderSettings = {
   language: "zh-CN",
   translation: DEFAULT_TRANSLATION_SETTINGS,
+  speech: DEFAULT_SPEECH,
   libraryPath: "Books",
   ai: loadAiSettings(undefined),
   questionPrompt: "",

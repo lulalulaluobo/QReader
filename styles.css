@@ -770,10 +770,37 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 }
 .qr-reader-dock {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
   margin-top: 10px;
 }
+.qr-speech-setting { display: flex; align-items: center; gap: 12px; margin: 14px 0; }
+.qr-speech-setting > span { flex-shrink: 0; }
+.qr-speech-setting select { min-width: 0; flex: 1; max-width: 100%; height: 44px; }
+.qr-speech-setting select { background: var(--qr-surface); color: var(--qr-reading-fg); border: 1px solid color-mix(in srgb, var(--qr-reading-fg) 25%, transparent); }
+.qr-reader .qr-speech-bar {
+  position: absolute; z-index: 9; left: 12px; right: 12px; bottom: calc(180px + env(safe-area-inset-bottom));
+  display: grid; grid-template-columns: 48px minmax(44px,1fr) 44px 44px; align-items: center; gap: 4px;
+  margin-inline: auto; max-width: 248px; box-sizing: border-box;
+  padding: 6px 8px; border-radius: 20px; background: var(--qr-surface);
+  border: 1px solid color-mix(in srgb, var(--qr-reading-fg) 15%, transparent);
+  color: var(--qr-reading-fg); box-shadow: 0 4px 18px rgba(0,0,0,.1);
+}
+.qr-reader.qr-chrome-hidden .qr-speech-bar { bottom: calc(36px + env(safe-area-inset-bottom)); }
+.qr-reader.qr-speech-active .qr-reader-content { bottom: calc(252px + env(safe-area-inset-bottom)); }
+.qr-reader.qr-speech-active.qr-chrome-hidden .qr-reader-content { bottom: calc(108px + env(safe-area-inset-bottom)); }
+.qr-reader .qr-speech-bar .qr-icon-btn { min-width: 44px; min-height: 44px; margin: 0; color: var(--qr-reading-fg); border-radius: 12px; }
+.qr-reader .qr-speech-bar .qr-speech-play { width: 48px; height: 48px; border-radius: 50%; background: var(--qr-reading-fg); color: var(--qr-surface); }
+.qr-speech-bar .qr-speech-rate { font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.qr-speech-rates { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; padding: 8px; border-radius: 16px; background: var(--qr-surface); border: 1px solid color-mix(in srgb,var(--qr-reading-fg) 15%,transparent); box-shadow: 0 4px 18px rgba(0,0,0,.1); }
+.qr-reader .qr-speech-rates button { min-width: 44px; min-height: 44px; padding: 0; border: 0; box-shadow: none; border-radius: 10px; background: transparent; color: var(--qr-reading-fg); font-size: 13px; }
+.qr-reader .qr-speech-rates button[aria-pressed="true"] { background: var(--qr-reading-fg); color: var(--qr-surface); }
+.qr-speech-sheet .qr-reading-sheet-body { padding-top: 0; }
+.qr-speech-sheet .qr-reading-help { font-size: 12px; margin-bottom: 2px; }
+.qr-speech-error { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); padding: 10px 12px; border-radius: 12px; background: var(--qr-surface); color: var(--qr-reading-fg); font-size: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.1); }
+.qr-speech-loading svg { animation: qr-speech-spin 1.4s linear infinite; }
+@keyframes qr-speech-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .qr-speech-loading svg { animation: none; } }
 .qr-reader .qr-dock-btn {
   display: flex;
   flex-direction: column;

@@ -26,6 +26,8 @@ import { VocabularyStore } from "../core/vocabulary";
 import { VaultFs } from "../core/fs";
 import { singleWord } from "../translation/youdao";
 import { translateSentence } from "../translation/sentence";
+import { SpeechPlayer, BING_VOICES } from "../reader/speech";
+import type { SpeechState } from "../reader/speech";
 
 export const VIEW_TYPE_READER = "qreader-reader";
 
@@ -76,6 +78,9 @@ export class ReaderView extends ItemView {
   private unsubVocabulary: (() => void) | null = null;
   private vocabularyJobs = new Set<Promise<void>>();
   private translationAudio: HTMLAudioElement | null = null;
+  private speech: SpeechPlayer | null = null;
+  private speechControlsOpen = false;
+  private speechRatesOpen = false;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -108,7 +113,9 @@ export class ReaderView extends ItemView {
         this.renderTitle();
         this.renderProgress(this.lastLoc?.percent ?? this.entry?.reading.progress.percent ?? 0);
         this.renderAnnotationCard();
-      } else if (reason !== "translation") this.applyThemeClass();
+      } else if (reason === "speech") this.speech?.updateRate();
+      else if (reason !== "translation") this.applyThemeClass();
+      this.renderSpeechControls();
       this.updateVocabulary();
     });
     this.registerDomEvent(document, "visibilitychange", () => {
@@ -126,6 +133,7 @@ export class ReaderView extends ItemView {
   }
 
   async onClose(): Promise<void> {
+    this.stopSpeech();
     this.engine?.flushVocabulary();
     this.opened = false;
     ++this.stateRequest;
@@ -165,6 +173,7 @@ export class ReaderView extends ItemView {
     const record = this.entry?.reading.annotations.find(record => record.id === id);
     const engine = this.engine;
     if (!record || !engine) throw new Error(this.plugin.t("原笔记或版本已不可用"));
+    this.stopSpeech();
     await engine.goToAnnotation(record);
     if (this.engine === engine) { this.closePanels(); engine.clearSelection(); }
   }
@@ -259,7 +268,8 @@ export class ReaderView extends ItemView {
     };
     dock.append(tocBtn, control(this.plugin.t("笔记"), "notebook-pen", () => this.openNotes()),
       control(this.plugin.t("字号"), "type", () => this.openReaderSettings()),
-      control(this.plugin.t("背景"), "palette", () => this.openReaderSettings("theme")));
+      control(this.plugin.t("背景"), "palette", () => this.openReaderSettings("theme")),
+      control(this.plugin.t("听书"), "headphones", () => this.openSpeechPlayer()));
     bottom.append(meter, chapters, dock);
     const header = el("div", "qr-reader-header");
     header.append(top);
@@ -291,6 +301,7 @@ export class ReaderView extends ItemView {
     this.markMenu = markMenu;
 
     root.append(mask, toc, markMenu, card);
+    this.renderSpeechControls();
   }
 
   // ------------------------------------------------------------ open book
@@ -306,6 +317,7 @@ export class ReaderView extends ItemView {
       await this.applyThemeClass();
       return;
     }
+    this.stopSpeech();
     this.engine?.flushVocabulary();
     const generation = ++this.generation;
     await Promise.allSettled([...this.vocabularyJobs]);
@@ -380,9 +392,11 @@ export class ReaderView extends ItemView {
     const theme = this.resolvedTheme();
     const generation = this.generation;
     const hooks: EngineHooks = {
+      onManualNavigation: () => { if (generation === this.generation) this.stopSpeech(); },
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
       onSelect: (sel) => {
         if (generation !== this.generation) return;
+        this.speech?.pause();
         if (singleWord(sel.text)) this.openTranslation(sel.text, sel.paragraphId, sel);
         else this.openSelectionMenu(sel);
       },
@@ -648,6 +662,7 @@ export class ReaderView extends ItemView {
         if (n.chapterId) {
           row.addClass("qr-toc-link");
           row.onclick = () => {
+            this.stopSpeech();
             void this.engine?.goToChapter(n.chapterId!, n.href)
               .catch((error: unknown) => new Notice(this.plugin.t("跳转失败：{0}", this.plugin.errorText(error))));
             this.closePanels();
@@ -833,6 +848,164 @@ export class ReaderView extends ItemView {
           await this.saveReadingSettings();
         }));
     }
+  }
+
+  private stopSpeech(): void {
+    this.speechControlsOpen = false;
+    this.speechRatesOpen = false;
+    this.speech?.stop(); this.speech = null;
+    this.root?.querySelector(".qr-speech-bar")?.remove();
+  }
+
+  private speechPlayer(): SpeechPlayer | null {
+    if (!this.engine || !this.entry) return null;
+    if (!this.speech) this.speech = new SpeechPlayer(this.engine, () => this.plugin.settings.speech,
+      this.contentEl.ownerDocument.defaultView!, () => this.renderSpeechControls());
+    return this.speech;
+  }
+
+  private openSpeechPlayer(): void {
+    if (!this.speechPlayer()) return;
+    this.closePanels();
+    this.speechControlsOpen = true;
+    if (!this.chromeHidden) this.toggleChrome();
+    this.renderSpeechControls();
+    this.root.querySelector<HTMLElement>(".qr-speech-play")?.focus({ preventScroll: true });
+  }
+
+  private async saveSpeechSettings(): Promise<void> {
+    try { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("speech"); }
+    catch (error) { new Notice(this.plugin.t("设置更新失败：{0}", this.plugin.errorText(error))); }
+  }
+
+  private openSpeechSettings(): void {
+    this.speechRatesOpen = false;
+    const player = this.speechPlayer();
+    if (!player) return;
+    const sheet = this.createReadingSheet(this.plugin.t("听书设置"), "qr-speech-sheet");
+    const body = el("div", "qr-reading-sheet-body");
+    const providerRow = el("label", "qr-speech-setting");
+    const provider = el("select"); provider.setAttribute("aria-label", this.plugin.t("语音方式"));
+    for (const [value, label] of [["auto", "自动选择"], ["system", "系统语音"], ["bing", "Bing 在线语音"]] as const) {
+      const option = el("option", undefined, this.plugin.t(label)); option.value = value; provider.appendChild(option);
+    }
+    provider.value = this.plugin.settings.speech.provider;
+    providerRow.append(el("span", undefined, this.plugin.t("语音方式")), provider);
+    const voiceRow = el("label", "qr-speech-setting");
+    const voice = el("select"); voice.setAttribute("aria-label", this.plugin.t("声音"));
+    voiceRow.append(el("span", undefined, this.plugin.t("声音")), voice);
+    const fillVoices = (): void => {
+      voice.replaceChildren();
+      const auto = el("option", undefined, this.plugin.t("自动识别中英文")); auto.value = "auto"; voice.appendChild(auto);
+      if (player.provider() === "system") {
+        for (const v of this.contentEl.ownerDocument.defaultView!.speechSynthesis?.getVoices() ?? []) {
+          const option = el("option", undefined, `${v.name} (${v.lang})`); option.value = v.voiceURI; voice.appendChild(option);
+        }
+      } else for (const name of Object.keys(BING_VOICES)) {
+        const labels = {
+          "zh-CN-XiaoxiaoNeural": this.plugin.t("中文 · 女声"), "zh-CN-YunxiNeural": this.plugin.t("中文 · 男声"),
+          "en-US-JennyNeural": this.plugin.t("英语 · 女声"), "en-US-GuyNeural": this.plugin.t("英语 · 男声"),
+        };
+        const option = el("option", undefined, labels[name as keyof typeof labels]); option.value = name; voice.appendChild(option);
+      }
+      voice.value = this.plugin.settings.speech.voice;
+      if (!voice.value) voice.value = "auto";
+    };
+    provider.onchange = () => {
+      player.stop(); this.plugin.settings.speech.provider = provider.value as "auto" | "system" | "bing";
+      this.plugin.settings.speech.voice = "auto"; fillVoices(); void this.saveSpeechSettings(); this.renderSpeechControls();
+    };
+    voice.onchange = () => { player.stop(); this.plugin.settings.speech.voice = voice.value; void this.saveSpeechSettings(); };
+    fillVoices();
+    const synth = this.contentEl.ownerDocument.defaultView!.speechSynthesis;
+    const voicesChanged = (): void => { if (sheet.isConnected && player.provider() === "system") fillVoices(); };
+    synth?.addEventListener("voiceschanged", voicesChanged);
+    this.speechSheetCleanup = () => synth?.removeEventListener("voiceschanged", voicesChanged);
+    const privacy = el("p", "qr-reading-help qr-speech-provider-help");
+    body.append(providerRow, voiceRow, privacy); sheet.appendChild(body);
+    this.renderSpeechControls();
+  }
+  private speechSheetCleanup: (() => void) | null = null;
+
+  private renderSpeechControls(): void {
+    const player = this.speech;
+    if (!this.root) return;
+    const state = player?.state ?? "idle";
+    this.root.toggleClass("qr-speech-active", !!player && (this.speechControlsOpen || state !== "idle" && state !== "finished"));
+    const labels: Record<SpeechState, string> = {
+      idle: this.plugin.t("准备朗读"), loading: this.plugin.t("正在准备语音……"), playing: this.plugin.t("正在朗读"),
+      paused: this.plugin.t("已暂停"), finished: this.plugin.t("朗读结束"), error: this.plugin.localizeStatus(player?.error ?? ""),
+    };
+    const privacy = this.root.querySelector<HTMLElement>(".qr-speech-provider-help");
+    privacy?.setText(player?.provider() === "bing" ? this.plugin.t("Bing 语音需要联网，无需密钥。")
+      : this.plugin.t("使用设备的声音。"));
+    const old = this.root.querySelector(".qr-speech-bar");
+    const active = old?.contains(this.contentEl.ownerDocument.activeElement) ? this.contentEl.ownerDocument.activeElement : null;
+    const focusClass = active?.hasAttribute("data-rate") ? `.qr-speech-rates button[data-rate="${active.getAttribute("data-rate")}"]`
+      : active?.classList.contains("qr-speech-stop") ? ".qr-speech-stop" : active?.classList.contains("qr-speech-rate") ? ".qr-speech-rate"
+      : active?.classList.contains("qr-speech-settings-button") ? ".qr-speech-settings-button" : active ? ".qr-speech-play" : null;
+    old?.remove();
+    if (!player || !this.speechControlsOpen && (state === "idle" || state === "finished") || this.root.querySelector(".qr-speech-sheet")) return;
+    const bar = el("div", "qr-speech-bar");
+    bar.setAttribute("role", "toolbar"); bar.setAttribute("aria-label", this.plugin.t("听书"));
+    bar.inert = !!this.root.querySelector(".qr-mask.qr-show");
+    const playing = state === "playing" || state === "loading";
+    const play = el("button", "qr-icon-btn qr-speech-play");
+    play.setAttribute("aria-label", this.plugin.t(playing ? "暂停朗读" : "播放朗读"));
+    play.title = labels[state];
+    play.toggleClass("qr-speech-loading", state === "loading");
+    setIcon(play, state === "loading" ? "loader-circle" : playing ? "pause" : "play");
+    play.onclick = () => { this.translationAudio?.pause(); if (playing) player.pause(); else player.play(); };
+    const speed = el("button", "qr-icon-btn qr-speech-rate", `${this.plugin.settings.speech.rate}×`);
+    speed.setAttribute("aria-label", this.plugin.t("语速")); speed.title = this.plugin.t("语速");
+    speed.setAttribute("aria-expanded", String(this.speechRatesOpen));
+    speed.onclick = () => {
+      this.speechRatesOpen = !this.speechRatesOpen; this.renderSpeechControls();
+      this.root.querySelector<HTMLElement>('.qr-speech-rates button[aria-pressed="true"]')?.focus({ preventScroll: true });
+    };
+    const settings = el("button", "qr-icon-btn qr-speech-settings-button"); settings.setAttribute("aria-label", this.plugin.t("听书设置"));
+    settings.title = this.plugin.t("听书设置");
+    setIcon(settings, "sliders-horizontal"); settings.onclick = () => this.openSpeechSettings();
+    const stop = el("button", "qr-icon-btn qr-speech-stop"); stop.setAttribute("aria-label", this.plugin.t("停止朗读"));
+    stop.title = this.plugin.t("停止朗读"); setIcon(stop, "square");
+    stop.onclick = () => { this.speechControlsOpen = this.speechRatesOpen = false; player.stop(); };
+    bar.append(play, speed, settings, stop);
+    if (this.speechRatesOpen) {
+      const rates = el("div", "qr-speech-rates"); rates.setAttribute("role", "group"); rates.setAttribute("aria-label", this.plugin.t("语速"));
+      for (const value of [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]) {
+        const option = el("button", "qr-speech-rate-option", `${value}×`);
+        option.dataset.rate = String(value); option.setAttribute("aria-pressed", String(Math.abs(this.plugin.settings.speech.rate - value) < 0.01));
+        option.onclick = () => {
+          this.plugin.settings.speech.rate = value; player.updateRate(); this.speechRatesOpen = false;
+          this.renderSpeechControls(); void this.saveSpeechSettings(); this.root.querySelector<HTMLElement>(".qr-speech-rate")?.focus({ preventScroll: true });
+        };
+        rates.appendChild(option);
+      }
+      rates.onkeydown = (event) => {
+        if (event.key === "Escape") {
+          event.stopPropagation(); this.speechRatesOpen = false; this.renderSpeechControls();
+          this.root.querySelector<HTMLElement>(".qr-speech-rate")?.focus({ preventScroll: true });
+        }
+        const buttons = Array.from(rates.querySelectorAll<HTMLButtonElement>("button"));
+        const index = buttons.indexOf(rates.ownerDocument.activeElement as HTMLButtonElement);
+        const delta = event.key === "ArrowRight" ? 1 : event.key === "ArrowLeft" ? -1 : event.key === "ArrowDown" ? 4 : event.key === "ArrowUp" ? -4 : 0;
+        if (delta) { event.preventDefault(); buttons[(index + delta + buttons.length) % buttons.length].focus({ preventScroll: true }); }
+      };
+      bar.appendChild(rates);
+    }
+    if (state === "error") {
+      const error = el("div", "qr-speech-error", labels.error); error.setAttribute("role", "alert"); bar.appendChild(error);
+    }
+    this.root.appendChild(bar);
+    bar.onkeydown = (event) => {
+      if ((event.target as Element).closest(".qr-speech-rates")) return;
+      const buttons = Array.from(bar.querySelectorAll<HTMLButtonElement>(":scope > button"));
+      const index = buttons.indexOf(bar.ownerDocument.activeElement as HTMLButtonElement);
+      const next = event.key === "ArrowRight" ? (index + 1) % buttons.length : event.key === "ArrowLeft" ? (index - 1 + buttons.length) % buttons.length
+        : event.key === "Home" ? 0 : event.key === "End" ? buttons.length - 1 : -1;
+      if (next >= 0) { event.preventDefault(); buttons[next].focus({ preventScroll: true }); }
+    };
+    if (focusClass && !bar.inert) bar.querySelector<HTMLElement>(focusClass)?.focus({ preventScroll: true });
   }
 
 
@@ -1725,6 +1898,8 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ panels
 
   private closePanels(): void {
+    this.speechRatesOpen = false;
+    this.speechSheetCleanup?.(); this.speechSheetCleanup = null;
     this.translationAudio?.pause(); this.translationAudio = null;
     ++this.panelSession;
     this.confirmingNoteId = null;
@@ -1737,6 +1912,7 @@ export class ReaderView extends ItemView {
     this.panelTrigger = null;
     this.root.querySelectorAll(".qr-reader-settings").forEach((n) => n.remove());
     this.root.querySelectorAll(".qr-modal-form").forEach((n) => n.remove());
+    this.renderSpeechControls();
     if (this.opened) {
       const focusTarget = trigger?.isConnected && !trigger.closest("[inert]") && !this.markMenu.contains(trigger)
         ? trigger : this.contentHost;
@@ -1749,6 +1925,7 @@ export class ReaderView extends ItemView {
     if (!entry) return;
     const fresh = this.plugin.library.get(entry.id);
     if (!fresh || !isHealthyBook(fresh) || fresh.dir !== entry.dir) {
+      this.stopSpeech();
       ++this.generation;
       this.closePanels();
       this.draft = null;

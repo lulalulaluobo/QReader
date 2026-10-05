@@ -17,8 +17,9 @@ import { QReaderSettingTab } from "./settings-tab";
 import { localizeMessage, localizedError, normalizeLanguage, translate } from "./i18n";
 import type { MessageKey } from "./i18n";
 import { loadTranslationSettings, YoudaoClient } from "./translation/youdao";
+import { loadSpeechSettings } from "./reader/speech";
 
-export type SettingsChangeReason = "settings" | "language" | "translation";
+export type SettingsChangeReason = "settings" | "language" | "translation" | "speech";
 
 // Obsidian's native settings controller is not exposed by its public typings.
 interface AppSettingsAccess extends App {
@@ -144,6 +145,7 @@ export class QReaderPlugin extends Plugin {
     this.settings = {
       language: normalizeLanguage(data.language),
       translation: loadTranslationSettings(data.translation),
+      speech: loadSpeechSettings(data.speech),
       libraryPath: libraryPath?.ok ? libraryPath.path : DEFAULT_SETTINGS.libraryPath,
       ai,
       questionPrompt: typeof data.questionPrompt === "string" ? data.questionPrompt : "",

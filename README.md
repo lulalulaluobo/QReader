@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.1) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.2) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -11,6 +11,7 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 - EPUB、PDF、FB2（含 `.fb2.zip`）、未加密 MOBI、AZW3 和 CBZ；原文件保存在 Vault 中。
 - 每页四本真实封面卡片，支持搜索、未读/已读和自定义分类。
 - 沉浸阅读、翻页/滚动、字体和背景设置，自动保存阅读位置。
+- 阅读页听书，从当前位置逐句朗读、临时标示原文并自动跟随翻页；支持暂停、停止、语速和声音选择。
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
 - 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
 - 选段后主动调用 AI 解读，结合前后文解释；只有明确存入笔记才保存。
@@ -20,9 +21,19 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.2.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 听书（1.2.2）
+
+阅读页点击耳机图标，显示一条紧凑控制栏，只有播放/暂停、语速、声音设置和停止四项；默认不遮罩正文。点击播放后从当前可见句子开始，正在朗读的短句临时标色；下一句不在当前页时自动翻页或滚动，读完后继续下一部分。点语速选择倍速，点设置才展开语音方式和声音；停止后控制栏收起。手动翻页、跳章、换书或离开阅读页会停止朗读。
+
+桌面默认使用网页系统语音；Android 的 Obsidian WebView 不支持该接口，自动使用 **Bing 在线语音**，直接在 Obsidian 内播放，无需个人 API 密钥。控制栏可点选 0.5–2 倍语速，声音设置中可切换服务及中英文声音。系统模式更改语速后从下一句生效；暂停续听会重新读当前短句，在线模式则从音频暂停点继续。
+
+在线模式需要联网，播放时将当前短句及至多下一短句发送至 Bing，短期会话和音频只在内存中保存。该网页语音接口可能变化或暂时不可用，失败时会显示错误，允许重试或切换系统语音。语音选择遵循书中文字，不受界面语言影响。只支持有文字层的书籍；CBZ 和扫描 PDF 不提供 OCR 朗读。正文跟随以短句为单位，不提供逐字同步时间戳；首版不保证锁屏和后台连续播放。
+
+实现参考：[GTranslate 的 Bing SSML 请求协议](https://github.com/d4n3436/GTranslate/blob/master/src/GTranslate/Translators/BingTranslator.cs)、[Web Speech 兼容性](https://github.com/mdn/browser-compat-data/blob/main/api/SpeechSynthesis.json)。
 
 ### 语言与 AI
 
@@ -88,6 +99,7 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - Read EPUB, PDF, FB2 (including `.fb2.zip`), unencrypted MOBI, AZW3 and CBZ. Original files stay in your Vault.
 - Four real cover cards per page, search, unread/read filters and your own categories.
 - Immersive reading, paginated or scrolling layouts, font/background controls and saved reading positions.
+- Listening in the reader, starting at the current sentence with temporary source highlights and automatic page following; pause, stop, speed and voice controls.
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
 - Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
 - Request a contextual AI explanation for a selected passage. Save it to notes only when you choose to.
@@ -97,9 +109,17 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.2.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Listening (1.2.2)
+
+Select the headphones icon to reveal a compact bar with four controls: play/pause, speed, voice settings and stop. It leaves the book unobscured. Narration starts at your current visible sentence, temporarily highlights the passage and follows it across pages or scroll positions, continuing into the next part of the book. Press speed to choose a rate; open settings only when you want to change the speech service or voice. Stopping hides the bar. Manual page/chapter navigation, changing books or leaving the reader stops playback.
+
+Desktop defaults to Web Speech system voices. Android's Obsidian WebView does not support that API, so it automatically uses **Bing online speech**, playing inside Obsidian with no personal API key. Choose 0.5–2× speed from the bar, and a service or Chinese/English voice in voice settings. System speed changes apply from the next sentence; resuming repeats the current short sentence. Online audio resumes at its paused position.
+
+Online playback requires internet and sends the current short passage and at most the following passage to Bing. Sessions and audio stay in memory. This web endpoint can change or become unavailable; errors offer retry or a manual service switch. Speech follows the book's text, independently of interface language. Text-based books and PDFs are supported; image-only CBZ/scanned PDFs require a text layer and are not OCR processed. Following operates per short sentence, without word-level timestamps. Background/lock-screen playback is not guaranteed in this first version.
 
 ### Language and AI
 
