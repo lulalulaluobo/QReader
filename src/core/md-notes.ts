@@ -45,7 +45,7 @@ export function renderAnnotationsMd(reading: ReadingFile): string {
   const chapters = Object.entries(reading.chapters)
     .map(([id, ch]) => ({ id, title: ch.title, index: ch.index, chapter: ch }))
     .sort((a, b) => a.index - b.index);
-  const blocks: string[] = [`# ${reading.book.title}`, "", "三问用于引导阅读，可以略过。AI 评价只供参考，不是标准答案。", ""];
+  const blocks: string[] = [`# ${reading.book.title}`, "", "阅读批注与历史记录。历史 AI 评价只供参考，不是标准答案。", ""];
   for (const ch of chapters) {
     const cfi = new EpubCFI();
     const list = (byChapter.get(ch.id) ?? []).sort((a, b) => {

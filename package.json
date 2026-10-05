@@ -1,7 +1,7 @@
 {
   "name": "qreader",
-  "version": "1.1.9",
-  "description": "Read with Questions — six-format, question-driven reader for Obsidian",
+  "version": "1.1.10",
+  "description": "Six-format immersive reader for Obsidian with on-demand explanations and local notes",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",

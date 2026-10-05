@@ -10,10 +10,13 @@ import { renderNoteHistory } from "./note-content";
 
 export const VIEW_TYPE_NOTES = "qreader-notes";
 export const LEGACY_REVIEW_VIEW = "qreader-review";
+export const LEGACY_ANSWER_VIEW = "qreader-answer";
 
 export class NotesView extends ItemView {
   private selectedBook: string | null = null;
   private selectedChapter: string | null = null;
+  // Keep old layout drafts available without turning them into saved notes.
+  private legacyState: Record<string, unknown> | null = null;
   private entries: HealthyBookEntry[] = [];
   private opened = false;
   private revision = 0;
@@ -29,10 +32,17 @@ export class NotesView extends ItemView {
   getViewType(): string { return this.viewType; }
   getDisplayText(): string { return this.plugin.t("QReader 笔记"); }
   getIcon(): string { return "notebook-pen"; }
-  getState(): Record<string, unknown> { return { selectedBook: this.selectedBook, selectedChapter: this.selectedChapter }; }
+  getState(): Record<string, unknown> {
+    return { ...this.legacyState, selectedBook: this.selectedBook, selectedChapter: this.selectedChapter };
+  }
   async setState(state: unknown, result: ViewStateResult): Promise<void> {
     const before = `${this.selectedBook}/${this.selectedChapter}`;
     if (state && typeof state === "object") {
+      if (this.viewType === LEGACY_ANSWER_VIEW) {
+        this.legacyState = { ...state };
+        if (!("selectedBook" in state) && "bookId" in state && typeof state.bookId === "string") this.selectedBook = state.bookId;
+        if (!("selectedChapter" in state) && "chapterId" in state && typeof state.chapterId === "string") this.selectedChapter = state.chapterId;
+      }
       if ("selectedBook" in state && (typeof state.selectedBook === "string" || state.selectedBook === null)) this.selectedBook = state.selectedBook;
       if ("selectedChapter" in state && (typeof state.selectedChapter === "string" || state.selectedChapter === null)) this.selectedChapter = state.selectedChapter;
     }
@@ -50,7 +60,7 @@ export class NotesView extends ItemView {
     await this.refresh();
   }
   async onClose(): Promise<void> {
-    this.plugin.rememberPageState(VIEW_TYPE_NOTES, this.getState());
+    this.plugin.rememberPageState(this.viewType, this.getState());
     this.opened = false;
     this.revision++;
     this.unsub?.(); this.unsubSettings?.();
@@ -76,7 +86,7 @@ export class NotesView extends ItemView {
     if (!this.opened) return;
     this.contentEl.empty();
     const root = el("div", "qr-notes-page");
-    root.append(el("h1", "qr-review-title", this.plugin.t("笔记")), el("p", "qr-muted qr-tiny", this.plugin.t("三问用于引导阅读，可以略过；这里保留问题、自己的想法和 AI 参考评价。")));
+    root.append(el("h1", "qr-review-title", this.plugin.t("笔记")), el("p", "qr-muted qr-tiny", this.plugin.t("按书籍和章节回看自己的批注与阅读记录。")));
     const body = el("div", "qr-notes-page-body");
     if (this.error) {
       const status = el("div", "qr-inline-error", this.plugin.localizeStatus(this.error)); status.setAttribute("role", "alert");
@@ -110,27 +120,15 @@ export class NotesView extends ItemView {
       finally { file.disabled = false; }
     };
     actions.append(read, file); body.appendChild(actions);
+    this.renderLegacyDraft(body, entry);
     const chapters = Object.entries(entry.reading.chapters).sort((a, b) => a[1].index - b[1].index)
       .filter(([id, chapter]) => chapter.questionVersions.length || chapterNotes(chapter).length || entry.reading.annotations.some(record => record.chapterId === id));
-    if (!chapters.length) body.appendChild(el("div", "qr-muted qr-empty", this.plugin.t("还没有笔记。阅读时可以查看三问、记录想法或添加批注。")));
+    if (!chapters.length) body.appendChild(el("div", "qr-muted qr-empty", this.plugin.t("还没有笔记。选择正文可以划线，也可以写下自己的理解。")));
     for (const [id, chapter] of chapters) {
       const details = el("details", "qr-notes-chapter"); details.open = id === this.selectedChapter;
       details.appendChild(el("summary", "qr-history-row", chapter.title));
       details.ontoggle = () => { if (details.open) this.selectedChapter = id; else if (this.selectedChapter === id) this.selectedChapter = null; this.app.workspace.requestSaveLayout(); };
       const content = el("div", "qr-notes-chapter-body");
-      const older = el("details", "qr-history-item");
-      older.appendChild(el("summary", "qr-muted qr-tiny", this.plugin.t("其他问题版本")));
-      for (const [index, version] of [...chapter.questionVersions].reverse().entries()) {
-        const questions = el("details", "qr-history-item"); questions.open = index === 0;
-        questions.appendChild(el("summary", "qr-muted qr-tiny", this.plugin.t("阅读三问 · 问题版本 {0}", version.version)));
-        for (const question of version.questions) contentQuestion(questions, this.plugin.t(QUESTION_LABELS[question.type]), question.text);
-        (index === 0 ? content : older).appendChild(questions);
-      }
-      if (chapter.questionVersions.length) {
-        const write = el("button", "qr-btn qr-btn-sm", this.plugin.t("写下想法")); write.onclick = () => void this.plugin.openAnswer(entry.id, id, "review"); content.appendChild(write);
-      }
-      content.appendChild(renderNoteHistory(this.plugin, chapter));
-      if (chapter.questionVersions.length > 1) content.appendChild(older);
       for (const record of entry.reading.annotations.filter(record => record.chapterId === id).sort((a, b) => a.sortKey - b.sortKey)) {
         const annotation = el("article", "qr-reading-note");
         annotation.appendChild(el("div", "qr-note-meta", record.kind === "highlight" ? this.plugin.t("划线") : this.plugin.t("批注")));
@@ -139,8 +137,41 @@ export class NotesView extends ItemView {
         if (record.aiExplanation) { const ai = el("details", "qr-note-ai"); ai.append(el("summary", undefined, this.plugin.t("已收录的 AI 解释")), el("p", undefined, record.aiExplanation)); annotation.appendChild(ai); }
         content.appendChild(annotation);
       }
+      if (chapter.questionVersions.length || chapterNotes(chapter).length) {
+        const archive = el("details", "qr-history-item qr-notes-archive");
+        archive.appendChild(el("summary", "qr-history-row", this.plugin.t("历史三问与回答")));
+        archive.appendChild(renderNoteHistory(this.plugin, chapter));
+        for (const version of [...chapter.questionVersions].reverse()) {
+          const questions = el("details", "qr-history-item");
+          questions.appendChild(el("summary", "qr-muted qr-tiny", this.plugin.t("阅读三问 · 问题版本 {0}", version.version)));
+          for (const question of version.questions) contentQuestion(questions, this.plugin.t(QUESTION_LABELS[question.type]), question.text);
+          archive.appendChild(questions);
+        }
+        content.appendChild(archive);
+      }
       details.appendChild(content); body.appendChild(details);
     }
+  }
+  private renderLegacyDraft(body: HTMLElement, entry: HealthyBookEntry): void {
+    const state = this.legacyState;
+    if (!state || state.bookId !== entry.id || state.savedKind !== undefined || !Array.isArray(state.answers)) return;
+    const answers: unknown[] = state.answers;
+    if (!answers.some(answer => typeof answer === "string" && answer.trim())) return;
+    const chapter = typeof state.chapterId === "string" ? entry.reading.chapters[state.chapterId] : undefined;
+    const version = chapter?.questionVersions.find(version => version.version === state.questionVersion);
+    const questionOrder = ["core", "logic", "retell"] as const;
+    const draft = el("details", "qr-history-item qr-legacy-draft");
+    draft.open = true;
+    draft.appendChild(el("summary", "qr-history-row", this.plugin.t("历史回答草稿")));
+    draft.appendChild(el("p", "qr-muted qr-tiny", this.plugin.t("三问已停用。此草稿保留供查看和复制，未自动保存为笔记。")));
+    if (chapter) draft.appendChild(el("div", "qr-question-type", chapter.title));
+    for (const [index, answer] of answers.entries()) {
+      if (typeof answer !== "string" || !answer.trim()) continue;
+      const question = version?.questions.find(question => question.type === questionOrder[index]);
+      contentQuestion(draft, this.plugin.t("草稿 {0}", index + 1), question?.text ?? "");
+      draft.appendChild(el("p", "qr-compare-text", answer));
+    }
+    body.appendChild(draft);
   }
   private bottomNav(): HTMLElement {
     const nav = el("nav", "qr-bottom-nav"); nav.setAttribute("aria-label", this.plugin.t("QReader 导航"));

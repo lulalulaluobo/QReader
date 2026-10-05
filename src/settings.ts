@@ -11,7 +11,7 @@ export interface QReaderSettings {
   translation: TranslationSettings;
   libraryPath: string; // vault-relative, e.g. "Books"
   ai: AiSettings;
-  questionPrompt: string; // Empty uses the built-in chapter prompt.
+  questionPrompt: string; // Archived setting, retained for upgrade compatibility only.
   categories: string[];
   highlightColor: HighlightColor;
   reading: ReadingLayout & {

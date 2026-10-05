@@ -1,8 +1,8 @@
-# QReader · 带着问题读书
+# QReader · 沉浸阅读，按需辅助
 
-An Obsidian reader with optional reading prompts, personal reflections and AI reference feedback. / 在 Obsidian 中带着问题读书，自由记录想法，按需获取 AI 参考评价。
+An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.1.9](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.9) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.1.10](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.10) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -13,13 +13,13 @@ An Obsidian reader with optional reading prompts, personal reflections and AI re
 - 沉浸阅读、翻页/滚动、字体和背景设置，自动保存阅读位置。
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
 - 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
-- 每章三问分别检查核心观点、关键推理和自己的复述，一题只问一件事。
-- 三问可以略过、只记一题或几题；保存为笔记后，按需获取 AI 参考评价。
-- 书架、阅读、阅读想法、笔记在当前标签页跳转，使用 Obsidian 原生回退。
+- 选段后主动调用 AI 解读，结合前后文解释；只有明确存入笔记才保存。
+- 笔记按书籍和章节回看批注；以前的三问、回答和 AI 评价保留为折叠的历史记录。
+- 书架、阅读和笔记在当前标签页跳转，使用 Obsidian 原生回退。
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.9.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.1.10.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -38,19 +38,17 @@ An Obsidian reader with optional reading prompts, personal reflections and AI re
 
 模板按 2026-10-04 的 [DeepSeek 官方集成文档](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/) 和 [Agnes 官方模型目录](https://wiki.agnes-ai.com/llms.txt) 核实；尚未发布的模型不列入模板。新安装默认 Flash，升级保留旧 Agnes 模型选择；可选择新模板或手动填写账户可用的其他模型。
 
-**每章三问提示词**留空时，使用当前语言的默认模板。自定义提示词按原文保存；用 `{{chapter_content}}` 插入章节正文，不写占位符时会自动追加正文。三问输出可用中文标签“核心问题/逻辑问题/复述问题”、英文标签“Core question/Logic question/Retelling question”，或 `questions` JSON 数组。
+切换语言不会翻译原书、分类名称、笔记或历史记录，也不会重置阅读位置。按需调用的 AI 解读使用当前界面语言。
 
-切换语言不会翻译原书、分类名称、笔记、旧问题、答案或反馈，也不会重置阅读位置和未提交回答。新生成的默认三问、AI 解读和反馈使用当前语言；已有问题保留，需要新语言时可重新生成。自定义出题模板保留自己的语言和要求。
+### 阅读辅助与笔记
 
-### 阅读想法与笔记
+**1.1.10 已撤销每章三问。** 打开书籍、切换章节不会生成问题，三问、重新生成、回答与提示词设置均已移除。阅读时遇到困难再使用长按查词或选段 AI 解读；有自己的想法时，通过选文菜单添加批注。
 
-三问是引导性阅读提示，**不要求答题，也不要求合上书**。点击任一问题或“写下想法”，可以任选一题记录。手机点按输入框后，问题、输入区和保存按钮一起保留在输入法上方；长回答在输入框内滚动，长问题可单独滚动查看。空白问题可以跳过；“保存想法”只写本地笔记，不调用 AI。需要时，再点击“获取 AI 参考评价”。
+书架的 **笔记** 入口按书籍和章节显示批注。已有问题版本、回答、AI 评价及已完成复习在“历史三问与回答”中折叠保留；旧预约数据不产生任务。阅读页也能主动回看历史记录。
 
-AI 评价只回应已记录的想法，不评分、不将未回答的问题视为遗漏，也不提供标准答案。它可以讨论其他解读、提醒核对原文；读者不需要认同作者或 AI。
+原有 `reading.json`、`批注.md` 与 `vocabulary.json` 继续使用，不迁移或删除旧记录。打开旧回答标签会显示只读笔记，未保存的旧回答草稿仍可查看和复制，不会自动变成已保存笔记。历史 AI 评价只供参考，不是标准答案。
 
-书架的 **笔记** 入口直接查看各书各章的问题、历次阅读想法、AI 参考评价和批注。阅读页的笔记面板也可回看本章想法。每本书沿用 `reading.json` 和 `批注.md`；`批注.md` 现在包含完整阅读笔记，保留问题版本与对应回答。点击“打开笔记文件”可在 Obsidian 查看。
-
-复习页和预约复习已取消。升级保留旧回答、旧 AI 评价、已完成复习以及原预约数据；已完成的复习作为历史笔记显示，原预约不会再形成阅读任务。
+后续辅助方案与优先级见[阅读辅助评估](docs/read-assistance-assessment.md)：优先改进主动选段解读，再考虑手动回顾已读上下文。
 
 ### 翻译与动态生词
 
@@ -83,13 +81,13 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - Immersive reading, paginated or scrolling layouts, font/background controls and saved reading positions.
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
 - Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
-- Three chapter questions focus on the core idea, one key reasoning link and retelling in your own words. Each question has one clear target.
-- Skip the prompts or reflect on any of them. Save your notes, then optionally request AI reference feedback.
-- Library, reader, reflections and notes share the current tab and support Obsidian's native back navigation.
+- Request a contextual AI explanation for a selected passage. Save it to notes only when you choose to.
+- Revisit annotations by book and chapter; earlier questions, answers and AI feedback remain in a collapsed archive.
+- Library, reader and notes share the current tab and support Obsidian's native back navigation.
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.1.9.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.1.10.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -108,19 +106,17 @@ Every provider keeps its own editable URL, model and key. Both base URLs and ful
 
 Verified on 2026-10-04 against the [official DeepSeek integration guide](https://api-docs.deepseek.com/quick_start/agent_integrations/codex/) and [Agnes model directory](https://wiki.agnes-ai.com/llms.txt). Unreleased models are excluded. New installations use Flash; upgrades preserve the older Agnes model selection. You can choose another template or enter any model available to your account.
 
-Leave **Chapter question prompt** empty to use the built-in template in the selected language. Custom prompts are preserved exactly. Insert `{{chapter_content}}` where the chapter belongs; without this placeholder, QReader appends the chapter automatically. Question output accepts the labels `Core question`, `Logic question`, `Retelling question`, their Chinese equivalents, or a `questions` JSON array.
+Changing language preserves book text, category names, notes, earlier records and reading positions. On-demand AI explanations follow the selected interface language.
 
-Changing language preserves book text, category names, notes, existing questions, answers and feedback, as well as reading positions and unsubmitted answers. New questions from the default template, explanations and feedback use the selected language. Regenerate existing questions if you want them in the new language. Custom question templates retain their own language and instructions.
+### Reading assistance and notes
 
-### Reflections and notes
+**Chapter questions have been retired in 1.1.10.** Opening a book or changing chapters does not generate questions. Question controls, regeneration, answering and prompt settings have been removed. Long-press an unfamiliar word, request an explanation for a difficult passage or add your own annotation when needed.
 
-The three prompts guide your reading; **answering and closing the book are optional**. Choose any prompt or press “Write a reflection.” On mobile, tap the input to start writing. The prompt, input and save controls share the visible area above the keyboard. Long answers scroll inside the input; long prompts scroll separately. Leave other prompts blank if you prefer. “Save reflections” writes local notes without calling AI. Afterwards, “Get AI reference feedback” is optional.
+**Notes** shows annotations by book and chapter. Earlier question versions, answers, AI feedback and completed reviews remain under the collapsed “Archived questions and answers” section. Old appointments do not create tasks. The reader also lets you revisit earlier records when you choose.
 
-AI feedback discusses only the reflections you recorded. It does not score you, treat unanswered prompts as omissions or offer standard answers. It may suggest another interpretation or a source check; you do not need to agree with the author or AI.
+Books retain their existing `reading.json`, `批注.md` and `vocabulary.json`, without migrating or deleting earlier records. Restoring an old answer tab displays read-only notes. Unsubmitted drafts remain available to read and copy; they are not automatically saved as notes. Historical AI feedback is a reference rather than a standard answer.
 
-The **Notes** entry shows each book's prompts, past reflections, AI reference feedback and annotations directly. The reader's notes panel also shows chapter reflections. Each book keeps its existing `reading.json` and `批注.md`; the latter now includes complete reading notes with the corresponding prompt versions. “Open notes file” opens it in Obsidian.
-
-The review page and scheduling have been removed. Upgrades retain earlier answers, AI comments, completed reviews and appointment data. Completed reviews appear as historical notes; old appointments no longer create reading tasks.
+See the [reading assistance assessment (Chinese)](docs/read-assistance-assessment.md) for proposed next steps: improve on-demand passage explanations first, then consider a manual recap of previously read content.
 
 ### Translation and dynamic vocabulary
 

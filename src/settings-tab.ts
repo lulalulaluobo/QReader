@@ -5,7 +5,6 @@ import type { App } from "obsidian";
 import type { QReaderPlugin } from "./main";
 import { validateLibraryPath } from "./settings";
 import { testConnection } from "./ai/client";
-import { defaultQuestionPrompt } from "./ai/tasks";
 import { normalizeLanguage } from "./i18n";
 import { AI_PRESETS, getAiConfig } from "./ai/providers";
 import type { AiProvider } from "./ai/providers";
@@ -15,10 +14,6 @@ export class QReaderSettingTab extends PluginSettingTab {
   private testing = false;
   private configRevision = 0;
   private renderAi: (() => void) | null = null;
-  private renderPrompt: (() => void) | null = null;
-  private promptDraft = "";
-  private promptSaving = false;
-  private promptStatus = "";
   private pathDraft: string | null = null;
 
   constructor(app: App, private plugin: QReaderPlugin) {
@@ -29,7 +24,6 @@ export class QReaderSettingTab extends PluginSettingTab {
     this.configRevision++;
     this.testStatus = "";
     this.renderAi = null;
-    this.renderPrompt = null;
     this.pathDraft = null;
   }
 
@@ -40,7 +34,6 @@ export class QReaderSettingTab extends PluginSettingTab {
     containerEl.lang = s.language;
     let proposedPath = preserveDraft ? this.pathDraft ?? s.libraryPath : s.libraryPath;
     this.pathDraft = proposedPath;
-    this.promptStatus = this.plugin.localizeStatus(this.promptStatus);
     this.testStatus = this.plugin.localizeStatus(this.testStatus);
 
     containerEl.createEl("h2", { text: "QReader" });
@@ -262,67 +255,6 @@ export class QReaderSettingTab extends PluginSettingTab {
         await saveTranslation();
       });
     });
-
-    // 提示词独立于 provider 重绘，切换接口不会丢失编辑草稿或串配置。
-    if (!this.promptSaving && !preserveDraft) {
-      this.promptDraft = s.questionPrompt;
-      this.promptStatus = "";
-    }
-    const promptContainer = containerEl.createDiv({ cls: "qr-question-prompt-settings" });
-    const renderPrompt = (): void => {
-      promptContainer.empty();
-      const setting = new Setting(promptContainer)
-        .setName(this.plugin.t("每章三问提示词"))
-        .setDesc(this.plugin.t("留空使用默认的一问一靶提示词。{{chapter_content}} 会替换为当前章节正文；没有占位符时自动追加正文。所有 AI 服务共用，保存后对新生成或重新生成的问题生效。"));
-      setting.settingEl.addClass("qr-question-prompt-setting");
-      setting.addTextArea((text) => {
-        text.inputEl.setAttribute("aria-label", this.plugin.t("每章三问提示词"));
-        text.inputEl.rows = 12;
-        text.setPlaceholder(defaultQuestionPrompt(s.language)).setValue(this.promptDraft)
-          .setDisabled(this.promptSaving)
-          .onChange((value) => {
-            this.promptDraft = value;
-            this.promptStatus = this.plugin.t("修改尚未保存");
-            statusEl.setText(this.promptStatus);
-          });
-      });
-      const savePrompt = async (restoreDefault: boolean): Promise<void> => {
-        if (this.promptSaving) return;
-        const previous = s.questionPrompt;
-        const draft = this.promptDraft;
-        const next = restoreDefault || !draft.trim() ? "" : draft;
-        this.promptSaving = true;
-        this.promptStatus = this.plugin.t("正在保存……");
-        renderPrompt();
-        try {
-          s.questionPrompt = next;
-          await this.plugin.saveSettings();
-          this.promptDraft = next;
-          this.promptStatus = next ? this.plugin.t("自定义提示词已保存") : this.plugin.t("已恢复默认提示词");
-          new Notice(this.promptStatus);
-        } catch {
-          s.questionPrompt = previous;
-          this.promptDraft = draft;
-          this.promptStatus = this.plugin.t("提示词保存失败，已回滚；可点击保存重试");
-          new Notice(this.promptStatus);
-        } finally {
-          this.promptSaving = false;
-          this.renderPrompt?.();
-        }
-      };
-      new Setting(promptContainer)
-        .setName(this.promptDraft.trim() ? this.plugin.t("自定义提示词") : this.plugin.t("当前使用默认提示词"))
-        .setDesc(this.plugin.t("默认生成核心、逻辑、复述问题各一个。"))
-        .addButton((button) => button.setButtonText(this.promptSaving ? this.plugin.t("正在保存……") : this.plugin.t("保存提示词"))
-          .setCta().setDisabled(this.promptSaving).onClick(() => savePrompt(false)))
-        .addButton((button) => button.setButtonText(this.plugin.t("清空并恢复默认"))
-          .setDisabled(this.promptSaving).onClick(() => savePrompt(true)));
-      const statusEl = promptContainer.createEl("p", { text: this.promptStatus, cls: "qr-settings-status" });
-      statusEl.setAttribute("role", "status");
-      statusEl.setAttribute("aria-live", "polite");
-    };
-    this.renderPrompt = renderPrompt;
-    renderPrompt();
 
     containerEl.createEl("h3", { text: this.plugin.t("阅读设置") });
     containerEl.createEl("p", { text: this.plugin.t("排版选项适用于可重排书籍；PDF、CBZ 与固定版式书籍保留原页面。"), cls: "setting-item-description" });

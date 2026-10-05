@@ -1,7 +1,7 @@
 import { App, Notice, normalizePath } from "obsidian";
 import { Book } from "epubjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
-import type { AiConfig, AnnotationRecord, AnswerRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, Feedback, HealthyBookEntry, ReadingFile, ReviewRecord, TocNode } from "../types";
+import type { AnnotationRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, HealthyBookEntry, ReadingFile, TocNode } from "../types";
 import { isHealthyBook, pdfChapterId } from "../types";
 import { sanitizeFolderName } from "../util";
 import { JsonStore, validateReading } from "./json-store";
@@ -9,7 +9,6 @@ import { VaultFs } from "./fs";
 import { renderAnnotationsMd } from "./md-notes";
 import { BookCache, buildEpubChapters, epubChapterText, pdfPagesText, tocNodesFromBook } from "./book-source";
 import { openPdf } from "../reader/pdfjs-setup";
-import { generateQuestions } from "../ai/tasks";
 import { BOOK_EXTENSION, bookAsEpub, detectBookFormat } from "./book-formats";
 import { translate } from "../i18n";
 import type { AppLanguage } from "../i18n";
@@ -19,8 +18,6 @@ export const READING_JSON = "reading.json";
 export interface LibraryDeps {
   app: App;
   libraryPath(): string;
-  aiConfig(): AiConfig;
-  questionPrompt(): string;
   language(): AppLanguage;
   configDir: string;
   pluginId: string;
@@ -35,7 +32,6 @@ export class LibraryManager {
   private scanned = false;
   private scanJob: Promise<BookEntry[]> | null = null;
   private importChain: Promise<void> = Promise.resolve();
-  private questionJobs = new Map<string, Promise<void>>();
   private coverMem = new Map<string, string>();
 
   constructor(private deps: LibraryDeps, public cache: BookCache) { this.fs = new VaultFs(deps.app.vault.adapter); }
@@ -271,61 +267,6 @@ export class LibraryManager {
     });
   }
 
-  ensureQuestions(entry: BookEntry, chapterId: string): Promise<void> { return this.questionJob(entry, chapterId, false); }
-  regenerateQuestions(entry: BookEntry, chapterId: string): Promise<void> { return this.questionJob(entry, chapterId, true); }
-  private questionJob(entry: BookEntry, chapterId: string, regenerate: boolean): Promise<void> {
-    const healthy = this.healthy(entry);
-    if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，无法生成正文问题");
-    const key = `${entry.dir}/${chapterId}`;
-    const running = this.questionJobs.get(key);
-    if (running) return running;
-    const job = (async () => {
-      const chapter = healthy.reading.chapters[chapterId];
-      if (!chapter) throw new Error("章节不存在");
-      if (!regenerate && chapter.questionVersions.length) return;
-      const text = await this.getChapterText(healthy, chapterId);
-      const questions = await generateQuestions(this.deps.aiConfig(), healthy.reading.book.title, chapter.title, text, this.deps.questionPrompt(), this.deps.language());
-      this.healthy(healthy);
-      await healthy.store.mutate((value) => {
-        const target = value.chapters[chapterId];
-        if (!target) throw new Error("章节不存在");
-        if (!regenerate && target.questionVersions.length) return;
-        // A draft restored through navigation can still reference an unanswered
-        // version. Keep it stable when the reader regenerates chapter questions.
-        const version = Math.max(0, ...target.questionVersions.map((item) => item.version)) + 1;
-        const next = { version, createdAt: new Date().toISOString(), questions };
-        target.questionVersions.push(next);
-      }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
-      this.deps.notifyChanged();
-    })().finally(() => this.questionJobs.delete(key));
-    this.questionJobs.set(key, job);
-    return job;
-  }
-  isGenerating(bookId: string, chapterId: string): boolean { return this.questionJobs.has(`${this.root()}/${bookId}/${chapterId}`); }
-
-  async recordAnswer(entry: BookEntry, chapterId: string, questionVersion: number, answerMap: Record<string, string>): Promise<AnswerRecord> {
-    const healthy = this.healthy(entry);
-    const record: AnswerRecord = { questionVersion, answers: { ...answerMap }, answeredAt: new Date().toISOString() };
-    await healthy.store.mutate((value) => {
-      const chapter = value.chapters[chapterId];
-      const version = chapter?.questionVersions.find(item => item.version === questionVersion);
-      if (!chapter || !version) throw new Error("回答关联的问题版本不存在");
-      if (!Object.values(answerMap).some(answer => answer.trim())) throw new Error("请先记录一点想法，再保存笔记。");
-      if (Object.keys(answerMap).some(id => !version.questions.some(question => question.id === id))) throw new Error("回答关联的问题编号不存在");
-      chapter.answers.push(record);
-    }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
-    this.deps.notifyChanged(); return record;
-  }
-  async attachFeedback(entry: BookEntry, chapterId: string, feedback: Feedback, record: AnswerRecord | ReviewRecord): Promise<void> {
-    const healthy = this.healthy(entry);
-    await healthy.store.mutate((value) => {
-      const chapter = value.chapters[chapterId];
-      if (!chapter || ![...chapter.answers, ...chapter.reviews].includes(record)) throw new Error("原回答已不存在，反馈未附加");
-      record.feedback = feedback;
-    }, (value) => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
-    this.deps.notifyChanged();
-  }
-
   async saveProgress(entry: BookEntry, progress: Partial<ReadingFile["progress"]> & { chapterId: string | null }): Promise<void> {
     const healthy = this.healthy(entry);
     await healthy.store.mutate((value) => { Object.assign(value.progress, progress, { lastReadAt: new Date().toISOString() }); });
@@ -343,6 +284,7 @@ export class LibraryManager {
     });
     this.deps.notifyChanged();
   }
+
   async saveAnnotation(entry: BookEntry, draft: Omit<AnnotationRecord, "createdAt" | "updatedAt">): Promise<AnnotationRecord> {
     const healthy = this.healthy(entry);
     if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不支持文字批注");

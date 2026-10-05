@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
 process.on('uncaughtException',error=>{console.error(error.message);console.error(error.stack?.split('\n').filter(line=>!line.includes('data:text/')).join('\n'));process.exitCode=1;});
-const bundle = await build({stdin:{contents:`export * from './src/core/chapter-notes'; export * from './src/core/md-notes'; export * from './src/core/json-store'; export * from './src/ai/tasks';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'host-test',setup(b){
+const bundle = await build({stdin:{contents:`export * from './src/core/chapter-notes'; export * from './src/core/md-notes'; export * from './src/core/json-store';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'host-test',setup(b){
   b.onResolve({filter:/^(obsidian|epubjs)$/},args=>({path:args.path,namespace:'test'}));
   b.onLoad({filter:/.*/,namespace:'test'},args=>({contents:args.path==='obsidian'?'export const requestUrl = async options => globalThis.qrRequest(options);':'export class EpubCFI { compare(){ throw new Error("Unexpected CFI fixture"); } }',loader:'js'}));
 }}]});
@@ -28,19 +28,6 @@ for(const text of ['核心旧问题','核心新问题','原阅读回答','原复
 assert.ok(!md.includes('2099-10-03'));
 assert.equal(JSON.stringify({answers:chapter.answers.slice(0,-1),reviews:chapter.reviews}),originalHistory);
 assert.deepEqual(m.feedbackSections(legacyFeedback).map(s=>s.content),['旧评价原文','另一种看法','原事实提醒']);
-let calls=0,lastRequest;
-globalThis.qrRequest=async options=>{calls++;lastRequest=JSON.parse(options.body);return {status:200,text:JSON.stringify({choices:[{message:{content:JSON.stringify({comment:'参考讨论',perspectives:'',evidenceNotes:''})}}]})};};
-const cfg={baseUrl:'https://example.test/v1',apiKey:'fixture-only',model:'fixture-model'};
-for(const language of ['zh-CN','en']) {
-  const feedback=await m.generateFeedback(cfg,'测试书','第一章','真实原文片段',questions,{q2:'只记录第二题'},language);
-  assert.equal(feedback.kind,'reference');
-  assert.ok(lastRequest.messages[1].content.includes('只记录第二题'));
-  assert.ok(lastRequest.messages[1].content.includes('推理旧问题'));
-  assert.ok(!lastRequest.messages[1].content.includes('核心旧问题'));
-  assert.ok(!lastRequest.messages[1].content.includes('复述旧问题'));
-}
-await assert.rejects(()=>m.generateFeedback(cfg,'书','章','原文',questions,{}),/请先记录/);assert.equal(calls,2);
-for(const raw of ['[]','{}','{"comment":""}','{"comment":"ok","score":"10"}','{"authorView":"legacy output"}','{"comment":"ok","perspectives":null}'])assert.throws(()=>m.parseFeedback(raw));
 const files=new Map();let failMd=false;
 const fs={exists:async p=>files.has(p),read:async p=>files.get(p),write:async(p,v)=>{if(p==='批注.md'&&failMd){failMd=false;throw Error('disk-full');}files.set(p,v);},remove:async p=>files.delete(p)};
 const store=m.JsonStore.forNew(fs,'reading.json',m.validateReading,structuredClone(reading));await m.JsonStore.persistNew(store);
@@ -56,4 +43,4 @@ failMd=true;await assert.rejects(()=>store.mutate(value=>{value.chapters.c1.answ
 assert.equal(sameRecord.feedback,undefined);assert.equal(sameRecord,store.value.chapters.c1.answers.at(-1));
 await store.mutate(()=>{sameRecord.feedback=reference;},sync);assert.equal(store.value.chapters.c1.answers.length,3);
 assert.deepEqual(store.value.chapters.c1.reviews,reviews);
-console.log('Reading notes: partial reflections, versions, legacy history, reference protocol, Markdown and rollback passed.');
+console.log('Reading notes: partial reflections, versions, legacy history, archived feedback, Markdown and rollback passed.');

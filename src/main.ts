@@ -1,16 +1,15 @@
-// QReader — Read with Questions. Plugin entry: views, commands, ribbon, events.
+// QReader — Read at your own pace. Plugin entry: views, commands, ribbon, events.
 
 import { Notice, Plugin, WorkspaceLeaf } from "obsidian";
 import type { App } from "obsidian";
 import { DEFAULT_SETTINGS, validateLibraryPath } from "./settings";
 import type { QReaderSettings } from "./settings";
-import { getAiConfig, loadAiSettings } from "./ai/providers";
+import { loadAiSettings } from "./ai/providers";
 import { BookCache } from "./core/book-source";
 import { LibraryManager } from "./core/library";
 import { BookshelfView, VIEW_TYPE_BOOKSHELF } from "./views/bookshelf";
 import { ReaderView, VIEW_TYPE_READER } from "./views/reader";
-import { AnswerView, VIEW_TYPE_ANSWER } from "./views/answer";
-import { NotesView, VIEW_TYPE_NOTES, LEGACY_REVIEW_VIEW } from "./views/notes";
+import { NotesView, VIEW_TYPE_NOTES, LEGACY_REVIEW_VIEW, LEGACY_ANSWER_VIEW } from "./views/notes";
 import { QReaderSettingTab } from "./settings-tab";
 import { localizeMessage, localizedError, normalizeLanguage, translate } from "./i18n";
 import type { MessageKey } from "./i18n";
@@ -46,8 +45,6 @@ export class QReaderPlugin extends Plugin {
       {
         app: this.app,
         libraryPath: () => this.settings.libraryPath,
-        aiConfig: () => getAiConfig(this.settings.ai),
-        questionPrompt: () => this.settings.questionPrompt,
         language: () => this.settings.language,
         configDir: this.app.vault.configDir,
         pluginId: this.manifest.id,
@@ -58,7 +55,7 @@ export class QReaderPlugin extends Plugin {
 
     this.registerView(VIEW_TYPE_BOOKSHELF, (leaf) => new BookshelfView(leaf, this));
     this.registerView(VIEW_TYPE_READER, (leaf) => new ReaderView(leaf, this));
-    this.registerView(VIEW_TYPE_ANSWER, (leaf) => new AnswerView(leaf, this));
+    this.registerView(LEGACY_ANSWER_VIEW, (leaf) => new NotesView(leaf, this, LEGACY_ANSWER_VIEW));
     this.registerView(VIEW_TYPE_NOTES, (leaf) => new NotesView(leaf, this));
     this.registerView(LEGACY_REVIEW_VIEW, (leaf) => new NotesView(leaf, this, LEGACY_REVIEW_VIEW));
 
@@ -106,7 +103,7 @@ export class QReaderPlugin extends Plugin {
   onunload(): void {
     this.translation.clear();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_READER);
-    this.app.workspace.detachLeavesOfType(VIEW_TYPE_ANSWER);
+    this.app.workspace.detachLeavesOfType(LEGACY_ANSWER_VIEW);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_BOOKSHELF);
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_NOTES);
     this.app.workspace.detachLeavesOfType(LEGACY_REVIEW_VIEW);
@@ -175,7 +172,7 @@ export class QReaderPlugin extends Plugin {
       this.registerCommands();
       this.ribbon?.setAttribute("aria-label", this.t("QReader 书架"));
       this.app.workspace.iterateAllLeaves((leaf) => {
-        if (leaf.view instanceof ReaderView || leaf.view instanceof BookshelfView || leaf.view instanceof AnswerView || leaf.view instanceof NotesView) {
+        if (leaf.view instanceof ReaderView || leaf.view instanceof BookshelfView || leaf.view instanceof NotesView) {
           leaf.view.contentEl.lang = this.settings.language;
           const header = leaf as LeafHeaderAccess;
           if (typeof header.updateHeader === "function") header.updateHeader();
@@ -213,14 +210,6 @@ export class QReaderPlugin extends Plugin {
     await this.activateLeaf(VIEW_TYPE_READER, { bookId });
   }
 
-  async openAnswer(bookId: string, chapterId: string, mode: "answer" | "review", scheduledFor?: string, question?: { id: string; version: number }): Promise<void> {
-    const target = { bookId, chapterId, mode, scheduledFor };
-    const state = this.pageStates.get(this.pageStateKey(VIEW_TYPE_ANSWER, target))
-      ?? { ...target, questionVersion: question?.version ?? 0, requestedQuestionId: question?.id };
-    const leaf = await this.activateLeaf(VIEW_TYPE_ANSWER, state);
-    if (question && leaf.view instanceof AnswerView) await leaf.view.openFor(bookId, chapterId, mode, scheduledFor, question);
-  }
-
   async openNotes(bookId?: string, chapterId?: string): Promise<void> {
     if (!bookId && this.app.workspace.getActiveViewOfType(NotesView)) return;
     const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_NOTES, {})) ?? {};
@@ -229,15 +218,11 @@ export class QReaderPlugin extends Plugin {
 
   rememberPageState(viewType: string, state: Record<string, unknown>): void {
     const key = this.pageStateKey(viewType, state);
-    if (viewType === VIEW_TYPE_ANSWER && state.savedKind !== undefined) this.pageStates.delete(key);
-    else this.pageStates.set(key, state);
+    this.pageStates.set(key, state);
   }
 
-  private pageStateKey(viewType: string, state: Record<string, unknown>): string {
-    const page = `${this.settings.libraryPath}/${viewType}`;
-    return viewType === VIEW_TYPE_ANSWER
-      ? `${page}/${state.bookId}/${state.chapterId}/${state.mode}/${state.scheduledFor ?? ""}`
-      : page;
+  private pageStateKey(viewType: string, _state: Record<string, unknown>): string {
+    return `${this.settings.libraryPath}/${viewType}`;
   }
 
   openSettings(): void {

@@ -1,5 +1,4 @@
-// Reading page (PRD §7–§15): minimal chrome, 目录 drawer, 💡 三问 panel,
-// ··· menu, annotation card, chapter navigation and 完成本章.
+// Reading page: immersive text, chapter navigation and on-demand reading tools.
 
 import { ItemView, Menu, Notice, setIcon } from "obsidian";
 import type { WorkspaceLeaf, ViewStateResult } from "obsidian";
@@ -12,13 +11,14 @@ import type {
   ReadingColors,
   TocNode,
 } from "../types";
-import { QUESTION_LABELS, chaptersOrdered, isHealthyBook } from "../types";
+import { chaptersOrdered, isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
 import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, SelectionAnchor } from "../reader/engine";
 import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
 import { el, genId, fmtDateTime } from "../util";
 import { renderNoteHistory } from "./note-content";
+import { chapterNotes } from "../core/chapter-notes";
 import { explainSelection } from "../ai/tasks";
 import { HIGHLIGHT_COLORS, READING_PALETTES } from "../settings";
 import { getAiConfig } from "../ai/providers";
@@ -181,8 +181,6 @@ export class ReaderView extends ItemView {
   private panelTrigger: HTMLElement | null = null;
   private tocPanel!: HTMLElement;
   private tocBody!: HTMLElement;
-  private questionsPanel!: HTMLElement;
-  private questionsBody!: HTMLElement;
   private annotCard!: HTMLElement;
   private markMenu!: HTMLElement;
 
@@ -216,14 +214,6 @@ export class ReaderView extends ItemView {
     tocBtn.title = this.plugin.t("目录");
     tocBtn.onclick = () => this.toggleToc();
     tocBtn.appendChild(el("span", undefined, this.plugin.t("目录")));
-    const qBtn = el("button", "qr-dock-btn qr-bulb");
-    setIcon(qBtn, "lightbulb");
-    qBtn.setAttribute("aria-label", this.plugin.t("本章三问"));
-    qBtn.title = this.plugin.t("本章三问");
-    qBtn.onclick = () => this.toggleQuestions();
-    qBtn.appendChild(el("span", undefined, this.plugin.t("三问")));
-    qBtn.disabled = this.entry?.reading.book.format === "cbz";
-    if (qBtn.disabled) qBtn.title = this.plugin.t("图片书没有文字层，不能生成三问");
     const moreBtn = el("button", "qr-icon-btn");
     setIcon(moreBtn, "more-horizontal");
     moreBtn.setAttribute("aria-label", this.plugin.t("更多阅读操作"));
@@ -240,13 +230,9 @@ export class ReaderView extends ItemView {
     const chapters = el("div", "qr-reader-chapter-actions");
     const prevCh = el("button", "qr-btn", this.plugin.t("上一章"));
     prevCh.onclick = () => void this.stepChapter(-1);
-    const done = el("button", "qr-btn qr-btn-primary", this.plugin.t("写下想法"));
-    done.disabled = this.entry?.reading.book.format === "cbz";
-    if (done.disabled) done.title = this.plugin.t("图片书没有文字层，不能生成阅读三问。");
-    done.onclick = () => void this.finishChapter();
     const nextCh = el("button", "qr-btn", this.plugin.t("下一章"));
     nextCh.onclick = () => void this.stepChapter(1);
-    chapters.append(prevCh, done, nextCh);
+    chapters.append(prevCh, nextCh);
     this.progressEl = el("span", "qr-progress");
     this.progressBar = document.createElement("progress");
     this.progressBar.max = 1;
@@ -262,7 +248,7 @@ export class ReaderView extends ItemView {
       button.onclick = action;
       return button;
     };
-    dock.append(tocBtn, qBtn, control(this.plugin.t("笔记"), "notebook-pen", () => this.openNotes()),
+    dock.append(tocBtn, control(this.plugin.t("笔记"), "notebook-pen", () => this.openNotes()),
       control(this.plugin.t("字号"), "type", () => this.openReaderSettings()),
       control(this.plugin.t("背景"), "palette", () => this.openReaderSettings("theme")));
     bottom.append(meter, chapters, dock);
@@ -375,12 +361,6 @@ export class ReaderView extends ItemView {
       return;
     }
     if (generation !== this.generation) return;
-    if (entry.reading.book.format !== "cbz") {
-      this.plugin.library.ensureQuestions(entry, this.currentChapterId ?? "")
-        .then(() => this.renderQuestions())
-        .catch(() => this.renderQuestions());
-    }
-    this.renderQuestions();
     this.app.workspace.requestSaveLayout();
   }
 
@@ -525,19 +505,11 @@ export class ReaderView extends ItemView {
     if (this.markTarget && this.lastLoc && (loc.cfi !== this.lastLoc.cfi ||
         loc.pdfPage !== this.lastLoc.pdfPage || loc.pageFraction !== this.lastLoc.pageFraction)) this.closeMarkMenu();
     this.lastLoc = loc;
-    const chapterChanged = loc.chapterId !== this.currentChapterId;
     this.currentChapterId = loc.chapterId;
     this.renderTitle();
     this.renderProgress(loc.percent);
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.progressTimer = window.setTimeout(() => void this.persistProgress(true), 500);
-    if (chapterChanged && loc.chapterId && entry.reading.book.format !== "cbz") {
-      this.plugin.library
-        .ensureQuestions(entry, loc.chapterId)
-        .then(() => this.renderQuestions())
-        .catch(() => this.renderQuestions());
-      this.renderQuestions();
-    }
   }
 
   private async persistProgress(force: boolean): Promise<void> {
@@ -755,101 +727,6 @@ export class ReaderView extends ItemView {
     nameInput.focus();
   }
 
-  // ------------------------------------------------------------ questions
-
-  private toggleQuestions(): void {
-    if (this.entry?.reading.book.format === "cbz") return;
-    if (this.questionsPanel?.isConnected) { this.closePanels(); return; }
-    this.questionsPanel = this.createReadingSheet(this.plugin.t("本章三问"), "qr-questions-panel");
-    this.questionsBody = el("div", "qr-reading-sheet-body");
-    this.questionsPanel.appendChild(this.questionsBody);
-    this.renderQuestions();
-  }
-
-  private renderQuestions(): void {
-    if (!this.opened || !this.questionsPanel?.isConnected) return;
-    const entry = this.entry;
-    const body = this.questionsBody;
-    body.empty();
-    if (!entry) return;
-    if (entry.reading.book.format === "cbz") {
-      body.appendChild(el("div", "qr-muted", this.plugin.t("图片书没有文字层，不能生成本章三问。")));
-      return;
-    }
-    const ch = this.currentChapterId ? entry.reading.chapters[this.currentChapterId] : undefined;
-    if (!ch) {
-      body.appendChild(el("div", "qr-muted", this.plugin.t("当前不在任何章节中")));
-      return;
-    }
-    const versions = ch.questionVersions;
-    if (versions.length === 0) {
-      const running = this.plugin.library.isGenerating(entry.id, this.currentChapterId ?? "");
-      if (running) {
-        body.appendChild(el("div", "qr-muted qr-pulse", this.plugin.t("正在生成本章问题……")));
-      } else {
-        const retry = el("button", "qr-btn qr-btn-primary", this.plugin.t("重新生成"));
-        retry.onclick = () => void this.regenerate();
-        body.append(el("div", "qr-muted", this.plugin.t("本章问题尚未生成")), retry);
-      }
-      return;
-    }
-    const latest = versions[versions.length - 1];
-    const chapterId = this.currentChapterId;
-    for (const type of ["core", "logic", "retell"] as const) {
-      const q = latest.questions.find((question) => question.type === type);
-      if (!q) continue;
-      const item = el("button", "qr-question-item qr-question-link");
-      item.appendChild(el("span", "qr-question-type", this.plugin.t(QUESTION_LABELS[q.type])));
-      item.appendChild(el("span", "qr-question-text", q.text));
-      item.setAttribute("aria-label", this.plugin.t("{0}：{1}，记录阅读想法", this.plugin.t(QUESTION_LABELS[q.type]), q.text));
-      item.onclick = () => { if (chapterId) void this.answerQuestion(chapterId, q.id, latest.version, item); };
-      body.appendChild(item);
-    }
-    body.appendChild(el("p", "qr-reading-help", this.plugin.t("三问是阅读提示，可以略过，也可以任选一题记录想法。")));
-    if (versions.length > 1) {
-      body.appendChild(el("div", "qr-muted", this.plugin.t("第 {0} 版 · 共 {1} 个版本", latest.version, versions.length)));
-    }
-  }
-
-  private async answerQuestion(chapterId: string, id: string, version: number, button: HTMLButtonElement): Promise<void> {
-    const entry = this.entry;
-    const generation = this.generation;
-    const panelSession = this.panelSession;
-    if (!entry || button.disabled) return;
-    button.disabled = true;
-    try {
-      await this.persistProgress(true);
-      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
-      this.closePanels();
-      await this.plugin.openAnswer(entry.id, chapterId, "answer", undefined, { id, version });
-    } catch (error) {
-      if (this.opened && generation === this.generation) new Notice(this.plugin.t("打开回答失败：{0}", this.plugin.errorText(error)));
-    } finally { button.disabled = false; }
-  }
-
-  private async regenerate(): Promise<void> {
-    const entry = this.entry;
-    const chapterId = this.currentChapterId;
-    if (!entry || !chapterId) return;
-    const generation = this.generation;
-    const panelSession = this.panelSession;
-    if (this.questionsPanel?.isConnected) {
-      this.questionsBody.empty();
-      this.questionsBody.appendChild(el("div", "qr-muted qr-pulse", this.plugin.t("正在生成本章问题……")));
-    }
-    try {
-      await this.plugin.library.regenerateQuestions(entry, chapterId);
-      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
-      this.renderQuestions();
-    } catch (e) {
-      if (!this.opened || generation !== this.generation || panelSession !== this.panelSession) return;
-      new Notice(this.plugin.t("生成失败: {0}", this.plugin.errorText(e)));
-      this.renderQuestions();
-    }
-  }
-
-  // ------------------------------------------------------------ more menu
-
   private openMoreMenu(e: MouseEvent): void {
     const menu = new Menu();
     menu.addItem((item) =>
@@ -868,9 +745,6 @@ export class ReaderView extends ItemView {
           }
         })
     );
-    if (this.entry?.reading.book.format !== "cbz") {
-      menu.addItem((item) => item.setTitle(this.plugin.t("重新生成三问")).setIcon("refresh-cw").onClick(() => void this.regenerate()));
-    }
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(this.plugin.t("阅读设置")).setIcon("sliders-horizontal").onClick(() => this.openReaderSettings()));
     menu.showAtMouseEvent(e);
@@ -1059,20 +933,17 @@ export class ReaderView extends ItemView {
     };
     body.appendChild(all);
     const currentChapter = this.currentChapterId ? entry.reading.chapters[this.currentChapterId] : undefined;
-    if (currentChapter?.questionVersions.length) {
-      body.appendChild(el("h3", "qr-note-chapter", currentChapter.title));
-      const version = currentChapter.questionVersions.at(-1);
-      if (version) for (const question of version.questions) {
-        const item = el("div", "qr-compare-item");
-        item.append(el("div", "qr-question-type", this.plugin.t(QUESTION_LABELS[question.type])), el("div", "qr-compare-question", question.text));
-        body.appendChild(item);
-      }
-      body.appendChild(renderNoteHistory(this.plugin, currentChapter));
+    const hasHistory = currentChapter && chapterNotes(currentChapter).length > 0;
+    if (hasHistory) {
+      const history = el("details", "qr-history-item");
+      history.appendChild(el("summary", "qr-history-row", this.plugin.t("历史阅读记录")));
+      history.appendChild(renderNoteHistory(this.plugin, currentChapter));
+      body.appendChild(history);
     }
     const records = entry.reading.annotations.slice().sort((a, b) =>
       (entry.reading.chapters[a.chapterId]?.index ?? 0) - (entry.reading.chapters[b.chapterId]?.index ?? 0) ||
       a.sortKey - b.sortKey);
-    if (records.length === 0 && !currentChapter?.questionVersions.length) {
+    if (records.length === 0 && !hasHistory) {
       body.appendChild(el("div", "qr-empty", entry.reading.book.format === "cbz"
         ? this.plugin.t("图片书没有文字层，不能添加文字批注。")
         : this.plugin.t("还没有笔记。选择正文可以划线，也可以写下自己的理解。")));
@@ -1183,21 +1054,6 @@ export class ReaderView extends ItemView {
     } catch (error) {
       new Notice(this.plugin.t("章节跳转失败：{0}", this.plugin.errorText(error)));
     }
-  }
-
-  private async finishChapter(): Promise<void> {
-    const entry = this.entry;
-    if (!entry) return;
-    if (entry.reading.book.format === "cbz") {
-      new Notice(this.plugin.t("图片书没有文字层，不能生成阅读三问。"));
-      return;
-    }
-    if (!this.currentChapterId) {
-      new Notice(entry.reading.book.format === "pdf" ? this.plugin.t("请先在目录中创建章节") : this.plugin.t("当前不在章节中"));
-      return;
-    }
-    await this.persistProgress(true);
-    await this.plugin.openAnswer(entry.id, this.currentChapterId, "answer");
   }
 
   // ------------------------------------------------------------ annotations
@@ -1891,7 +1747,6 @@ export class ReaderView extends ItemView {
     }
     this.entry = fresh;
     this.engine?.updateChapters?.(chaptersOrdered(fresh.reading));
-    this.renderQuestions();
     this.renderNotes();
   }
 }

@@ -1,5 +1,9 @@
 # 状态管理
 
+## 当前阅读规则（1.1.10）
+
+每章三问已撤销：LibraryManager 不再生成问题或写入新回答/评价。原 reading.json 的历史结构仍严格校验并原样保留；笔记页可折叠查看，Markdown 继续输出原问题版本和对应回答。旧 qreader-answer 由 NotesView 接收，保留布局的 bookId/chapterId/answers/questionVersion 等草稿状态，仅显示，不调用 AI、不自动保存。旧问题提示词配置保留作升级兼容，设置页不再暴露。下文早期回答/三问流程仅为历史实现；原书、位置、批注、生词与串行存储规则继续适用。
+
 reading.json 是每本书阅读、批注与问答的事实源，批注.md 是可重建的派生输出。vocabulary.json 独立保存活跃生词。插件配置通过 Obsidian loadData/saveData 保存，AI 密钥不进入阅读库。
 
 ## 1.1.6 免密查词契约（覆盖下述 1.1.5 有道凭据方案）

@@ -1,5 +1,11 @@
 /** Chinese source messages are stable keys; numbered placeholders preserve user text. */
 export const EN = {
+  "按书籍和章节回看自己的批注与阅读记录。": "Revisit your annotations and reading records by book and chapter.",
+  "历史阅读记录": "Earlier reading records",
+  "历史三问与回答": "Archived questions and answers",
+  "历史回答草稿": "Earlier answer draft",
+  "三问已停用。此草稿保留供查看和复制，未自动保存为笔记。": "Chapter questions have been retired. This draft remains available to read and copy; it has not been saved as a note.",
+  "草稿 {0}": "Draft {0}",
   "其他问题版本": "Other prompt versions",
   "参考评价": "Reference feedback",
   "其他理解角度": "Other perspectives",
