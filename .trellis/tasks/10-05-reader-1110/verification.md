@@ -17,4 +17,19 @@
 
 固定本地 AI 端点验证调用与明确保存流程，不评价真实模型质量。测试使用 macOS Obsidian；手机屏宽布局覆盖不等于 Android/iOS 真机手势验证。本次没有改变查词的长按规则。
 
-发布附件核验待完成后补记。
+发布前检查发现 AI 设置仍描述“三问与反馈”，已修正中英文说明，重新构建并在原生 Obsidian 核验两种语言的最终设置；无残留三问提示词或用途。新建且尚未发布的标签使用明确旧 SHA 的 force-with-lease 更新至修正提交，未重写 main 历史。
+
+## 发布核验
+
+源码：`ac75406de06a0334cd82a5fa01a7dfbbc7de391d`；main 与注解标签 1.1.10 推送。[正式 Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.1.10) 为 latest，非草稿、非预发行。
+
+`tmp/verify-release.mjs 1.1.10` 验证四个公开附件 HTTP 200，逐字节匹配最终产物，远程源码/tag 一致，GitHub digest 匹配；ZIP 严格只含 qreader/main.js、manifest.json、styles.css，内容与散装附件相同。
+
+| 文件 | 字节 | SHA-256 |
+| --- | ---: | --- |
+| main.js | 6379501 | 71bf80ca3fe77fe3baa11df9ce10c6bea499fc4a0817679f1f4fdc8cfc677ef1 |
+| manifest.json | 239 | 478d4de7d2949a5bb0cab64446bb142197ff1e0534f987d1c745bf624157e770 |
+| styles.css | 35313 | ce5e25f64616ddd50928141e8b7d0a4738303703edd08a8a94b7f9171bc17048 |
+| QReader-1.1.10.zip | 2926050 | ef997dd1ad454a0b8d4ba6fdaa58e9d91d9416d865b3dfc0b512a4dcbf26d49e |
+
+独立 GUI 和协议服务器均已退出。

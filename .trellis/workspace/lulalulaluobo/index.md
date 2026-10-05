@@ -4,8 +4,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 11
-- **Last Active**: 2026-10-04
+- **Total Sessions**: 14
+- **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
 ## 日志
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~190 | Active |
+| `journal-1.md` | ~215 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 14 | 2026-10-05 | 撤销每章三问并评估按需阅读辅助，发布 1.1.10 | `ac75406de06a0334cd82a5fa01a7dfbbc7de391d` | `main` |
 | 13 | 2026-10-04 | 手机输入保持问题可见，发布 1.1.9 | `0db82bcb7a52a50192e732a6c0bb99845c98dcda` | `main` |
 | 12 | 2026-10-04 | 三问可选笔记与 AI 参考评价，发布 1.1.8 | `c4668441f697db2c7d69e72bb9b4bbe50de41826` | `main` |
 | 11 | 2026-10-04 | 长按选词与卡片手动删除生词，发布 1.1.7 | `a1dfea8a58ad649ac44297cae319108e741f970f` | `main` |

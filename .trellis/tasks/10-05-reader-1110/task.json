@@ -2,9 +2,12 @@
   "id": "reader-1110",
   "name": "reader-1110",
   "title": "撤销每章三问并评估按需阅读辅助",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-05",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-05",
+  "commit": "ac75406de06a0334cd82a5fa01a7dfbbc7de391d",
+  "notes": "三问生成、回答入口和设置撤销，历史折叠归档、旧布局草稿只读保留。六格式、零被动 AI、84 组布局、17 本原书/历史、主动解读与批注通过；最终中英文设置说明在原生宿主核验。main 和 1.1.10 标签推送，正式 latest Release 四附件公开 HTTP 200/字节/digest/ZIP 一致。独立 GUI 与服务器已退出，方案评估见 docs/read-assistance-assessment.md。"
 }
