@@ -1,25 +1,29 @@
 import type { FsLike } from "./fs";
 import type { ReadingFile } from "../types";
 
-export interface LoadResult {
-  store: JsonStore;
-  value: ReadingFile | null;
+export interface LoadResult<T = ReadingFile> {
+  store: JsonStore<T>;
+  value: T | null;
   damaged: boolean;
   recoveredFromBackup: boolean;
 }
-export type ReadingValidator = (raw: unknown) => ReadingFile;
+export type ReadingValidator<T = ReadingFile> = (raw: unknown) => T;
 
 /** A failed job never poisons the next job; stores of the same file share a queue. */
 const queues = new WeakMap<object, Map<string, Promise<void>>>();
 
-export class JsonStore {
+export class JsonStore<T = ReadingFile> {
   private lastGood: string | undefined;
-  private live: ReadingFile | null = null;
+  private live: T | null = null;
   damaged = false;
 
-  private constructor(private fs: FsLike, private path: string, private validate: ReadingValidator) {}
+  private constructor(private fs: FsLike, private path: string, private validate: ReadingValidator<T>) {}
 
-  get value(): ReadingFile | null { return this.live; }
+  private error(message: string, cause?: unknown): Error {
+    return new Error(message.replaceAll("reading.json", this.path.slice(this.path.lastIndexOf("/") + 1)), cause === undefined ? undefined : { cause });
+  }
+
+  get value(): T | null { return this.live; }
 
   async matchesDisk(): Promise<boolean> {
     let matches = false;
@@ -38,7 +42,7 @@ export class JsonStore {
     return job;
   }
 
-  static async open(fs: FsLike, path: string, validate: ReadingValidator): Promise<LoadResult> {
+  static async open<T = ReadingFile>(fs: FsLike, path: string, validate: ReadingValidator<T>): Promise<LoadResult<T>> {
     const store = new JsonStore(fs, path, validate);
     await store.enqueue(async () => {
       if (!(await fs.exists(path))) return;
@@ -64,11 +68,11 @@ export class JsonStore {
     });
   }
 
-  reset(fresh: ReadingFile): Promise<void> {
+  reset(fresh: T): Promise<void> {
     return this.enqueue(() => this.replaceDamaged(fresh, JSON.stringify(this.validate(fresh), null, 2)));
   }
 
-  private async replaceDamaged(fresh: ReadingFile, raw: string): Promise<void> {
+  private async replaceDamaged(fresh: T, raw: string): Promise<void> {
     if (await this.fs.exists(this.path)) {
       const old = await this.fs.read(this.path);
       let backup = this.path + ".corrupt";
@@ -79,16 +83,16 @@ export class JsonStore {
     this.damaged = true;
     await this.fs.write(this.path, raw);
     if (await this.fs.read(this.path) !== raw) throw new Error("恢复写入校验失败，损坏文件备份已保留");
-    if (this.live) restoreObject(this.live, fresh);
+    if (this.live) restoreObject(this.live as object, fresh as object);
     else this.live = fresh;
     this.lastGood = raw;
     this.damaged = false;
   }
 
-  mutate(fn: (v: ReadingFile) => void | Promise<void>, afterCommit?: (v: ReadingFile) => Promise<void>): Promise<void> {
+  mutate(fn: (v: T) => void | Promise<void>, afterCommit?: (v: T) => Promise<void>): Promise<void> {
     return this.enqueue(async () => {
-      if (this.damaged) throw new Error("reading.json 已损坏或被外部修改，请显式恢复后再写入");
-      if (!this.live) throw new Error("reading.json 尚未加载");
+      if (this.damaged) throw this.error("reading.json 已损坏或被外部修改，请显式恢复后再写入");
+      if (!this.live) throw this.error("reading.json 尚未加载");
       await this.checkDisk();
       const before = this.validate(JSON.parse(JSON.stringify(this.live)));
       try {
@@ -96,24 +100,24 @@ export class JsonStore {
         this.validate(this.live);
         await this.flush();
       } catch (error) {
-        restoreObject(this.live, before);
+        restoreObject(this.live as object, before as object);
         throw error;
       }
       if (afterCommit) {
         try {
           await afterCommit(this.live);
         } catch (error) {
-          restoreObject(this.live, before);
+          restoreObject(this.live as object, before as object);
           try {
             await this.flush();
           } catch (rollbackError) {
             this.damaged = true;
-            throw new Error("附属文件写入及 reading.json 回滚失败，写入已暂停；恢复副本已保留", { cause: rollbackError });
+            throw this.error("附属文件写入及 reading.json 回滚失败，写入已暂停；恢复副本已保留", rollbackError);
           }
           try {
             await afterCommit(this.live);
           } catch (rollbackError) {
-            throw new Error("reading.json 变更已撤销，但附属文件恢复失败；请检查目录写入权限后重新同步批注", { cause: rollbackError });
+            throw this.error("reading.json 变更已撤销，但附属文件恢复失败；请检查目录写入权限后重新同步批注", rollbackError);
           }
           throw error;
         }
@@ -127,7 +131,7 @@ export class JsonStore {
       if (!exists) return;
     } else if (exists && await this.fs.read(this.path) === this.lastGood) return;
     this.damaged = true;
-    throw new Error("reading.json 与已加载版本不一致，写入已暂停；请重新加载或显式恢复");
+    throw this.error("reading.json 与已加载版本不一致，写入已暂停；请重新加载或显式恢复");
   }
 
   private async flush(): Promise<void> {
@@ -137,11 +141,11 @@ export class JsonStore {
     if (str === this.lastGood) return;
     if (this.lastGood !== undefined && this.lastGood !== str) {
       await this.fs.write(this.path + ".recovery", this.lastGood);
-      if (await this.fs.read(this.path + ".recovery") !== this.lastGood) throw new Error("reading.json 恢复副本校验失败");
+      if (await this.fs.read(this.path + ".recovery") !== this.lastGood) throw this.error("reading.json 恢复副本校验失败");
     }
     try {
       await this.fs.write(this.path, str);
-      if (await this.fs.read(this.path) !== str) throw new Error("reading.json 写入校验失败");
+      if (await this.fs.read(this.path) !== str) throw this.error("reading.json 写入校验失败");
     } catch (error) {
       if (this.lastGood !== undefined) {
         try {
@@ -149,7 +153,7 @@ export class JsonStore {
           if (await this.fs.read(this.path) !== this.lastGood) throw new Error("回滚校验失败");
         } catch {
           this.damaged = true;
-          throw new Error("reading.json 写入及回滚失败，写入已暂停；恢复副本已保留");
+          throw this.error("reading.json 写入及回滚失败，写入已暂停；恢复副本已保留");
         }
       } else {
         this.damaged = await this.fs.exists(this.path);
@@ -159,12 +163,12 @@ export class JsonStore {
     this.lastGood = str;
   }
 
-  static forNew(fs: FsLike, path: string, validate: ReadingValidator, initial: ReadingFile): JsonStore {
+  static forNew<T = ReadingFile>(fs: FsLike, path: string, validate: ReadingValidator<T>, initial: T): JsonStore<T> {
     const store = new JsonStore(fs, path, validate);
     store.live = validate(initial);
     return store;
   }
-  static persistNew(store: JsonStore): Promise<void> { return store.mutate(() => {}); }
+  static persistNew<T>(store: JsonStore<T>): Promise<void> { return store.mutate(() => {}); }
 }
 
 /** Preserve the live root and existing nested records when rolling back. */
@@ -181,8 +185,8 @@ function restoreObject(target: object, source: object): void {
   }
 }
 
-type ParseOutcome = { ok: true; value: ReadingFile } | { ok: false };
-export function tryParse(raw: string, validate: ReadingValidator): ParseOutcome {
+type ParseOutcome<T> = { ok: true; value: T } | { ok: false };
+export function tryParse<T = ReadingFile>(raw: string, validate: ReadingValidator<T>): ParseOutcome<T> {
   try { return { ok: true, value: validate(JSON.parse(raw)) }; }
   catch { return { ok: false }; }
 }
@@ -292,6 +296,7 @@ export function validateReading(raw: unknown): ReadingFile {
     if (a.kind !== undefined && a.kind !== "highlight" && a.kind !== "annotation") throw new Error("reading.json 标记类型无效");
     if (a.color !== undefined && a.color !== "yellow" && a.color !== "green" && a.color !== "blue" && a.color !== "pink" && a.color !== "purple") throw new Error("reading.json 高亮颜色无效");
     if (a.kind === "highlight" && (a.note || a.aiExplanation)) throw new Error("reading.json 纯划线不能包含批注内容");
+    if (a.history !== undefined) validateNoteHistory(a.history, typeof a.note === "string" ? a.note : "", typeof a.aiExplanation === "string" ? a.aiExplanation : undefined);
     optionalString(a.updatedAt, "updatedAt"); optionalString(a.note, "note"); optionalString(a.aiExplanation, "aiExplanation"); optionalString(a.cfi, "annotation.cfi");
     if (a.pdfPage !== undefined) integer(a.pdfPage, "annotation.pdfPage", 1);
     if (a.itemRanges !== undefined) for (const rawRange of list(a.itemRanges, "itemRanges")) {
@@ -303,5 +308,32 @@ export function validateReading(raw: unknown): ReadingFile {
       }
     }
   }
+  if (v.bookNotes !== undefined) {
+    const ids = new Set<string>();
+    for (const item of list(v.bookNotes, "bookNotes")) {
+      const n = requireRecord(item, "bookNote");
+      string(n.id, "bookNote.id"); string(n.text, "bookNote.text"); string(n.createdAt, "bookNote.createdAt");
+      optionalString(n.updatedAt, "bookNote.updatedAt");
+      if (!n.id || ids.has(n.id)) throw new Error("reading.json 书籍想法编号重复");
+      ids.add(n.id);
+      validateNoteHistory(n.history, n.text);
+    }
+  }
   return raw as ReadingFile;
+}
+
+function validateNoteHistory(raw: unknown, current: string, ai?: string): void {
+  const revisions = list(raw, "note.history");
+  if (!revisions.length) throw new Error("reading.json 笔记版本不能为空");
+  const ids = new Set<string>();
+  for (const item of revisions) {
+    const r = requireRecord(item, "note.revision");
+    string(r.id, "revision.id"); string(r.at, "revision.at"); string(r.note, "revision.note");
+    optionalString(r.aiExplanation, "revision.aiExplanation");
+    if (!r.id || ids.has(r.id) || !Number.isFinite(Date.parse(r.at))) throw new Error("reading.json 笔记版本编号或时间无效");
+    if (r.baseline !== undefined && typeof r.baseline !== "boolean") throw new Error("reading.json 笔记版本来源无效");
+    ids.add(r.id);
+  }
+  const last = revisions[revisions.length - 1] as Record<string, unknown>;
+  if (last.note !== current || (last.aiExplanation ?? "") !== (ai ?? "")) throw new Error("reading.json 笔记当前内容与最后版本不一致");
 }

@@ -34,6 +34,16 @@ export function renderAnnotationEntry(a: AnnotationRecord): string {
   ].join("\n");
 }
 
+function renderRevisionHistory(history: import("../types").NoteRevision[] | undefined): string {
+  if (!history || history.length < 2) return "";
+  const blocks = ["", "#### 修改历史", ""];
+  for (const revision of history.slice(0, -1).reverse()) {
+    blocks.push(`##### ${fmtDateTime(revision.at)}${revision.baseline ? " · 接入时的已存内容" : ""}`, "", section("当时的想法", revision.note), "");
+    if (revision.aiExplanation) blocks.push(section("当时收录的 AI 解释", revision.aiExplanation), "");
+  }
+  return blocks.join("\n");
+}
+
 export function renderAnnotationsMd(reading: ReadingFile): string {
   const byChapter = new Map<string, AnnotationRecord[]>();
   for (const a of reading.annotations) {
@@ -46,6 +56,10 @@ export function renderAnnotationsMd(reading: ReadingFile): string {
     .map(([id, ch]) => ({ id, title: ch.title, index: ch.index, chapter: ch }))
     .sort((a, b) => a.index - b.index);
   const blocks: string[] = [`# ${reading.book.title}`, "", "阅读批注与历史记录。历史 AI 评价只供参考，不是标准答案。", ""];
+  if (reading.bookNotes?.length) {
+    blocks.push("## 关于这本书的想法", "");
+    for (const note of reading.bookNotes) blocks.push(`### ${fmtDateTime(note.updatedAt ?? note.createdAt)}`, "", note.text, renderRevisionHistory(note.history), "");
+  }
   for (const ch of chapters) {
     const cfi = new EpubCFI();
     const list = (byChapter.get(ch.id) ?? []).sort((a, b) => {
@@ -56,7 +70,7 @@ export function renderAnnotationsMd(reading: ReadingFile): string {
     if (list.length === 0 && !ch.chapter.questionVersions.length && !chapterNotes(ch.chapter).length) continue;
     blocks.push("", `## ${ch.title}`, "");
     blocks.push(renderChapterNotes(ch.chapter));
-    blocks.push(list.map(renderAnnotationEntry).join("\n\n"));
+    blocks.push(list.map(record => renderAnnotationEntry(record) + renderRevisionHistory(record.history)).join("\n\n"));
     blocks.push("", "---");
   }
   return blocks.join("\n") + "\n";

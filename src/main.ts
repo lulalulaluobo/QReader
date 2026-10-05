@@ -7,6 +7,11 @@ import type { QReaderSettings } from "./settings";
 import { loadAiSettings } from "./ai/providers";
 import { BookCache } from "./core/book-source";
 import { LibraryManager } from "./core/library";
+import { VaultFs } from "./core/fs";
+import { ThinkingManager } from "./core/thinking";
+import { traceSources, traceKey, validateRef } from "./core/thought-data";
+import type { TraceRef, TraceSource } from "./core/thought-data";
+import { isHealthyBook } from "./types";
 import { BookshelfView, VIEW_TYPE_BOOKSHELF } from "./views/bookshelf";
 import { ReaderView, VIEW_TYPE_READER } from "./views/reader";
 import { NotesView, VIEW_TYPE_NOTES, LEGACY_REVIEW_VIEW, LEGACY_ANSWER_VIEW } from "./views/notes";
@@ -31,6 +36,7 @@ export class QReaderPlugin extends Plugin {
   declare settings: QReaderSettings;
   library!: LibraryManager;
   cache!: BookCache;
+  thinking!: ThinkingManager;
   translation = new YoudaoClient();
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<(reason: SettingsChangeReason) => void>();
@@ -52,6 +58,15 @@ export class QReaderPlugin extends Plugin {
       },
       this.cache
     );
+
+    this.thinking = new ThinkingManager(new VaultFs(this.app.vault.adapter), () => this.library.ensureRoot(), ref => this.resolveTraceSource(ref), () => this.notifyChanged());
+    this.registerObsidianProtocolHandler("qreader", params => {
+      void (async () => {
+        await this.library.scan();
+        const ref = validateRef({ bookId: params.book, kind: params.kind, id: params.note, revisionId: params.revision });
+        await this.openTrace(ref);
+      })().catch(error => new Notice(this.errorText(error)));
+    });
 
     this.registerView(VIEW_TYPE_BOOKSHELF, (leaf) => new BookshelfView(leaf, this));
     this.registerView(VIEW_TYPE_READER, (leaf) => new ReaderView(leaf, this));
@@ -206,14 +221,30 @@ export class QReaderPlugin extends Plugin {
     if (triggerImport && view instanceof BookshelfView) view.pickFile();
   }
 
-  async openReader(bookId: string): Promise<void> {
-    await this.activateLeaf(VIEW_TYPE_READER, { bookId });
+  traceSources(currentOnly = false): TraceSource[] {
+    return traceSources(this.library.all().filter(isHealthyBook), currentOnly);
+  }
+  resolveTraceSource(ref: TraceRef): TraceSource | undefined {
+    return this.traceSources().find(source => source.key === traceKey(ref));
+  }
+  async openTrace(ref: TraceRef): Promise<void> {
+    const source = this.resolveTraceSource(ref);
+    if (!source) throw new Error(this.t("原笔记或版本已不可用"));
+    if (ref.kind === "annotation") await this.openReader(ref.bookId, ref.id);
+    else {
+      const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_NOTES, {})) ?? {};
+      await this.activateLeaf(VIEW_TYPE_NOTES, { ...previous, tab: "books", selectedBook: ref.bookId, selectedChapter: null, selectedNote: ref.id, selectedRevision: ref.revisionId });
+    }
+  }
+  async openReader(bookId: string, annotationId?: string): Promise<void> {
+    const leaf = await this.activateLeaf(VIEW_TYPE_READER, { bookId });
+    if (annotationId && leaf.view instanceof ReaderView) await leaf.view.goToAnnotation(annotationId);
   }
 
   async openNotes(bookId?: string, chapterId?: string): Promise<void> {
     if (!bookId && this.app.workspace.getActiveViewOfType(NotesView)) return;
     const previous = this.pageStates.get(this.pageStateKey(VIEW_TYPE_NOTES, {})) ?? {};
-    await this.activateLeaf(VIEW_TYPE_NOTES, bookId ? { ...previous, selectedBook: bookId, selectedChapter: chapterId ?? null } : previous);
+    await this.activateLeaf(VIEW_TYPE_NOTES, bookId ? { ...previous, tab: "books", selectedBook: bookId, selectedChapter: chapterId ?? null, selectedNote: null, selectedRevision: null } : previous);
   }
 
   rememberPageState(viewType: string, state: Record<string, unknown>): void {

@@ -54,6 +54,22 @@ export interface PdfItemRange {
   rects?: { x: number; y: number; width: number; height: number }[];
 }
 
+export interface NoteRevision {
+  id: string;
+  at: string;
+  note: string;
+  aiExplanation?: string;
+  baseline?: boolean; // Existing text, not a reconstruction of earlier drafts.
+}
+
+export interface BookNote {
+  id: string;
+  text: string;
+  createdAt: string;
+  updatedAt?: string;
+  history: NoteRevision[];
+}
+
 export interface AnnotationRecord {
   id: string;
   chapterId: string;
@@ -61,6 +77,7 @@ export interface AnnotationRecord {
   kind?: "highlight" | "annotation"; // Missing on V1 records means annotation.
   color?: HighlightColor; // Missing on existing records means yellow.
   updatedAt?: string;
+  history?: NoteRevision[];
   text: string; // quoted original text
   note?: string; // 我的理解 (may be empty)
   aiExplanation?: string; // included AI explanation (may be empty)
@@ -113,6 +130,7 @@ export interface ReadingFile {
   progress: ReadingProgress;
   chapters: Record<string, ChapterState>;
   annotations: AnnotationRecord[];
+  bookNotes?: BookNote[];
   importedAt: string;
 }
 

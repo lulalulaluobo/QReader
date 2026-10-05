@@ -160,6 +160,14 @@ export class ReaderView extends ItemView {
     if (this.opened && request === this.stateRequest && this.entry?.id !== previousBookId) result.history = true;
   }
 
+  async goToAnnotation(id: string): Promise<void> {
+    const record = this.entry?.reading.annotations.find(record => record.id === id);
+    const engine = this.engine;
+    if (!record || !engine) throw new Error(this.plugin.t("原笔记或版本已不可用"));
+    await engine.goToAnnotation(record);
+    if (this.engine === engine) { this.closePanels(); engine.clearSelection(); }
+  }
+
   private async releaseSource(entry: HealthyBookEntry): Promise<void> {
     const usedElsewhere = this.app.workspace.getLeavesOfType(VIEW_TYPE_READER).some((leaf) =>
       leaf.view instanceof ReaderView && leaf.view !== this && leaf.view.entry?.dir === entry.dir

@@ -3,7 +3,8 @@ import { Book } from "epubjs";
 import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { AnnotationRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, HealthyBookEntry, ReadingFile, TocNode } from "../types";
 import { isHealthyBook, pdfChapterId } from "../types";
-import { sanitizeFolderName } from "../util";
+import { genId, sanitizeFolderName } from "../util";
+import { appendAnnotationRevision, revision } from "./thought-data";
 import { JsonStore, validateReading } from "./json-store";
 import { VaultFs } from "./fs";
 import { renderAnnotationsMd } from "./md-notes";
@@ -289,6 +290,7 @@ export class LibraryManager {
     const healthy = this.healthy(entry);
     if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不支持文字批注");
     const record: AnnotationRecord = { ...draft, createdAt: new Date().toISOString() };
+    if (record.note || record.aiExplanation) record.history = [revision(record.note ?? "", record.aiExplanation)];
     await healthy.store.mutate((value) => { value.annotations.push(record); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged();
     return record;
@@ -298,7 +300,9 @@ export class LibraryManager {
     await healthy.store.mutate((value) => {
       const record = value.annotations.find((annotation) => annotation.id === id);
       if (!record) throw new Error("批注不存在");
+      const before = { ...record };
       Object.assign(record, patch, { updatedAt: new Date().toISOString() });
+      appendAnnotationRevision(record, before);
     }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged();
   }
@@ -309,6 +313,9 @@ export class LibraryManager {
       if (!record) throw new Error("批注不存在");
       delete record.note;
       delete record.aiExplanation;
+      // Retain only a fresh empty revision: earlier references must not resolve
+      // to a reused legacy revision after personal content is explicitly cleared.
+      record.history = [revision("")];
       record.kind = "highlight";
       record.updatedAt = new Date().toISOString();
     }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
@@ -319,6 +326,34 @@ export class LibraryManager {
     await healthy.store.mutate((value) => { value.annotations = value.annotations.filter((annotation) => annotation.id !== id); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
     this.deps.notifyChanged();
   }
+  async saveBookNote(entry: BookEntry, text: string, id?: string): Promise<string> {
+    const healthy = this.healthy(entry);
+    if (!text.trim() || text.length > 100000) throw new Error("请记录一点想法，长度不超过十万字");
+    const nextId = id ?? genId("book-note");
+    await healthy.store.mutate(value => {
+      value.bookNotes ??= [];
+      const note = id ? value.bookNotes.find(note => note.id === id) : undefined;
+      if (id && !note) throw new Error("书籍想法已不存在，请重新打开");
+      if (note) {
+        if (note.text === text) return;
+        const next = revision(text);
+        note.text = text; note.updatedAt = next.at; note.history.push(next);
+      } else {
+        const next = revision(text);
+        value.bookNotes.push({ id: nextId, text, createdAt: next.at, history: [next] });
+      }
+    }, value => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
+    return nextId;
+  }
+
+  async deleteBookNote(entry: BookEntry, id: string): Promise<void> {
+    const healthy = this.healthy(entry);
+    await healthy.store.mutate(value => { value.bookNotes = (value.bookNotes ?? []).filter(note => note.id !== id); },
+      value => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    this.deps.notifyChanged();
+  }
+
   async syncAnnotationsMd(entry: BookEntry): Promise<void> {
     const healthy = this.healthy(entry);
     await healthy.store.mutate(() => {}, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
