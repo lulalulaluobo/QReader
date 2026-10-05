@@ -188,7 +188,7 @@ export class QReaderSettingTab extends PluginSettingTab {
           });
         });
       new Setting(aiContainer).setName(this.plugin.t("测试连接"))
-        .setDesc(this.plugin.t("章节正文、选文或回答会按需发送到所选接口，用于三问、解释、整句翻译和反馈。连接测试只发送探针。"))
+        .setDesc(this.plugin.t("选文与相关上下文会按需发送到所选接口，用于解读和整句翻译。连接测试只发送探针。"))
         .addButton((button) => button.setButtonText(this.testing ? this.plugin.t("正在测试……") : this.plugin.t("测试连接"))
           .setDisabled(this.testing).onClick(async () => {
             if (this.testing) return;

@@ -1,5 +1,6 @@
 /** Chinese source messages are stable keys; numbered placeholders preserve user text. */
 export const EN = {
+  "选文与相关上下文会按需发送到所选接口，用于解读和整句翻译。连接测试只发送探针。": "Selected text and relevant context are sent to the chosen endpoint when you request an explanation or sentence translation. Connection tests send only a probe.",
   "按书籍和章节回看自己的批注与阅读记录。": "Revisit your annotations and reading records by book and chapter.",
   "历史阅读记录": "Earlier reading records",
   "历史三问与回答": "Archived questions and answers",
