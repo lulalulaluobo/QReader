@@ -246,3 +246,14 @@
 - 从当前可见位置按短句朗读，自动跨章节/页，临时标色不写入批注。EPUB 用 CFI 定位并在 resize/relocated 保留当前句子，PDF TextLayer 重绘恢复标色；旧阅读页销毁、停止、手动翻页和迟到请求均不会重启播放。保留每个 Window 单一播放器所有权。
 - build 与 speech/translation/notes/documents 测试通过；原生隔离 Obsidian 实际系统播放、requestUrl 在线合成/解码、HTMLAudio 暂停续播、语速持久化、六格式及 56 组双语/主题/七宽度布局通过。17 本原书与旧个人内容完整，隔离 Obsidian 已退出。手机为桌面视口模拟，Android 尚无真机验收；首版不保证锁屏后台连续播放。
 - 双语 README、规格和发布说明同步至 1.2.2。源码 `830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba`、main 与注解标签 1.2.2 已原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`96f17a2a9c14c0b697ebfa441a6353d5a139ac4349acbbb1efc3f7bf80e9561d`。详情见 .trellis/tasks/10-05-reader-audio/verification.md。
+
+
+## 会话 18：从选中文字和已有标记起读，发布 1.2.3
+
+**日期**：2026-10-05；**分支**：main；**状态**：已完成。
+
+- 用户要求选中文字后直接从这一句开始朗读，不只从视口顶端起读。主排新增播放三角，保持六个纯图标、单行 44px；底部播放和先打开听书栏后播放优先采用选区，已有划线/批注也能起读。
+- EPUB 用选区起点 CFI，PDF 用文字项与字符偏移；从包含起点的完整短句开始继续往后读。同页重复句、同项多句、跨文字项都不依赖字符串匹配。新起点替换旧批次/暂停句，取消代次拦截迟到原文/在线语音；停止、导航、换书清掉临时起点。
+- build、speech/translation/notes/documents 和 diff 检查通过；原生隔离 Obsidian 验证实际系统/在线选区播放、底部路由、已有标记、PDF TextLayer、六格式、56 组双语/主题/七宽度布局。17 本原书和生词字节、旧历史/批注/整书想法、笔记正文保持完整，只排除既有中英文最近阅读时间的正常更新。
+- 隔离 Obsidian 正常退出、终端无未处理异常。Android 尚无真机验收，手机为视口模拟，不保证锁屏后台。双语 README 与版本更新完成。
+- 源码 `c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc`、main 与注解标签 1.2.3 已原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`945772655ee19fc100f3d43449c0bc5051a705042a29a4f1ac7c85d0a1e29cfa`。详情见 .trellis/tasks/10-05-selection-audio/verification.md。

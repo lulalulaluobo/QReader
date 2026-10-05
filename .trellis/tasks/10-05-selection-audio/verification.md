@@ -21,6 +21,7 @@
 - EPUB、PDF、FB2、MOBI、AZW3 起点与原文对应；图片 CBZ 无文字。2 语言 × 4 主题 × 7 宽度共 56 组验证六图标主排单行、无可见文字、ARIA、44px、无横向溢出。
 - 比较 17 本原书、生词文件的字节，历史章节/问题/回答/批注/整书想法，及笔记文档正文；仅排除原有中文/英文“最近阅读”时间行的正常更新。
 - 原生验收脚本：`tmp/release-112-smoke/audio-123-selection.mjs`；截图：`tmp/release-112-smoke/tts-123-selection-mobile.png`。手机为桌面视口模拟，Android 尚未真机验收；不保证锁屏/后台连续播放。
+- 最终脚本完整通过，`preserved: true`；隔离 Obsidian 正常退出（exit 0），终端无 Uncaught/unhandled/TypeError/ReferenceError。
 
 ## 发布包
 
@@ -33,4 +34,8 @@ ZIP 精确三文件，无个人数据、密钥、书籍或音频缓存。逐项�
 | styles.css | 39112 | 8ec12a6efc12663fd019b2e871840429e8952f40ff1ac9f5e22bf9526effa99b |
 | QReader-1.2.3.zip | 2943745 | 945772655ee19fc100f3d43449c0bc5051a705042a29a4f1ac7c85d0a1e29cfa |
 
-远程发布回执待发布后补充。
+## 远程发布回执
+
+源码提交 `c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc`，main 与注解标签 1.2.3 已原子推送；公开远程 main 和剥离后的标签均对应此提交。
+
+[正式 Release 1.2.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.3) 已发布为 latest，非草稿、非预发布。四个公开附件均 HTTP 200，下载字节、SHA-256 与本地及 GitHub digest 一致；ZIP 精确三文件，逐项字节一致。后续日志提交仅改 Trellis 文档，不更换源码标签和附件。

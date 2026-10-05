@@ -2,9 +2,12 @@
   "id": "selection-audio",
   "name": "selection-audio",
   "title": "从选中文字位置开始朗读",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-05",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-05",
+  "sourceCommit": "c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc",
+  "release": "https://github.com/lulalulaluobo/QReader/releases/tag/1.2.3"
 }

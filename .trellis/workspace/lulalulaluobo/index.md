@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 17
+- **Total Sessions**: 18
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~248 | Active |
+| `journal-1.md` | ~259 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 18 | 2026-10-05 | 从选中文字和已有标记起读，发布 1.2.3 | `c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc` | `main` |
 | 17 | 2026-10-05 | 阅读页听书、正文跟随与简洁播放栏，发布 1.2.2 | `830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba` | `main` |
 | 16 | 2026-10-05 | 撤下思考线，汇总每书 Markdown 笔记，发布 1.2.1 | `aa7622dc0c171b53b0275ee154cdfdddec973b66` | `main` |
 | 15 | 2026-10-05 | 可追溯的阅读思考与跨书关联，发布 1.2.0 | `804249d89e4810123865b9fa3f5a7db22d73d41d` | `main` |
