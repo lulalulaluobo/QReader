@@ -77,7 +77,8 @@ export interface ReaderEngine {
   setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void;
   noteVocabularyLookup(word: string, paragraphId?: string): void;
   flushVocabulary(): void;
-  speechText(unit?: number): Promise<SpeechBatch>;
+  /** An explicit source anchor takes precedence over the visible page on the first batch. */
+  speechText(unit?: number, from?: SpeechSegment): Promise<SpeechBatch>;
   followSpeech(segment: SpeechSegment): Promise<void>;
   clearSpeech(): void;
   updateChapters?(chapters: ChapterState[]): void;

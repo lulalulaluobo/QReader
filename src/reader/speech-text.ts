@@ -1,6 +1,28 @@
 import { EpubCFI } from "epubjs";
 import type { SpeechSegment } from "./engine";
 
+/** Keep PDF item offsets even when a chosen sentence shares an item or spans several. */
+export function pdfSpeechSegments(items: readonly { str: string; hasEOL?: boolean }[], page: number,
+  first = 0, from?: { item: number; start: number }): SpeechSegment[] {
+  let text = "";
+  const offsets: { item: number; start: number; end: number }[] = [];
+  items.forEach((item, index) => {
+    if (index < (from ? 0 : first) || !item.str.trim()) return;
+    const start = text.length; text += item.str;
+    offsets.push({ item: index, start, end: text.length });
+    text += item.hasEOL ? "\n" : " ";
+  });
+  const segments: SpeechSegment[] = [];
+  for (const slice of sentenceSlices(text)) {
+    const itemRanges = offsets.filter((o) => o.end > slice.start && o.start < slice.end)
+      .map((o) => ({ item: o.item, start: Math.max(0, slice.start - o.start), end: Math.min(o.end, slice.end) - o.start }));
+    const last = itemRanges.at(-1);
+    if (from && (!last || last.item < from.item || last.item === from.item && last.end <= from.start)) continue;
+    segments.push({ text: slice.text, pdfPage: page, itemRanges });
+  }
+  return segments;
+}
+
 /** Offset-preserving short sentences: useful for both audio requests and source anchors. */
 export function sentenceSlices(text: string, limit = 180): { start: number; end: number; text: string }[] {
   const result: { start: number; end: number; text: string }[] = [];

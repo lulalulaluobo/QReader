@@ -24,6 +24,8 @@ export const EN = {
   "已暂停": "Paused",
   "朗读结束": "Finished reading",
   "播放朗读": "Play narration",
+  "从这里朗读": "Read from here",
+  "选文无法定位，请重新选择文字。": "Cannot locate this passage. Select the text again.",
   "暂停朗读": "Pause narration",
   "停止朗读": "Stop narration",
   "在线语音服务暂不可用，请稍后重试或切换系统语音。": "Online speech is temporarily unavailable. Try again later or choose system speech.",

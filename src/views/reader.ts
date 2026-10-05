@@ -81,6 +81,7 @@ export class ReaderView extends ItemView {
   private speech: SpeechPlayer | null = null;
   private speechControlsOpen = false;
   private speechRatesOpen = false;
+  private speechStart: EngineSelection | undefined;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -853,6 +854,7 @@ export class ReaderView extends ItemView {
   private stopSpeech(): void {
     this.speechControlsOpen = false;
     this.speechRatesOpen = false;
+    this.speechStart = undefined;
     this.speech?.stop(); this.speech = null;
     this.root?.querySelector(".qr-speech-bar")?.remove();
   }
@@ -866,11 +868,23 @@ export class ReaderView extends ItemView {
 
   private openSpeechPlayer(): void {
     if (!this.speechPlayer()) return;
+    this.speechStart = this.markSelection() ?? this.speechStart;
     this.closePanels();
     this.speechControlsOpen = true;
     if (!this.chromeHidden) this.toggleChrome();
     this.renderSpeechControls();
     this.root.querySelector<HTMLElement>(".qr-speech-play")?.focus({ preventScroll: true });
+  }
+
+  private playSpeech(from = this.markSelection() ?? this.speechStart): void {
+    const player = this.speechPlayer();
+    if (!player) return;
+    this.speechStart = undefined;
+    this.closePanels();
+    this.engine?.clearSelection();
+    this.speechControlsOpen = true;
+    if (!this.chromeHidden) this.toggleChrome();
+    player.play(from);
   }
 
   private async saveSpeechSettings(): Promise<void> {
@@ -951,11 +965,16 @@ export class ReaderView extends ItemView {
     bar.inert = !!this.root.querySelector(".qr-mask.qr-show");
     const playing = state === "playing" || state === "loading";
     const play = el("button", "qr-icon-btn qr-speech-play");
-    play.setAttribute("aria-label", this.plugin.t(playing ? "暂停朗读" : "播放朗读"));
+    play.setAttribute("aria-label", this.plugin.t(this.markSelection() || this.speechStart ? "从这里朗读" : playing ? "暂停朗读" : "播放朗读"));
     play.title = labels[state];
     play.toggleClass("qr-speech-loading", state === "loading");
     setIcon(play, state === "loading" ? "loader-circle" : playing ? "pause" : "play");
-    play.onclick = () => { this.translationAudio?.pause(); if (playing) player.pause(); else player.play(); };
+    play.onclick = () => {
+      const from = this.markSelection() ?? this.speechStart;
+      if (from) this.playSpeech(from);
+      else if (playing) player.pause();
+      else this.playSpeech();
+    };
     const speed = el("button", "qr-icon-btn qr-speech-rate", `${this.plugin.settings.speech.rate}×`);
     speed.setAttribute("aria-label", this.plugin.t("语速")); speed.title = this.plugin.t("语速");
     speed.setAttribute("aria-expanded", String(this.speechRatesOpen));
@@ -968,7 +987,7 @@ export class ReaderView extends ItemView {
     setIcon(settings, "sliders-horizontal"); settings.onclick = () => this.openSpeechSettings();
     const stop = el("button", "qr-icon-btn qr-speech-stop"); stop.setAttribute("aria-label", this.plugin.t("停止朗读"));
     stop.title = this.plugin.t("停止朗读"); setIcon(stop, "square");
-    stop.onclick = () => { this.speechControlsOpen = this.speechRatesOpen = false; player.stop(); };
+    stop.onclick = () => this.stopSpeech();
     bar.append(play, speed, settings, stop);
     if (this.speechRatesOpen) {
       const rates = el("div", "qr-speech-rates"); rates.setAttribute("role", "group"); rates.setAttribute("aria-label", this.plugin.t("语速"));
@@ -1257,6 +1276,7 @@ export class ReaderView extends ItemView {
           return selected?.item === range.item && selected.start === range.start && selected.end === range.end;
         })
     );
+    this.speechStart = undefined;
     this.closePanels();
     this.markTarget = { record, selection, anchor: selection.anchor, color: record?.color ?? (record ? "yellow" : this.plugin.settings.highlightColor) };
     this.renderMarkMenu();
@@ -1266,6 +1286,8 @@ export class ReaderView extends ItemView {
     if (!this.entry || this.entry.reading.book.format === "cbz" || this.draft || this.annotationSaving || this.contentHost.inert) return;
     const record = this.entry.reading.annotations.find((record) => record.id === id);
     if (!record) return;
+    this.speech?.pause();
+    this.speechStart = undefined;
     this.closePanels();
     this.markTarget = { record, anchor, color: record.color ?? "yellow" };
     this.renderMarkMenu();
@@ -1278,6 +1300,14 @@ export class ReaderView extends ItemView {
     this.markMenu.empty();
     this.markMenu.addClass("qr-hidden");
     if (clearSelection) this.engine?.clearSelection();
+  }
+
+  private markSelection(target = this.markTarget): EngineSelection | undefined {
+    const record = target?.record;
+    return target?.selection ?? (record ? {
+      text: record.text, chapterId: record.chapterId, cfi: record.cfi,
+      pdfPage: record.pdfPage, itemRanges: record.itemRanges, sortKey: record.sortKey,
+    } : undefined);
   }
 
   private renderMarkMenu(): void {
@@ -1302,13 +1332,12 @@ export class ReaderView extends ItemView {
       return button;
     };
     const record = target.record;
-    const selection = target.selection ?? (record ? {
-      text: record.text, chapterId: record.chapterId, cfi: record.cfi,
-      pdfPage: record.pdfPage, itemRanges: record.itemRanges, sortKey: record.sortKey,
-    } : undefined);
+    const selection = this.markSelection(target);
     if (selection) {
       addAction(this.plugin.t("复制"), "copy", () => void this.copySelection(selection, target));
       addAction(this.plugin.t(singleWord(selection.text) ? "查词" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId));
+      const play = addAction(this.plugin.t("从这里朗读"), "play", () => this.playSpeech(selection));
+      play.dataset.action = "speech-selection";
     }
     if (record || target.selection) this.appendHighlightControl(menu, target);
     if (record) {
@@ -1353,6 +1382,7 @@ export class ReaderView extends ItemView {
       menu.appendChild(actions);
     }
     this.positionMarkMenu(target);
+    this.renderSpeechControls();
   }
 
   private positionMarkMenu(target: MarkTarget): void {

@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.2) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.3](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.3) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -21,13 +21,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.2.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.3.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
-### 听书（1.2.2）
+### 听书（1.2.3）
 
 阅读页点击耳机图标，显示一条紧凑控制栏，只有播放/暂停、语速、声音设置和停止四项；默认不遮罩正文。点击播放后从当前可见句子开始，正在朗读的短句临时标色；下一句不在当前页时自动翻页或滚动，读完后继续下一部分。点语速选择倍速，点设置才展开语音方式和声音；停止后控制栏收起。手动翻页、跳章、换书或离开阅读页会停止朗读。
+
+想指定起读位置时，选中文字，点击选文菜单中的播放三角图标。从选区起点所在的完整短句开始，继续顺序朗读；已有划线和批注也可以从原文位置起读。选文菜单打开时，底部播放键同样优先使用选区；正在播放或暂停时重新选文播放，会切换到新位置，不会回到页首。
 
 桌面默认使用网页系统语音；Android 的 Obsidian WebView 不支持该接口，自动使用 **Bing 在线语音**，直接在 Obsidian 内播放，无需个人 API 密钥。控制栏可点选 0.5–2 倍语速，声音设置中可切换服务及中英文声音。系统模式更改语速后从下一句生效；暂停续听会重新读当前短句，在线模式则从音频暂停点继续。
 
@@ -109,13 +111,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.2.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.3.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
-### Listening (1.2.2)
+### Listening (1.2.3)
 
 Select the headphones icon to reveal a compact bar with four controls: play/pause, speed, voice settings and stop. It leaves the book unobscured. Narration starts at your current visible sentence, temporarily highlights the passage and follows it across pages or scroll positions, continuing into the next part of the book. Press speed to choose a rate; open settings only when you want to change the speech service or voice. Stopping hides the bar. Manual page/chapter navigation, changing books or leaving the reader stops playback.
+
+To choose a starting point, select text and press the play triangle in the selection menu. Narration starts with the complete short sentence containing the selection's beginning and continues forward. Existing highlights and annotations can also start narration at their source. The bottom play button uses the selection while its menu is open. Selecting a new passage while playing or paused replaces the old position instead of restarting at the top of the page.
 
 Desktop defaults to Web Speech system voices. Android's Obsidian WebView does not support that API, so it automatically uses **Bing online speech**, playing inside Obsidian with no personal API key. Choose 0.5–2× speed from the bar, and a service or Chinese/English voice in voice settings. System speed changes apply from the next sentence; resuming repeats the current short sentence. Online audio resumes at its paused position.
 

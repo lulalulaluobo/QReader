@@ -6,7 +6,7 @@ import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import { pdfChapterId } from "../types";
 import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment } from "./engine";
-import { sentenceSlices } from "./speech-text";
+import { pdfSpeechSegments } from "./speech-text";
 import { speechHighlight } from "./speech-highlight";
 import { HIGHLIGHT_COLORS } from "../settings";
 import { WordLayer } from "./word-layer";
@@ -406,14 +406,21 @@ export class PdfEngine implements ReaderEngine {
     this.selectionSignature = "";
   }
 
-  async speechText(unit?: number): Promise<SpeechBatch> {
+  async speechText(unit?: number, from?: SpeechSegment): Promise<SpeechBatch> {
     if (this.destroyed) return { segments: [], next: null };
-    const pageNumber = unit ?? this.readLocation().page;
+    const selected = unit === undefined ? from : undefined;
+    const pageNumber = unit ?? selected?.pdfPage ?? this.readLocation().page;
+    const start = selected?.itemRanges?.slice().sort((a, b) => a.item - b.item || a.start - b.start)[0];
+    if (selected && (!selected.pdfPage || !Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > this.doc.numPages || !start)) {
+      throw new Error("选文无法定位，请重新选择文字。");
+    }
     const page = await this.doc.getPage(pageNumber);
     const content = await page.getTextContent();
     const items = content.items.filter((item): item is TextItem => "str" in item);
+    if (start && (!Number.isInteger(start.item) || !Number.isInteger(start.start) || start.start < 0 ||
+      !items[start.item] || start.start >= items[start.item].str.length)) throw new Error("选文无法定位，请重新选择文字。");
     let first = 0;
-    if (unit === undefined && this.scroller) {
+    if (unit === undefined && !selected && this.scroller) {
       const viewport = this.scroller.getBoundingClientRect();
       const spans = this.wrappers.get(pageNumber)?.querySelectorAll<HTMLElement>(".qr-pdf-text [data-i]");
       const visible = Array.from(spans ?? []).find((span) => {
@@ -421,21 +428,7 @@ export class PdfEngine implements ReaderEngine {
       });
       first = Number(visible?.dataset.i ?? 0);
     }
-    const segments: SpeechSegment[] = [];
-    // PDF text items retain their own glyph geometry, even when a sentence spans several items.
-    let text = "";
-    const offsets: { item: number; start: number; end: number }[] = [];
-    items.forEach((item, index) => {
-      if (index < first || !item.str.trim()) return;
-      const start = text.length; text += item.str;
-      offsets.push({ item: index, start, end: text.length });
-      text += item.hasEOL ? "\n" : " ";
-    });
-    for (const slice of sentenceSlices(text)) {
-      const itemRanges = offsets.filter((o) => o.end > slice.start && o.start < slice.end)
-        .map((o) => ({ item: o.item, start: Math.max(0, slice.start - o.start), end: Math.min(o.end, slice.end) - o.start }));
-      segments.push({ text: slice.text, pdfPage: pageNumber, itemRanges });
-    }
+    const segments = pdfSpeechSegments(items, pageNumber, first, start);
     return { segments, next: pageNumber < this.doc.numPages ? pageNumber + 1 : null };
   }
   async followSpeech(segment: SpeechSegment): Promise<void> {

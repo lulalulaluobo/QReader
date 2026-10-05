@@ -77,6 +77,7 @@ export class SpeechPlayer {
   error = "";
   private generation = 0;
   private batch: SpeechBatch | null = null;
+  private from: SpeechSegment | undefined;
   private index = 0;
   private audio: HTMLAudioElement;
   private utterance: SpeechSynthesisUtterance | null = null;
@@ -98,7 +99,8 @@ export class SpeechPlayer {
     return s.provider === "auto" ? this.win.speechSynthesis ? "system" : "bing" : s.provider;
   }
   private setState(state: SpeechState): void { this.state = state; this.changed(); }
-  play(): void {
+  play(from?: SpeechSegment): void {
+    if (from) { this.stop(); this.from = from; }
     if (this.state === "loading" || this.state === "playing") return;
     const previous = owners.get(this.win);
     if (previous && previous !== this) previous.stop();
@@ -140,7 +142,7 @@ export class SpeechPlayer {
     this.utterance = null; this.resume = null;
     this.prefetched = null;
     this.releaseAudio(); this.engine.clearSpeech();
-    this.batch = null; this.index = 0; this.current = null; this.error = "";
+    this.batch = null; this.from = undefined; this.index = 0; this.current = null; this.error = "";
     this.setState("idle");
   }
   updateRate(): void { this.audio.playbackRate = this.settings().rate; }
@@ -159,9 +161,10 @@ export class SpeechPlayer {
   }
   private async run(token: number): Promise<void> {
     if (!this.batch) {
-      const batch = await this.engine.speechText();
+      const batch = await this.engine.speechText(undefined, this.from);
       if (token !== this.generation) return;
       this.batch = batch;
+      this.from = undefined;
     }
     if (!await this.ready(token)) return;
     let spoken = false;

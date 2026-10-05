@@ -574,10 +574,13 @@ export class EpubEngine implements ReaderEngine {
     after.setStart(range.endContainer, range.endOffset);
     return { before: before.toString().slice(-300), after: after.toString().slice(0, 300) };
   }
-  async speechText(unit?: number): Promise<SpeechBatch> {
+  async speechText(unit?: number, from?: SpeechSegment): Promise<SpeechBatch> {
     if (this.destroyed || this.format === "cbz") return { segments: [], next: null };
+    if (unit === undefined && from && !from.cfi) throw new Error("选文无法定位，请重新选择文字。");
+    const selected = unit === undefined && from?.cfi ? new EpubCFI(from.cfi) : null;
+    selected?.collapse(true);
     const fallback = this.position.cfi ?? this.rendition?.location?.start?.cfi;
-    const cfi = unit === undefined && fallback ? this.visibleCfi(fallback) : undefined;
+    const cfi = selected?.toString() ?? (unit === undefined && fallback ? this.visibleCfi(fallback) : undefined);
     const index = unit ?? (cfi ? new EpubCFI(cfi).spinePos : 0);
     const section = this.book.spine.get(index);
     if (!section) return { segments: [], next: null };

@@ -1,13 +1,13 @@
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { createRequire } from 'node:module';
-const bundle = await build({ stdin: { contents: "export * from './src/reader/speech'; export {sentenceSlices} from './src/reader/speech-text';", resolveDir: process.cwd() },
+const bundle = await build({ stdin: { contents: "export * from './src/reader/speech'; export {sentenceSlices,pdfSpeechSegments} from './src/reader/speech-text';", resolveDir: process.cwd() },
   bundle: true, write: false, format: 'cjs', platform: 'node', plugins: [{ name: 'obsidian-test', setup(b) {
     b.onResolve({ filter: /^obsidian$/ }, () => ({ path: 'obsidian', namespace: 'test' }));
     b.onLoad({ filter: /.*/, namespace: 'test' }, () => ({ contents: 'export const requestUrl = (o) => globalThis.qrSpeechRequest(o);', loader: 'js' }));
   } }] });
 const mod = {exports:{}}; new Function('exports', 'require', 'module', bundle.outputFiles[0].text)(mod.exports, createRequire(import.meta.url), mod);
-const { SpeechPlayer, BingSpeech, loadSpeechSettings, sentenceSlices } = mod.exports;
+const { SpeechPlayer, BingSpeech, loadSpeechSettings, sentenceSlices, pdfSpeechSegments } = mod.exports;
 assert.deepEqual(loadSpeechSettings(undefined), { provider: 'auto', rate: 1, voice: 'auto' });
 assert.equal(loadSpeechSettings({rate: Infinity}).rate, 1);
 assert.equal(loadSpeechSettings({rate: 3}).rate, 2);
@@ -18,6 +18,19 @@ assert.deepEqual(sentenceSlices('中文第一句。第二句！第三句？').ma
 for (const s of sentenceSlices('word '.repeat(100) + '😀'.repeat(150))) {
   assert.ok(s.text.length <= 180); assert.ok(!/^[\uDC00-\uDFFF]|[\uD800-\uDBFF]$/.test(s.text));
 }
+// Source offsets, not text matching: the second identical sentence in a single PDF item.
+const repeated = 'First. Chosen sentence. Middle. Chosen sentence. Last.';
+const chosenOffset = repeated.lastIndexOf('Chosen') + 3;
+const pdfChosen = pdfSpeechSegments([{str: repeated, hasEOL: true}], 2, 0, {item:0,start:chosenOffset});
+assert.deepEqual(pdfChosen.map(s=>s.text), ['Chosen sentence.', 'Last.']);
+assert.equal(pdfChosen[0].pdfPage,2);
+assert.equal(pdfChosen[0].itemRanges[0].start,repeated.lastIndexOf('Chosen'));
+assert.equal(pdfChosen[0].itemRanges[0].end,repeated.indexOf(' Last.'));
+const spanning = pdfSpeechSegments([{str:'Before.'},{str:'The chosen'},{str:'sentence continues.'},{str:'After.'}],3,0,{item:2,start:4});
+assert.deepEqual(spanning.map(s=>s.text),['The chosen sentence continues.','After.']);
+assert.deepEqual(spanning[0].itemRanges.map(r=>r.item),[1,2]);
+assert.deepEqual(pdfSpeechSegments([{str:'第一句。第二句。第三句。'}],1,0,{item:0,start:6}).map(s=>s.text),['第二句。','第三句。']);
+assert.deepEqual(pdfSpeechSegments([{str:'First.'},{str:'Second.'}],1,1).map(s=>s.text),['Second.']);
 const audioBuffer = () => { const bytes = new Uint8Array(200); bytes[0] = 0xff; bytes[1] = 0xf3; return bytes.buffer; };
 let requests = [];
 const auth = () => ({status:200,text:'var params_AbusePreventionHelper = [12345,"fixture-token",3600000];'});
@@ -96,4 +109,43 @@ let releaseSource;
 const slowEngine = engineMock(); slowEngine.speechText = () => new Promise(r => {releaseSource = () => r({segments:[{text:'late'}],next:null});});
 const slow = new SpeechPlayer(slowEngine,()=>settings,windowMock(),()=>{}); slow.play(); slow.pause(); slow.stop(); releaseSource(); await tick();
 assert.equal(slow.state,'idle'); assert.equal(slowEngine.follows.length,0);
-console.log('Speech: provider protocol, bounded sentences, ownership, pause/resume, cross-page playback and stale-response cleanup passed.');
+// Selecting a new anchor replaces playing/paused narration and then continues to the next unit.
+const seekWin=windowMock(true), seekEngine=engineMock(), starts=[];
+seekEngine.speechText=async (unit,from)=>{
+  starts.push({unit,from});
+  return unit===undefined ? {segments:[{text:from?.text??'Top.',cfi:from?.cfi},{text:'Following.'}],next:2}
+    : {segments:[{text:'Next chapter.'}],next:null};
+};
+const seek=new SpeechPlayer(seekEngine,()=>settings,seekWin,()=>{});
+seek.play(); await wait(()=>seek.state==='playing');
+seek.play({text:'Chosen.',cfi:'chosen-location'}); await wait(()=>seek.state==='playing');
+assert.equal(seek.current.text,'Chosen.'); assert.equal(starts.at(-1).from.cfi,'chosen-location');
+seek.pause(); seek.play(); await wait(()=>seek.state==='playing'); assert.equal(seek.current.text,'Chosen.');
+seekWin.speechSynthesis.active.onend(); await wait(()=>seek.current.text==='Following.');
+seekWin.speechSynthesis.active.onend(); await wait(()=>seek.current.text==='Next chapter.');
+assert.deepEqual(starts.at(-1),{unit:2,from:undefined});
+seek.pause();seek.play({text:'New selection.',cfi:'new-location'}); await wait(()=>seek.state==='playing');
+assert.equal(seek.current.text,'New selection.'); seek.stop();seek.play(); await wait(()=>seek.state==='playing');
+assert.equal(seek.current.text,'Top.','stop discards the chosen anchor');seek.stop();
+// A prior source load arriving after a new selection never takes back the playback position.
+const deferredWin=windowMock(true), deferredEngine=engineMock(); let oldSource;
+deferredEngine.speechText=(_unit,from)=>from ? Promise.resolve({segments:[from],next:null})
+  : new Promise(r=>{oldSource=()=>r({segments:[{text:'Obsolete top.'}],next:null});});
+const deferred=new SpeechPlayer(deferredEngine,()=>settings,deferredWin,()=>{});
+deferred.play();deferred.play({text:'Desired sentence.',cfi:'desired'});await wait(()=>deferred.state==='playing');
+oldSource();await tick();assert.deepEqual(deferredEngine.follows,['Desired sentence.']);deferred.stop();
+// A pending online request from the old sentence cannot replace the selected one.
+let oldNetwork;globalThis.qrSpeechRequest=async o=>{
+  if(!o.method)return auth();
+  return new URLSearchParams(o.body).get('ssml').includes('First.') ? new Promise(r=>{oldNetwork=()=>r({status:200,arrayBuffer:audioBuffer()});})
+    : {status:200,arrayBuffer:audioBuffer()};
+};
+const onlineSeekWin=windowMock(), onlineSeekEngine=engineMock();
+onlineSeekEngine.speechText=async (_unit,from)=>({segments:[from??{text:'First.'}],next:null});
+const onlineSeek=new SpeechPlayer(onlineSeekEngine,()=>settings,onlineSeekWin,()=>{});
+onlineSeek.play();await wait(()=>!!oldNetwork);
+onlineSeek.play({text:'Selected online.',pdfPage:2,itemRanges:[{item:3,start:2,end:8}]});await wait(()=>onlineSeek.state==='playing');
+const activePlays=onlineSeekWin.audios[0].plays;oldNetwork();await tick();
+assert.equal(onlineSeek.current.text,'Selected online.');assert.equal(onlineSeekWin.audios[0].plays,activePlays);
+onlineSeek.stop();
+console.log('Speech: protocol, source-anchored selection, repeated PDF sentences, pause/resume, cross-page ownership and stale-response cleanup passed.');
