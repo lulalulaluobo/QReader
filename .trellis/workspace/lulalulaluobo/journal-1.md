@@ -223,3 +223,15 @@
 - JSON 通用存储继续串行验证、外部变更保护和回滚。清除个人内容使用新空版本，旧引用不误指向遗留划线；删除来源移除历史，线程不缓存原笔记内容。导出快照不覆盖手工编辑。
 - build、thinking/notes/translation 测试通过；六格式、140组双语主题宽度/弹窗、17本原书/旧章节/批注/vocabulary.json 完整、实际 EPUB/PDF 与 open-url 定位、草稿语言切换、迟到/删除/清除通过；被动请求0，异步错误为空。手机为模拟，外部模型质量未用固定回复宣称。
 - 源码 `804249d89e4810123865b9fa3f5a7db22d73d41d`、main 与注解标签1.2.0已推送，正式latest Release四附件公开HTTP200/逐字节/SHA-256/digest/三文件ZIP一致。ZIP SHA-256：`a48cb94c996ccae4655641b3138182f2a15ca85d819ca9fd06d0f5732480fcc0`。回执见 `.trellis/tasks/10-05-reader-thinking/verification.md`；隔离GUI与服务器退出。
+
+
+## 会话 16：撤下思考线，汇总每书 Markdown 笔记，发布 1.2.1
+
+**日期**：2026-10-05；**分支**：main；**状态**：已完成。
+
+- 用户决定只保留摘抄、笔记汇总，跨书关系交给未来的本地 LLM。移除思考线视图、检索、关联建议及 MiniSearch；保留阅读/生词/主动解读。
+- 每书沿用批注.md，收录纯划线、批注、已有整书想法、日期/作者/原书/定位，旧三问与记录折叠保留；笔记页展示实际文件，在当前标签页用原生编辑器自由记录。
+- 使用 node-diff3 3.2.1 的三方合并，按独立笔记边界缩小范围；手工文字及同处新批注均保留。reading.json 保存基线/摘要/手工时间，串行回读与附属文件失败回滚，外部变化不覆盖，不逐页改文档。
+- 旧思考 JSON 不改，普通归档保存判断、疑问、理由及来源版本，缺失来源明确显示，碰撞避让/重扫不覆盖；修正来源协议空格和原书特殊文件名编码。双语 README/文档与日期区分完成。
+- build、documents/notes/translation 测试通过；原生隔离 Obsidian 验证编辑、合并、EPUB/PDF 协议、历史版本、归档/草稿、六格式和 112 组语言/主题/七宽度。17 本原书/历史/批注/vocabulary.json 完整，被动 AI 0、明确解读固定回复 1、异步错误为空。手机为视口模拟。
+- 源码 `aa7622dc0c171b53b0275ee154cdfdddec973b66`、main 与注解标签 1.2.1 已推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/三文件 ZIP 一致。ZIP SHA-256：`ec9521c84154b2ee63a4507efd9cdb71a50adeb48e2b76ee570ca3e2120b045b`。详情见 .trellis/tasks/10-05-book-documents/verification.md；隔离 GUI/服务器均退出。

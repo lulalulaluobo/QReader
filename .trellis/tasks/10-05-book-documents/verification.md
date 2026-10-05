@@ -24,4 +24,17 @@
 
 ## 发布
 
-待创建正式 1.2.1 Release 并核对远程源码、四个公开附件、字节/SHA-256/digest 与 ZIP 内容。
+正式 latest [Release 1.2.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.1) 已发布，非草稿/非预发布。
+
+- 源码提交：aa7622dc0c171b53b0275ee154cdfdddec973b66；注解标签 1.2.1 与远程 main 的发布时提交一致。
+- 四附件实际公开 GET 均 HTTP 200，逐字节与 dist/1.2.1 一致；GitHub digest 与实际 SHA-256 一致。
+- ZIP 精确包含 qreader/main.js、qreader/manifest.json、qreader/styles.css，解压字节与单独附件及本地构建一致。
+- 发布前补充带 #/空格/括号/中文的原书文件名编码单测，并重新通过文档测试和 build。
+- 隔离 Obsidian 与测试服务器均已退出。
+
+| 附件 | 字节数 | SHA-256 |
+|---|---:|---|
+| main.js | 6407493 | 6bef772474cc7b9848734d4c3ebc8711a2025d135fc487a342435b87be8fc930 |
+| manifest.json | 254 | cb5ce4c969fa654ad6fb7907f23e717180c8fac20aea592becdc37a175d62425 |
+| QReader-1.2.1.zip | 2934633 | ec9521c84154b2ee63a4507efd9cdb71a50adeb48e2b76ee570ca3e2120b045b |
+| styles.css | 36212 | 50ff850b6384fcaa215b651633496c3b7ba30bca3f27f26da104fc80c15f0b65 |

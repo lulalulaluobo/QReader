@@ -2,9 +2,12 @@
   "id": "book-documents",
   "name": "book-documents",
   "title": "撤下思考线，汇总为每书 Markdown 笔记",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-05",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-05",
+  "sourceCommit": "aa7622dc0c171b53b0275ee154cdfdddec973b66",
+  "release": "https://github.com/lulalulaluobo/QReader/releases/tag/1.2.1"
 }
