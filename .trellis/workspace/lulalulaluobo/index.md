@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
+- **Total Sessions**: 15
 - **Last Active**: 2026-10-05
 <!-- @@@/auto:current-status -->
 
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~215 | Active |
+| `journal-1.md` | ~225 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 15 | 2026-10-05 | 可追溯的阅读思考与跨书关联，发布 1.2.0 | `804249d89e4810123865b9fa3f5a7db22d73d41d` | `main` |
 | 14 | 2026-10-05 | 撤销每章三问并评估按需阅读辅助，发布 1.1.10 | `ac75406de06a0334cd82a5fa01a7dfbbc7de391d` | `main` |
 | 13 | 2026-10-04 | 手机输入保持问题可见，发布 1.1.9 | `0db82bcb7a52a50192e732a6c0bb99845c98dcda` | `main` |
 | 12 | 2026-10-04 | 三问可选笔记与 AI 参考评价，发布 1.1.8 | `c4668441f697db2c7d69e72bb9b4bbe50de41826` | `main` |

@@ -2,9 +2,12 @@
   "id": "reader-thinking",
   "name": "reader-thinking",
   "title": "可追溯的阅读思考与主动跨书关联",
-  "status": "in_progress",
+  "status": "completed",
   "creator": "lulalulaluobo",
   "assignee": "lulalulaluobo",
   "createdAt": "2026-10-05",
-  "branch": "main"
+  "branch": "main",
+  "completedAt": "2026-10-05",
+  "commit": "804249d89e4810123865b9fa3f5a7db22d73d41d",
+  "notes": "批注版本、整书想法、跨书搜索与主动关联、可编辑思考线和来源快照完成。构建/三组单元测试、六格式、140组布局、17本书原文件与旧历史、生词数据、真实来源协议及EPUB/PDF定位通过。1.2.0正式latest Release四附件公开HTTP200/字节/digest/ZIP与源码一致；独立GUI/服务器退出。手机为模拟验收，AI使用固定协议响应，手动关联不依赖AI。"
 }
