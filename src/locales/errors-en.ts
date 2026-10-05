@@ -193,4 +193,11 @@ export const ERROR_EN = {
   "无法创建 PDF 页面画布": "Could not create the PDF page canvas",
   "第 {0} 页渲染失败：{1}": "Could not render page {0}: {1}",
   "这条批注没有可用的原文页码": "This annotation has no usable page number",
+  "笔记文档在同步期间发生修改，已保留，请重试": "The note document changed during sync. Your changes were preserved; please retry.",
+  "笔记文档写入校验失败": "Note document write verification failed",
+  "笔记文档恢复校验失败": "Note document restore verification failed",
+  "旧版笔记归档写入校验失败": "Legacy note archive write verification failed",
+  "reading.json 笔记同步摘要无效": "reading.json note sync digest is invalid",
+  "reading.json 笔记修改时间无效": "reading.json note edit time is invalid",
+  "reading.json 笔记语言无效": "reading.json note document language is invalid",
 } as const;

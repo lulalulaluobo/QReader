@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.0) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.1) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -14,13 +14,13 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
 - 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
 - 选段后主动调用 AI 解读，结合前后文解释；只有明确存入笔记才保存。
-- 批注保留修改历史，可写整书想法；笔记支持按书籍、按思考线查看和跨书搜索。
-- 主动寻找关联，确认后连接自己的笔记，编辑当前判断，导出可回到来源的 Markdown 快照。
+- 每本书持续汇总为一份 Markdown 笔记，包含摘抄、个人批注、日期和原文定位；整书想法可直接在文档中自由书写。
+- 原生编辑器里的手工修改会保留，批注更新同时修改同一处时，两份内容都留下供回看。
 - 书架、阅读和笔记在当前标签页跳转，使用 Obsidian 原生回退。
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
@@ -45,21 +45,19 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 **1.1.10 已撤销每章三问。** 打开书籍、切换章节不会生成问题，三问、重新生成、回答与提示词设置均已移除。阅读时遇到困难再使用长按查词或选段 AI 解读；有自己的想法时，通过选文菜单添加批注。
 
-书架的 **笔记** 入口按书籍和章节显示批注。已有问题版本、回答、AI 评价及已完成复习在“历史三问与回答”中折叠保留；旧预约数据不产生任务。阅读页也能主动回看历史记录。
+书架的 **笔记** 直接展示每本书的 `批注.md`。纯划线也作为摘抄收录，按章节和书内顺序汇总；原文、你的笔记、保存的 AI 解释分开呈现。每条记录保留日期与原文链接。旧问题、回答、AI 评价和已完成复习仍保存在折叠的历史区域，旧预约不产生任务。
 
-原有 `reading.json`、`批注.md` 与 `vocabulary.json` 继续使用，不迁移或删除旧记录。打开旧回答标签会显示只读笔记，未保存的旧回答草稿仍可查看和复制，不会自动变成已保存笔记。历史 AI 评价只供参考，不是标准答案。
+### 每本书一份笔记（1.2.1）
 
-### 可追溯的思考线（1.2.0）
+点 **编辑笔记文档**，在当前标签页进入 Obsidian 原生 Markdown 编辑器。你可以在“关于这本书的想法”中自由书写，也可以补充或修改任何一处。阅读时随手摘抄、批注，读完就已经得到整本书的笔记，无需再做一次整理。
 
-阅读时继续只做你愿意做的批注。**笔记 → 按书籍** 可记录整本书的想法；修改自己的文字会追加一个版本，改颜色不算观点变化。旧批注只接入已有内容，明确标记此前没有记录的历史。
+新增、修改、删除批注以及离开阅读页时会同步；普通翻页不会重写笔记。同步比较上次生成内容、当前文档和新的批注：保留你在文档中做的修改。两边同时改同一处时，手工文字留在原处，新的批注列为“同步补充”；删除记录时，你改过的文字也会保留。文档手工修改不会反向修改阅读器中的结构化批注，回到原文编辑批注仍以阅读器保存的记录为准。
 
-一条笔记可以直接 **加入思考线**，无需 AI。也可以主动点 **找相关笔记**：本地检索你的读者文字，选最多十条候选，将原文最多 500 字、自己的想法最多 700 字发送给已配置的 AI。AI 最多提出三条关系、说明和可编辑标题，不能生成或覆盖你的当前判断；只有确认后才保存。没有候选就不发请求。检索依据共有词语，表达差异很大的相关想法可能找不到；随时可以手动连接。
+文档包含书名、作者、原书路径、最近阅读与最近笔记时间。阅读时间不会冒充笔记时间；手工编辑的时间在下一次同步或离开原生编辑器时记录。文档首次生成时采用当前界面语言，之后切换语言不改已有文档与个人文字。文件无需插件也能阅读、编辑或交给本地 LLM；QReader 不生成跨书关系或维护思考线。
 
-**按思考线** 可跨书搜索自己的笔记，查看有日期的来源，编辑“我目前怎么看”和“仍想探索”。关联引用具体版本，修改笔记不会把当时的想法变成今天的版本。查词、翻页和滚动不进入思考记录，也没有定时总结、提醒或复习任务。
+思考线界面与关联请求已移除。已有非空 `.qreader/thinking.json` 自动归档为阅读库中的 **旧版思考记录.md**，保存此前的判断、疑问、关联理由与可用来源；同名文件存在时使用新文件名，原始 JSON 和既有导出快照保留不变。归档后手工编辑不会被后续扫描覆盖。损坏的旧记录保留原文件并提示，不阻碍阅读。
 
-思考线按阅读库保存在 `.qreader/thinking.json`，只保存引用和你确认的关联。删除原笔记会删除其修改历史，思考线显示来源不可用；删除思考线不会删除原书或笔记。损坏数据停止写入，只有你显式选择恢复才使用恢复副本。
-
-**导出 Markdown 快照** 在阅读库的 `思考线导出/` 生成新文件，包含你的当前判断、想探索的事、来源文字与日期、确认的关系，并带 Obsidian 来源链接。每次导出都使用新文件名，不覆盖手工编辑；原笔记以后的修改或删除不会自动改写这些独立快照。书籍的 `批注.md` 同步包含整书想法与批注历史。
+原有 `reading.json`、`批注.md` 与 `vocabulary.json` 继续使用。旧回答标签中的未保存草稿仍可查看和复制，不会自动变成已保存笔记。历史 AI 评价只供参考，不是标准答案。
 
 ### 翻译与动态生词
 
@@ -79,7 +77,7 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 数据与限制
 
-每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。AI 密钥保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。升级保留现有生词，旧有道凭据不再使用并在下一次保存设置时移除。AI 解读、整句翻译或主动找关联会将相应文本发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的单词和播放发音的单词。查词释义与整句译文使用中文，不随界面语言改变。
+每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。AI 密钥保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。升级保留现有生词，旧有道凭据不再使用并在下一次保存设置时移除。AI 解读或整句翻译会将相应文本发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的单词和播放发音的单词。查词释义与整句译文使用中文，不随界面语言改变。
 
 CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。免密有道单词查询与音频已实际连通；AI 整句译文质量和 Android/iOS 真机尚未验证。桌面验收使用 macOS Obsidian 1.13.7 独立 Vault，窄屏使用移动 CSS 模拟。
 
@@ -93,13 +91,13 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
 - Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
 - Request a contextual AI explanation for a selected passage. Save it to notes only when you choose to.
-- Preserve annotation revisions, write book-level thoughts, browse by book or thought thread, and search across your own notes.
-- Find connections on demand, confirm them yourself, edit your current view, and export Markdown snapshots with links to the sources.
+- Each book has one continuously updated Markdown document with excerpts, personal notes, dates and source links. Write book-level thoughts directly in it.
+- Native Markdown edits are preserved. When both the document and reader change the same passage, both versions remain available.
 - Library, reader and notes share the current tab and support Obsidian's native back navigation.
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
@@ -124,21 +122,19 @@ Changing language preserves book text, category names, notes, earlier records an
 
 **Chapter questions have been retired in 1.1.10.** Opening a book or changing chapters does not generate questions. Question controls, regeneration, answering and prompt settings have been removed. Long-press an unfamiliar word, request an explanation for a difficult passage or add your own annotation when needed.
 
-**Notes** shows annotations by book and chapter. Earlier question versions, answers, AI feedback and completed reviews remain under the collapsed “Archived questions and answers” section. Old appointments do not create tasks. The reader also lets you revisit earlier records when you choose.
+**Notes** displays each book's actual `批注.md` document. Highlights are included as excerpts in chapter and reading order. Quotes, your words and saved AI explanations are distinct, with dates and links back to the source. Earlier prompts, answers, AI feedback and completed reviews remain in the collapsed archive. Old appointments do not create tasks.
 
-Books retain their existing `reading.json`, `批注.md` and `vocabulary.json`, without migrating or deleting earlier records. Restoring an old answer tab displays read-only notes. Unsubmitted drafts remain available to read and copy; they are not automatically saved as notes. Historical AI feedback is a reference rather than a standard answer.
+### One note document per book (1.2.1)
 
-### Traceable thought threads (1.2.0)
+Choose **Edit note document** to open Obsidian's native Markdown editor in the same tab. Write freely under “My thoughts on this book”, or edit and add text elsewhere. Excerpts and annotations accumulate while you read, so the finished book already has its own note document.
 
-Annotate when you choose. **Notes → By book** also lets you write a thought about the whole book. Editing your words adds a revision; color changes do not imply a change of belief. Existing annotations start with their saved text, clearly marked as lacking earlier revision history.
+Annotations sync when saved, edited or deleted, and when you leave the reader. Ordinary page turns do not rewrite the document. Sync compares the previous generated text, your current document and new annotations. Manual edits remain in place. Simultaneous changes to one passage retain the new reader text in a sync supplement; manually edited text also survives deleting its annotation. Direct document edits do not change the reader's structured annotation records.
 
-Use **Add to thought thread** manually without AI, or request **Find related notes**. Local search selects at most ten candidates from your own writing. Each excerpt sends at most 500 characters of quoted text and 700 of your thought to the configured AI endpoint. AI proposes at most three connections, reasons and editable titles. It cannot write or replace your current view. Nothing is saved until you confirm, and no candidates means no request. Search uses shared terms and can miss ideas expressed differently; manual connections remain available.
+The document includes title, author, original-file path, last reading time and last note time. Reading later does not imply a newer note. Manual-edit time is recorded during the next sync or when leaving the native editor. A document uses the interface language when first generated; later language changes preserve existing documents and personal text. Read, edit or provide these plain files to a local LLM independently of QReader.
 
-**By thought thread** searches your own notes across books, shows dated sources, and lets you edit “My current view” and “Still exploring”. Connections refer to exact revisions, so later edits preserve your earlier words. Word lookups, page turns and scrolling are excluded. There are no background summaries, reminders or review tasks.
+Thought-thread views and connection requests have been removed. A non-empty legacy `.qreader/thinking.json` is archived as **旧版思考记录.md** in the library, keeping your earlier judgments, questions, connection reasons and available sources. Existing filenames get unique alternatives. Original JSON and earlier exported snapshots remain untouched; later scans preserve your archive edits. Damaged legacy records remain intact and do not prevent reading.
 
-Each reading library keeps its references and confirmed connections in `.qreader/thinking.json`. Deleting a source removes its revisions and makes its thread reference unavailable. Deleting a thread leaves the book and notes intact. Damaged files stop writes; recovery is explicit.
-
-**Export Markdown snapshot** writes a new file under `思考线导出/`, with your current view, open questions, dated sources, confirmed connections and Obsidian source links. Unique filenames preserve manual edits. Later source edits or deletions do not update these independent snapshots. Each book's `批注.md` also includes book-level thoughts and annotation revisions.
+Books retain `reading.json`, `批注.md` and `vocabulary.json`. Unsubmitted old answer drafts remain available to read and copy without automatic saving. Historical AI feedback is a reference rather than a standard answer.
 
 ### Translation and dynamic vocabulary
 

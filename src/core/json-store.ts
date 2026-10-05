@@ -319,6 +319,14 @@ export function validateReading(raw: unknown): ReadingFile {
       validateNoteHistory(n.history, n.text);
     }
   }
+  if (v.notesSync !== undefined) {
+    const sync = requireRecord(v.notesSync, "notesSync");
+    string(sync.base, "notesSync.base"); string(sync.hash, "notesSync.hash");
+    if (!/^[a-f0-9]{64}$/.test(sync.hash)) throw new Error("reading.json 笔记同步摘要无效");
+    optionalString(sync.manualEditedAt, "notesSync.manualEditedAt");
+    if (sync.language !== undefined && sync.language !== "zh-CN" && sync.language !== "en") throw new Error("reading.json 笔记语言无效");
+    if (sync.manualEditedAt !== undefined && !Number.isFinite(Date.parse(sync.manualEditedAt as string))) throw new Error("reading.json 笔记修改时间无效");
+  }
   return raw as ReadingFile;
 }
 

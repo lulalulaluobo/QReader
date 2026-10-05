@@ -131,6 +131,7 @@ export interface ReadingFile {
   chapters: Record<string, ChapterState>;
   annotations: AnnotationRecord[];
   bookNotes?: BookNote[];
+  notesSync?: { base: string; hash: string; manualEditedAt?: string; language?: "zh-CN" | "en" };
   importedAt: string;
 }
 

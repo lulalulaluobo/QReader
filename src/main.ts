@@ -7,10 +7,8 @@ import type { QReaderSettings } from "./settings";
 import { loadAiSettings } from "./ai/providers";
 import { BookCache } from "./core/book-source";
 import { LibraryManager } from "./core/library";
-import { VaultFs } from "./core/fs";
-import { ThinkingManager } from "./core/thinking";
-import { traceSources, traceKey, validateRef } from "./core/thought-data";
-import type { TraceRef, TraceSource } from "./core/thought-data";
+import { traceSources, traceKey, validateRef } from "./core/note-history";
+import type { TraceRef, TraceSource } from "./core/note-history";
 import { isHealthyBook } from "./types";
 import { BookshelfView, VIEW_TYPE_BOOKSHELF } from "./views/bookshelf";
 import { ReaderView, VIEW_TYPE_READER } from "./views/reader";
@@ -36,7 +34,6 @@ export class QReaderPlugin extends Plugin {
   declare settings: QReaderSettings;
   library!: LibraryManager;
   cache!: BookCache;
-  thinking!: ThinkingManager;
   translation = new YoudaoClient();
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<(reason: SettingsChangeReason) => void>();
@@ -59,11 +56,11 @@ export class QReaderPlugin extends Plugin {
       this.cache
     );
 
-    this.thinking = new ThinkingManager(new VaultFs(this.app.vault.adapter), () => this.library.ensureRoot(), ref => this.resolveTraceSource(ref), () => this.notifyChanged());
     this.registerObsidianProtocolHandler("qreader", params => {
       void (async () => {
         await this.library.scan();
-        const ref = validateRef({ bookId: params.book, kind: params.kind, id: params.note, revisionId: params.revision });
+        const bookId = this.library.get(params.book) ? params.book : params.book?.replace(/\+/g, " ");
+        const ref = validateRef({ bookId, kind: params.kind, id: params.note, revisionId: params.revision });
         await this.openTrace(ref);
       })().catch(error => new Notice(this.errorText(error)));
     });
@@ -82,6 +79,14 @@ export class QReaderPlugin extends Plugin {
     this.registerEvent(this.app.workspace.on("css-change", () => this.notifySettingsChanged()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.syncReadingChrome()));
     this.registerEvent(this.app.workspace.on("layout-change", () => this.syncReadingChrome()));
+    let previousDocument: string | undefined;
+    this.registerEvent(this.app.workspace.on("file-open", file => {
+      const previous = previousDocument;
+      previousDocument = file?.path;
+      if (!previous || previous === previousDocument) return;
+      const entry = this.library.all().filter(isHealthyBook).find(book => previous === book.dir + "/批注.md");
+      if (entry) void this.library.syncAnnotationsMd(entry).catch(error => new Notice(this.t("同步笔记失败：{0}", this.errorText(error))));
+    }));
     this.app.workspace.onLayoutReady(() => this.syncReadingChrome());
 
     void this.library.scan().catch(() => {

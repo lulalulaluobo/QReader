@@ -1724,16 +1724,14 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 .qr-translation-phonetic { color: var(--qr-muted); font-size: .9em; margin-bottom: 10px; }
 .qr-translation-body .qr-icon-btn { display: inline-flex; margin-right: 8px; }
 
-/* Personal thought trails, with quiet reading and touch-sized controls. */
-.qr-notes-tabs, .qr-note-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
-.qr-notes-tabs button, .qr-notes-page .qr-btn, .qr-thought-editor button { min-height: 44px; max-width: 100%; white-space: normal; }
-.qr-notes-page-body, .qr-thought-thread, .qr-trace-source, .qr-note-revisions, .qr-related-panel { min-width: 0; overflow-wrap: anywhere; }
-.qr-note-understanding { white-space: pre-wrap; }
-.qr-note-revisions { border-top: 1px solid var(--background-modifier-border); margin-top: 12px; }
-.qr-related-panel { border: 1px solid var(--background-modifier-border); border-radius: 12px; padding: 12px; margin-top: 12px; background: var(--background-secondary); }
-.qr-thought-editor { display: flex; flex-direction: column; gap: 10px; min-width: 0; max-height: 75dvh; overflow-y: auto; }
-.qr-thought-editor .qr-input { width: 100%; min-width: 0; font-size: 16px; box-sizing: border-box; }
-.qr-thought-editor .qr-input, .qr-notes-page .qr-input { min-height: 44px; font-size: 16px; }
-.qr-thought-editor .qr-thought-input { min-height: 100px; max-height: 30dvh; resize: vertical; }
-.qr-thought-editor .qr-question-type { margin: 0; }
-.qr-notes-page button:focus-visible, .qr-thought-editor button:focus-visible, .qr-notes-page summary:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }
+/* The actual book document, rendered with Obsidian's Markdown renderer. */
+.qr-notes-page .qr-btn { min-height: 44px; max-width: 100%; white-space: normal; }
+.qr-notes-page .qr-input { min-height: 44px; font-size: 16px; }
+.qr-notes-page-body, .qr-notes-document { min-width: 0; overflow-wrap: anywhere; }
+.qr-notes-document { padding: 16px 0; line-height: 1.7; }
+.qr-notes-document img { max-width: 100%; height: auto; }
+.qr-notes-document pre, .qr-notes-document .table-wrapper { max-width: 100%; overflow-x: auto; }
+.qr-notes-document table { display: block; max-width: 100%; overflow-x: auto; }
+.qr-notes-document summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+.qr-notes-document blockquote { margin-inline: 0; }
+.qr-notes-page button:focus-visible, .qr-notes-page summary:focus-visible { outline: 2px solid var(--interactive-accent); outline-offset: 2px; }

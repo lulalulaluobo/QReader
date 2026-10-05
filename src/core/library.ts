@@ -4,10 +4,11 @@ import type { PDFDocumentProxy } from "pdfjs-dist";
 import type { AnnotationRecord, BookEntry, BookFormat, BookReadStatus, ChapterState, HealthyBookEntry, ReadingFile, TocNode } from "../types";
 import { isHealthyBook, pdfChapterId } from "../types";
 import { genId, sanitizeFolderName } from "../util";
-import { appendAnnotationRevision, revision } from "./thought-data";
+import { appendAnnotationRevision, revision } from "./note-history";
 import { JsonStore, validateReading } from "./json-store";
 import { VaultFs } from "./fs";
-import { renderAnnotationsMd } from "./md-notes";
+import { mutateNoteDocument } from "./note-document";
+import { archiveLegacyNotes } from "./legacy-notes";
 import { BookCache, buildEpubChapters, epubChapterText, pdfPagesText, tocNodesFromBook } from "./book-source";
 import { openPdf } from "../reader/pdfjs-setup";
 import { BOOK_EXTENSION, bookAsEpub, detectBookFormat } from "./book-formats";
@@ -33,6 +34,7 @@ export class LibraryManager {
   private scanned = false;
   private scanJob: Promise<BookEntry[]> | null = null;
   private importChain: Promise<void> = Promise.resolve();
+  private archiveWarnings = new Set<string>();
   private coverMem = new Map<string, string>();
 
   constructor(private deps: LibraryDeps, public cache: BookCache) { this.fs = new VaultFs(deps.app.vault.adapter); }
@@ -91,6 +93,17 @@ export class LibraryManager {
       for (const [id, entry] of found) if (!(await this.fs.exists(entry.dir))) found.delete(id);
       this.root();
       if (this.rootGeneration !== generation) return this.scan();
+      try {
+        await archiveLegacyNotes(this.fs, root, [...found.values()].filter(isHealthyBook), this.deps.app.vault.getName());
+      } catch (error) {
+        if (!this.archiveWarnings.has(root)) {
+          this.archiveWarnings.add(root);
+          new Notice(translate(this.deps.language(), "旧版思考记录暂未归档，原始文件已保留"));
+          console.error("QReader legacy note archive:", error);
+        }
+      }
+      this.root();
+      if (this.rootGeneration !== generation) return this.scan();
       this.entriesById = found; this.scanned = true;
       return this.all();
     })();
@@ -142,7 +155,7 @@ export class LibraryManager {
     await this.fs.mkdir(dir);
     await this.deps.app.vault.adapter.writeBinary(`${dir}/${safeName}`, bytes);
     const store = JsonStore.forNew(this.fs, `${dir}/${READING_JSON}`, validateReading, reading);
-    await store.mutate(() => {}, (value) => this.fs.write(`${dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    await mutateNoteDocument(this.fs, store, `${dir}/${ANNOTATIONS_MD}`, { bookId: id, vault: this.deps.app.vault.getName(), language: this.deps.language() }, () => {});
     const entry: HealthyBookEntry = { id, dir, reading, store };
     if (cover) await this.saveCover(entry, cover);
     this.root();
@@ -286,29 +299,33 @@ export class LibraryManager {
     this.deps.notifyChanged();
   }
 
+  private mutateNotes(entry: HealthyBookEntry, change: (reading: ReadingFile) => void | Promise<void>): Promise<void> {
+    return mutateNoteDocument(this.fs, entry.store, `${entry.dir}/${ANNOTATIONS_MD}`, { bookId: entry.id, vault: this.deps.app.vault.getName(), language: this.deps.language() }, change);
+  }
+
   async saveAnnotation(entry: BookEntry, draft: Omit<AnnotationRecord, "createdAt" | "updatedAt">): Promise<AnnotationRecord> {
     const healthy = this.healthy(entry);
     if (healthy.reading.book.format === "cbz") throw new Error("CBZ 为图片书，不支持文字批注");
     const record: AnnotationRecord = { ...draft, createdAt: new Date().toISOString() };
     if (record.note || record.aiExplanation) record.history = [revision(record.note ?? "", record.aiExplanation)];
-    await healthy.store.mutate((value) => { value.annotations.push(record); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    await this.mutateNotes(healthy, (value) => { value.annotations.push(record); });
     this.deps.notifyChanged();
     return record;
   }
   async updateAnnotation(entry: BookEntry, id: string, patch: Partial<Pick<AnnotationRecord, "kind" | "color" | "note" | "aiExplanation">>): Promise<void> {
     const healthy = this.healthy(entry);
-    await healthy.store.mutate((value) => {
+    await this.mutateNotes(healthy, (value) => {
       const record = value.annotations.find((annotation) => annotation.id === id);
       if (!record) throw new Error("批注不存在");
       const before = { ...record };
       Object.assign(record, patch, { updatedAt: new Date().toISOString() });
       appendAnnotationRevision(record, before);
-    }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    });
     this.deps.notifyChanged();
   }
   async clearAnnotation(entry: BookEntry, id: string): Promise<void> {
     const healthy = this.healthy(entry);
-    await healthy.store.mutate((value) => {
+    await this.mutateNotes(healthy, (value) => {
       const record = value.annotations.find((annotation) => annotation.id === id);
       if (!record) throw new Error("批注不存在");
       delete record.note;
@@ -318,19 +335,19 @@ export class LibraryManager {
       record.history = [revision("")];
       record.kind = "highlight";
       record.updatedAt = new Date().toISOString();
-    }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    });
     this.deps.notifyChanged();
   }
   async deleteAnnotation(entry: BookEntry, id: string): Promise<void> {
     const healthy = this.healthy(entry);
-    await healthy.store.mutate((value) => { value.annotations = value.annotations.filter((annotation) => annotation.id !== id); }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    await this.mutateNotes(healthy, (value) => { value.annotations = value.annotations.filter((annotation) => annotation.id !== id); });
     this.deps.notifyChanged();
   }
   async saveBookNote(entry: BookEntry, text: string, id?: string): Promise<string> {
     const healthy = this.healthy(entry);
     if (!text.trim() || text.length > 100000) throw new Error("请记录一点想法，长度不超过十万字");
     const nextId = id ?? genId("book-note");
-    await healthy.store.mutate(value => {
+    await this.mutateNotes(healthy, value => {
       value.bookNotes ??= [];
       const note = id ? value.bookNotes.find(note => note.id === id) : undefined;
       if (id && !note) throw new Error("书籍想法已不存在，请重新打开");
@@ -342,21 +359,20 @@ export class LibraryManager {
         const next = revision(text);
         value.bookNotes.push({ id: nextId, text, createdAt: next.at, history: [next] });
       }
-    }, value => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    });
     this.deps.notifyChanged();
     return nextId;
   }
 
   async deleteBookNote(entry: BookEntry, id: string): Promise<void> {
     const healthy = this.healthy(entry);
-    await healthy.store.mutate(value => { value.bookNotes = (value.bookNotes ?? []).filter(note => note.id !== id); },
-      value => this.fs.write(`${healthy.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    await this.mutateNotes(healthy, value => { value.bookNotes = (value.bookNotes ?? []).filter(note => note.id !== id); });
     this.deps.notifyChanged();
   }
 
   async syncAnnotationsMd(entry: BookEntry): Promise<void> {
     const healthy = this.healthy(entry);
-    await healthy.store.mutate(() => {}, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    await this.mutateNotes(healthy, () => {});
   }
 
   async createPdfChapter(entry: BookEntry, title: string, startPage: number, endPage: number): Promise<string> {
@@ -364,7 +380,7 @@ export class LibraryManager {
     const pages = healthy.reading.book.numPages;
     if (healthy.reading.book.format !== "pdf" || !pages || !Number.isInteger(startPage) || !Number.isInteger(endPage) || startPage < 1 || endPage < startPage || endPage > pages || !title.trim()) throw new Error("PDF 章节名称或页码范围无效");
     const id = pdfChapterId(startPage);
-    await healthy.store.mutate((value) => {
+    await this.mutateNotes(healthy, (value) => {
       const existing = value.chapters[id];
       if (existing) Object.assign(existing, { title: title.trim(), pdfStartPage: startPage, pdfEndPage: endPage, custom: true });
       else value.chapters[id] = { title: title.trim(), index: 0, pdfStartPage: startPage, pdfEndPage: endPage, custom: true, questionVersions: [], answers: [], reviews: [] };
@@ -374,7 +390,7 @@ export class LibraryManager {
         const next = ordered[index + 1]?.pdfStartPage;
         if (next && (chapter.pdfEndPage ?? 0) >= next) chapter.pdfEndPage = next - 1;
       });
-    }, (value) => this.fs.write(`${entry.dir}/${ANNOTATIONS_MD}`, renderAnnotationsMd(value)));
+    });
     this.deps.notifyChanged(); return id;
   }
 }

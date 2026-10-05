@@ -141,6 +141,7 @@ export class ReaderView extends ItemView {
     this.engine?.destroy();
     this.engine = null;
     await saving;
+    if (this.entry) await this.syncNoteDocument(this.entry);
     await Promise.allSettled([...this.vocabularyJobs]);
     if (this.entry) await this.releaseSource(this.entry);
   }
@@ -313,6 +314,8 @@ export class ReaderView extends ItemView {
     await this.persistProgress(true);
     if (generation !== this.generation) return;
     const previous = this.entry;
+    if (previous) await this.syncNoteDocument(previous);
+    if (generation !== this.generation) return;
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.engine?.destroy();
     this.engine = null;
@@ -518,6 +521,11 @@ export class ReaderView extends ItemView {
     this.renderProgress(loc.percent);
     if (this.progressTimer !== null) window.clearTimeout(this.progressTimer);
     this.progressTimer = window.setTimeout(() => void this.persistProgress(true), 500);
+  }
+
+  private async syncNoteDocument(entry: HealthyBookEntry): Promise<void> {
+    try { await this.plugin.library.syncAnnotationsMd(entry); }
+    catch (error) { new Notice(this.plugin.t("同步笔记失败：{0}", this.plugin.errorText(error))); }
   }
 
   private async persistProgress(force: boolean): Promise<void> {

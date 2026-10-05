@@ -3,6 +3,7 @@
 
 export interface FsLike {
   readonly queueScope?: object;
+  stat?(path: string): Promise<{ mtime: number } | null>;
   read(path: string): Promise<string>;
   write(path: string, data: string): Promise<void>;
   exists(path: string): Promise<boolean>;
@@ -16,6 +17,8 @@ import type { DataAdapter } from "obsidian";
 export class VaultFs implements FsLike {
   readonly queueScope: object;
   constructor(private adapter: DataAdapter) { this.queueScope = adapter; }
+
+  stat(path: string): Promise<{ mtime: number } | null> { return this.adapter.stat(path); }
 
   read(path: string): Promise<string> {
     return this.adapter.read(path);

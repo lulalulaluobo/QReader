@@ -1,6 +1,6 @@
 {
   "name": "qreader",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Six-format immersive reader for Obsidian with on-demand explanations and local notes",
   "main": "main.js",
   "scripts": {
@@ -9,7 +9,7 @@
     "check": "tsc -noEmit -skipLibCheck",
     "test:translation": "node tests/translation.mjs",
     "test:notes": "node tests/reading-notes.mjs",
-    "test:thinking": "node tests/thinking.mjs"
+    "test:documents": "node tests/note-documents.mjs"
   },
   "keywords": [],
   "author": "",
@@ -28,7 +28,7 @@
     "fflate": "0.8.2",
     "foliate-js": "1.0.1",
     "jszip": "^3.10.2",
-    "minisearch": "7.2.0",
+    "node-diff3": "3.2.1",
     "pdfjs-dist": "6.3.289",
     "stream-browserify": "^3.0.0"
   },
