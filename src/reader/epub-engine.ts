@@ -53,6 +53,7 @@ export class EpubEngine implements ReaderEngine {
   private speechGeneration = 0;
   private speechSegment: SpeechSegment | null = null;
   private speechFollowing = true;
+  private speechPageEnd: string | null = null;
   private navigation: Promise<void> = Promise.resolve();
   private resizePoint: { cfi: string; offset: number | null } | null = null;
   private removeSpeechMark: (() => void) | null = null;
@@ -389,11 +390,11 @@ export class EpubEngine implements ReaderEngine {
     for (const content of contents) content.addStylesheetCss(this.readingCss, "qreader-reading");
   }
 
-  private visibleCfi(fallback: string): string {
+  private visibleCfi(fallback: string, end = false): string {
     const surface = this.container?.getBoundingClientRect();
     if (!this.reflowable || !surface?.width || !surface.height) return fallback;
     const contents = (this.rendition?.getContents() ?? []) as unknown as ContentsLike[];
-    for (const content of contents) {
+    for (const content of end ? [...contents].reverse() : contents) {
       const doc = content.document;
       const frame = content.window.frameElement?.getBoundingClientRect();
       if (!frame || !doc.body || !doc.caretRangeFromPoint ||
@@ -401,13 +402,33 @@ export class EpubEngine implements ReaderEngine {
           frame.bottom <= surface.top || frame.top >= surface.bottom) continue;
       const padding = content.window.getComputedStyle(doc.body);
       const rightToLeft = padding.direction === "rtl" || padding.writingMode === "vertical-rl";
-      const x = rightToLeft
+      const x = rightToLeft !== end
         ? Math.min(frame.right, surface.right) - frame.left - parseFloat(padding.paddingRight) - 1
         : Math.max(frame.left, surface.left) - frame.left + parseFloat(padding.paddingLeft) + 1;
-      const y = Math.max(frame.top, surface.top) - frame.top + parseFloat(padding.paddingTop) + 1;
-      const range = doc.caretRangeFromPoint(x, y);
-      if (range?.startContainer.nodeType === Node.TEXT_NODE && doc.body.contains(range.startContainer)) {
-        return content.cfiFromRange(range);
+      const top = Math.max(frame.top, surface.top) - frame.top;
+      const y = end ? Math.min(frame.bottom, surface.bottom) - frame.top - 2 : top + parseFloat(padding.paddingTop) + 1;
+      // Page-end CFIs must use visible characters; EPUB.js splits on spaces and
+      // can otherwise map a long Chinese paragraph's page end back to its start.
+      for (let point = y; point >= top; point -= 8) {
+        const range = doc.caretRangeFromPoint(x, point);
+        if (range?.startContainer.nodeType === Node.TEXT_NODE && doc.body.contains(range.startContainer)) {
+          if (!end) return content.cfiFromRange(range);
+          // A trailing caret can mean the beginning of the next wrapped line.
+          // Store the last visible character, so that line's first sentence returns on time.
+          const length = range.startContainer.textContent?.length ?? 0;
+          for (const offset of [Math.min(range.startOffset, length - 1), range.startOffset - 1]) {
+            if (offset < 0 || offset >= length) continue;
+            const character = range.cloneRange();
+            character.setStart(range.startContainer, offset); character.setEnd(range.startContainer, offset + 1);
+            const rect = character.getClientRects()[0];
+            if (rect && rect.left + frame.left >= surface.left - 2 && rect.left + frame.left < surface.right - 1 &&
+                rect.top + frame.top < surface.bottom - 1 && rect.bottom + frame.top > surface.top) {
+              character.collapse(true);
+              return content.cfiFromRange(character);
+            }
+          }
+        }
+        if (!end) break;
       }
     }
     return fallback;
@@ -631,6 +652,10 @@ export class EpubEngine implements ReaderEngine {
   async followSpeech(segment: SpeechSegment): Promise<void> {
     const rendition = this.rendition;
     if (!segment.cfi || !rendition || this.destroyed) return;
+    const start = new EpubCFI(segment.cfi); start.collapse(true);
+    if (!this.speechFollowing && (!this.speechPageEnd || this.cfiComparator.compare(start, this.speechPageEnd) > 0)) {
+      this.speechFollowing = true;
+    }
     this.speechSegment = segment;
     const generation = ++this.speechGeneration;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
@@ -638,7 +663,6 @@ export class EpubEngine implements ReaderEngine {
     await this.enqueueNavigation(async () => {
       if (generation !== this.speechGeneration || !this.speechFollowing || this.destroyed || rendition !== this.rendition) return;
       const cfi = new EpubCFI(segment.cfi);
-      const start = new EpubCFI(segment.cfi); start.collapse(true);
       const contents = (rendition.getContents() ?? []) as unknown as ContentsLike[];
       const current = contents.find((content) => content.sectionIndex === cfi.spinePos);
       let visible = false;
@@ -669,10 +693,21 @@ export class EpubEngine implements ReaderEngine {
     const shown = ((this.rendition.getContents() ?? []) as unknown as ContentsLike[]).find((content) => content.sectionIndex === cfi.spinePos);
     if (!shown) return;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
-    this.removeSpeechMark = speechHighlight(shown.document, [cfi.toRange(shown.document)]);
+    const range = cfi.toRange(shown.document);
+    this.removeSpeechMark = speechHighlight(shown.document, [range]);
+    const rect = range.getClientRects()[0];
+    const frame = shown.window.frameElement?.getBoundingClientRect();
+    const viewport = this.container?.getBoundingClientRect();
+    if (this.speechFollowing && rect && frame && viewport && rect.left + frame.left >= viewport.left - 2 &&
+        rect.left + frame.left < viewport.right - 2 && rect.top + frame.top >= viewport.top - 2 && rect.top + frame.top < viewport.bottom - 2) {
+      const end = this.rendition.location?.end?.cfi;
+      // Keep the spoken page boundary frozen while the reader browses elsewhere.
+      if (end) this.speechPageEnd = this.visibleCfi(end, true);
+    }
   }
   clearSpeech(): void {
     this.speechSegment = null;
+    this.speechPageEnd = null;
     ++this.speechGeneration; this.removeSpeechMark?.(); this.removeSpeechMark = null;
   }
   clearSelection(): void {

@@ -82,6 +82,7 @@ export interface ReaderEngine {
   /** An explicit source anchor takes precedence over the visible page on the first batch. */
   speechText(unit?: number, from?: SpeechSegment): Promise<SpeechBatch>;
   followSpeech(segment: SpeechSegment): Promise<void>;
+  /** Manual browsing yields to the next spoken page; true resumes following immediately. */
   setSpeechFollowing(enabled: boolean): void;
   clearSpeech(): void;
   updateChapters?(chapters: ChapterState[]): void;

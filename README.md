@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.4](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.4) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.5](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.5) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -21,15 +21,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.4.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.5.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
 
-### 听书（1.2.4）
+### 听书（1.2.5）
 
 阅读页点击耳机图标，显示一条紧凑控制栏，只有播放/暂停、语速、声音设置和停止四项；默认不遮罩正文。点击播放后从当前可见句子开始，正在朗读的短句临时标色；下一句不在当前页时自动翻页或滚动，读完后继续下一部分。点语速选择倍速，点设置才展开语音方式和声音；停止后控制栏收起，保留眼前的阅读位置。
 
-朗读与翻页独立：手动翻页、滚动、跳章或回看批注时，音频沿原顺序继续，页面留在你正在浏览的位置，不被自动跟随拉回。暂停再继续播放，或选文从这里朗读，可恢复原文跟随。按停止按钮主动退出朗读；换书或离开阅读页也会释放该阅读器的音频。
+手动翻页、滚动、跳章或回看批注时，音频沿原顺序继续。当前朗读页内可以临时翻看；当声音进入下一页的文字，页面自动回到正在朗读的位置并恢复跟随。上下滚动也按原朗读视口的文字边界返回，不必等到章尾。暂停再继续播放，或选文从这里朗读，也可立即恢复跟随。按停止按钮主动退出朗读并保留眼前的阅读位置；换书或离开阅读页也会释放该阅读器的音频。
 
 想指定起读位置时，选中文字，点击选文菜单中的播放三角图标。从选区起点所在的完整短句开始，继续顺序朗读；已有划线和批注也可以从原文位置起读。选文菜单打开时，底部播放键同样优先使用选区；正在播放或暂停时重新选文播放，会切换到新位置，不会回到页首。
 
@@ -113,15 +113,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.4.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.5.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
 
-### Listening (1.2.4)
+### Listening (1.2.5)
 
 Select the headphones icon to reveal a compact bar with four controls: play/pause, speed, voice settings and stop. It leaves the book unobscured. Narration starts at your current visible sentence, temporarily highlights the passage and follows it across pages or scroll positions, continuing into the next part of the book. Press speed to choose a rate; open settings only when you want to change the speech service or voice. Stopping hides the bar and keeps the passage you are currently reading in place.
 
-Browsing and narration are independent. Turning pages, scrolling, jumping to a chapter or revisiting an annotation keeps the audio moving through its original sequence and suspends automatic following, so your browsing position stays under your control. Pause and resume, or select text to read from there, to restore following. Use Stop to exit playback; changing books or leaving the reader also releases its audio.
+Turning pages, scrolling, jumping to a chapter or revisiting an annotation keeps the audio moving through its original sequence. You can browse temporarily while narration remains on its current page. When the voice reaches the next page, the reader returns to the spoken passage and resumes automatic following. In scrolling mode, this uses the text boundary of the original spoken viewport rather than waiting for a chapter to end. Pause and resume, or select text to read from there, to restore following immediately. Stop keeps your current reading position; changing books or leaving the reader also releases its audio.
 
 To choose a starting point, select text and press the play triangle in the selection menu. Narration starts with the complete short sentence containing the selection's beginning and continues forward. Existing highlights and annotations can also start narration at their source. The bottom play button uses the selection while its menu is open. Selecting a new passage while playing or paused replaces the old position instead of restarting at the top of the page.
 

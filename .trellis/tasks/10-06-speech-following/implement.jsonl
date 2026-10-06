@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"稳定翻页、临时浏览与朗读跟随验收"}
+{"file":".trellis/tasks/archive/2026-10/10-06-navigation-audio/verification.md","reason":"保留 1.2.4 稳定定位与音频不中断，替换永久关闭跟随规则"}

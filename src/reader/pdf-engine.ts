@@ -51,6 +51,7 @@ export class PdfEngine implements ReaderEngine {
   private speechGeneration = 0;
   private speechSegment: SpeechSegment | null = null;
   private speechFollowing = true;
+  private speechPageEnd: { page: number; item: number; end: number } | null = null;
   private navigation: Promise<void> = Promise.resolve();
   private resizePoint: { page: number; fraction: number } | null = null;
   private removeSpeechMark: (() => void) | null = null;
@@ -442,6 +443,11 @@ export class PdfEngine implements ReaderEngine {
   async followSpeech(segment: SpeechSegment): Promise<void> {
     const page = segment.pdfPage;
     if (!page || this.destroyed) return;
+    const end = this.speechPageEnd;
+    const start = segment.itemRanges?.[0];
+    if (!this.speechFollowing && (!end || page !== end.page || !start || start.item > end.item || start.item === end.item && start.start >= end.end)) {
+      this.speechFollowing = true;
+    }
     this.speechSegment = segment;
     const generation = ++this.speechGeneration;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
@@ -479,9 +485,22 @@ export class PdfEngine implements ReaderEngine {
       if (r.top < viewport.top || r.bottom > viewport.bottom) this.scroller.scrollTop += r.top - viewport.top - 24;
     }
     if (ranges.length && wrapper) this.removeSpeechMark = speechHighlight(wrapper.ownerDocument, ranges);
+    if (this.speechFollowing && ranges[0] && wrapper && this.scroller) {
+      const viewport = this.scroller.getBoundingClientRect();
+      const rect = ranges[0].getBoundingClientRect();
+      if (rect.top >= viewport.top - 2 && rect.top < viewport.bottom - 2) {
+        const spans = Array.from(wrapper.querySelectorAll<HTMLElement>(".qr-pdf-text [data-i]"));
+        const last = spans.reverse().find((span) => {
+          const r = span.getBoundingClientRect();
+          return span.textContent?.trim() && r.bottom > viewport.top && r.top < viewport.bottom - 2;
+        });
+        if (last) this.speechPageEnd = { page: segment.pdfPage, item: Number(last.dataset.i), end: last.textContent?.length ?? 0 };
+      }
+    }
   }
   clearSpeech(): void {
     this.speechSegment = null;
+    this.speechPageEnd = null;
     ++this.speechGeneration; this.removeSpeechMark?.(); this.removeSpeechMark = null;
   }
 

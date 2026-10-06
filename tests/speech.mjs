@@ -149,7 +149,7 @@ onlineSeek.play({text:'Selected online.',pdfPage:2,itemRanges:[{item:3,start:2,e
 const activePlays=onlineSeekWin.audios[0].plays;oldNetwork();await tick();
 assert.equal(onlineSeek.current.text,'Selected online.');assert.equal(onlineSeekWin.audios[0].plays,activePlays);
 onlineSeek.stop();
-// Browsing moves only the reader: narration and its original source sequence continue.
+// Browsing within the spoken page moves only the reader; audio continues its original sequence.
 const browseWin=windowMock(true),browseEngine=engineMock(),browsePlayer=new SpeechPlayer(browseEngine,()=>settings,browseWin,()=>{});
 browsePlayer.play();await wait(()=>browsePlayer.state==='playing');browsePlayer.browse();
 assert.equal(browsePlayer.state,'playing');browseWin.speechSynthesis.active.onend();await wait(()=>browsePlayer.current.text==='Second.');
