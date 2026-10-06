@@ -268,3 +268,14 @@
 - 播放栏重排让位于显式选文起点；笔记原文跳转保留同一播放器；CBZ 空文字 Range 回退，不破坏图片书的工具栏重排或后续切书。
 - build、speech/translation/notes/documents、diff 与任务上下文检查通过；独立 Obsidian 八组 EPUB/PDF/模式/375及768宽度、快速往返、迟到定位、停止保位、真实滚轮/触摸输入、Bing 自然续句不抢位置、暂停续播、跳章补载、笔记两个跳转入口均通过。完整选文及六格式/56组双语主题宽度回归通过，原书、旧笔记和生词完整。Android 无设备，触摸为桌面模拟；最终独立 GUI 正常退出，无收尾未处理异常。
 - 双语 README 与规格更新；源码 `7f513cf8cf38f40dfa230e685c6dc23e666b086f`、main 与注解标签 1.2.4 原子推送，正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`82b2b204d0209c489f0d3cf14f65ba46e45987b55c91284f83efda02ebeaad86`。任务已归档，证据见 .trellis/tasks/archive/2026-10/10-06-navigation-audio/verification.md。
+
+
+## 会话 20：下一朗读页优先恢复跟随，发布 1.2.5
+
+**日期**：2026-10-06；**分支**：main；**状态**：已完成。
+
+- 用户进一步明确：手动翻页继续播音，但声音进入下一朗读页必须返回正在朗读的位置。当前朗读页内只暂时让出页面，越过原视口文字边界自动恢复连续跟随；暂停续播、明确选文起读可立即恢复。
+- EPUB 捕获最后可见字符 CFI，处理空格映射无法正确覆盖的长中文段落及下一行起点光标；PDF 捕获可见文字项结束偏移，支持同页跨屏与物理跨页。临时浏览期间冻结边界，重复翻页不推迟返回。
+- build、speech/translation/notes/documents、diff 和任务上下文检查通过。原生独立 Obsidian 八组 EPUB/PDF/模式/375及768宽度、同页暂留/跨页返回、重复周期、队列优先级、停止保位通过；真实 Bing 音频自然续句返回且继续播放。六格式边界与切书通过，36 个原书/生词/笔记受保护文件完整。
+- 本轮隔离 Electron 系统语音未触发 start 回调，未计作实际发声验收；系统队列/控制器检查和真实在线音频验收区分记录。Android 无真机，手机为桌面视口模拟。隔离 GUI 已正常退出，收尾无未处理异常。
+- 双语 README 与规格更新；源码 `43aff8b980b4d3c51bd6618fe501053778f3d362`、main 与注解标签 1.2.5 原子推送，正式 latest Release 四附件 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`ee29e607d513408ef932fe3d98ff89d2196649659cda6e8beb49027135b340e1`。证据见 .trellis/tasks/archive/2026-10/10-06-speech-following/verification.md。

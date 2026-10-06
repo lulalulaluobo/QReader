@@ -1,0 +1,13 @@
+{
+  "id": "speech-following",
+  "name": "speech-following",
+  "title": "手动翻页后在下一朗读页恢复跟随",
+  "status": "completed",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-06",
+  "branch": "main",
+  "completedAt": "2026-10-06",
+  "sourceCommit": "43aff8b980b4d3c51bd6618fe501053778f3d362",
+  "release": "https://github.com/lulalulaluobo/QReader/releases/tag/1.2.5"
+}

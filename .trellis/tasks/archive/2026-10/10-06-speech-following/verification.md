@@ -41,4 +41,6 @@
 | styles.css | 39194 | 1ceadd9d0a4ed0c222c3e38cddfa3df58616c85ff9f72fc5bc15ad65f9406785 |
 | QReader-1.2.5.zip | 2944231 | ee29e607d513408ef932fe3d98ff89d2196649659cda6e8beb49027135b340e1 |
 
-公开附件、源码与标签回执在发布后补录。
+源码提交：`43aff8b980b4d3c51bd6618fe501053778f3d362`。main 与注解标签 1.2.5 原子推送。
+
+正式 [Release 1.2.5](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.5) 为 latest，非草稿、非预发布。四个公开附件 HTTP 200，逐字节下载与上表构建一致，GitHub digest 与 SHA-256 一致，ZIP 解压精确三文件。公开核验时远程 main 与标签剥离提交均为上述源码提交；后续仅补录此回执和归档，不改变标签或附件。
