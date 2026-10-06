@@ -105,7 +105,16 @@ export class SpeechPlayer {
     const previous = owners.get(this.win);
     if (previous && previous !== this) previous.stop();
     owners.set(this.win, this);
-    if (this.state === "paused" && this.resume) { this.setState("playing"); this.resume(); return; }
+    this.engine.setSpeechFollowing(true);
+    if (this.state === "paused" && this.resume) {
+      this.setState("playing"); this.resume();
+      const token = this.generation;
+      if (this.current) void this.engine.followSpeech(this.current).catch((error: unknown) => {
+        if (token !== this.generation) return;
+        this.stop(); this.error = error instanceof Error ? error.message : String(error); this.setState("error");
+      });
+      return;
+    }
     // Unlock this same audio element within the click gesture before async synthesis.
     if (this.provider() === "bing") {
       this.audio.src = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
@@ -122,6 +131,7 @@ export class SpeechPlayer {
       this.setState("error");
     });
   }
+  browse(): void { this.engine.setSpeechFollowing(false); }
   pause(): void {
     if (this.state !== "playing" && this.state !== "loading") return;
     if (this.provider() === "system") {

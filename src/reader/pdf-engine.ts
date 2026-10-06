@@ -50,6 +50,9 @@ export class PdfEngine implements ReaderEngine {
   private selectionSignature = "";
   private speechGeneration = 0;
   private speechSegment: SpeechSegment | null = null;
+  private speechFollowing = true;
+  private navigation: Promise<void> = Promise.resolve();
+  private resizePoint: { page: number; fraction: number } | null = null;
   private removeSpeechMark: (() => void) | null = null;
   private ro: ResizeObserver | null = null;
   private touchStart: { x: number; y: number; time: number } | null = null;
@@ -94,6 +97,7 @@ export class PdfEngine implements ReaderEngine {
     });
     scroller.addEventListener("click", (event) => this.handleClick(event));
     scroller.addEventListener("keydown", (event) => this.handleKey(event));
+    scroller.addEventListener("wheel", () => this.manualNavigation(), { passive: true });
     scroller.addEventListener("mouseup", this.selectionListener);
     scroller.addEventListener("contextmenu", (event) => {
       if (!window.getSelection()?.isCollapsed) event.preventDefault();
@@ -104,6 +108,10 @@ export class PdfEngine implements ReaderEngine {
       const first = event.touches[0];
       this.touchStart = first && event.touches.length === 1 ? { x: first.clientX, y: first.clientY, time: Date.now() } : null;
       this.swiped = false;
+    }, { passive: true });
+    scroller.addEventListener("touchmove", (event) => {
+      const first = event.touches[0];
+      if (this.touchStart && first && Math.hypot(first.clientX - this.touchStart.x, first.clientY - this.touchStart.y) > 10) this.manualNavigation();
     }, { passive: true });
     scroller.addEventListener("touchend", (event) => { this.handleSwipe(event); this.selectionListener(); }, { passive: true });
     document.addEventListener("selectionchange", this.selectionListener);
@@ -302,7 +310,7 @@ export class PdfEngine implements ReaderEngine {
       });
       for (const br of layer.querySelectorAll("br")) { br.style.position = "absolute"; br.style.color = "transparent"; }
       wrapper.dataset.rendered = "true";
-      if (this.speechSegment?.pdfPage === number) this.paintSpeech();
+      if (this.speechSegment?.pdfPage === number) this.paintSpeech(false);
       if (this.scroller) {
         const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordExposure, true);
         this.wordLayers.set(number, words);
@@ -432,15 +440,26 @@ export class PdfEngine implements ReaderEngine {
     return { segments, next: pageNumber < this.doc.numPages ? pageNumber + 1 : null };
   }
   async followSpeech(segment: SpeechSegment): Promise<void> {
-    if (!segment.pdfPage || this.destroyed) return;
+    const page = segment.pdfPage;
+    if (!page || this.destroyed) return;
     this.speechSegment = segment;
     const generation = ++this.speechGeneration;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
-    if (this.currentPage !== segment.pdfPage || !this.wrappers.get(segment.pdfPage)?.dataset.rendered) await this.setPage(segment.pdfPage);
-    if (generation !== this.speechGeneration || this.destroyed) return;
-    this.paintSpeech();
+    if (!this.speechFollowing) { this.paintSpeech(false); return; }
+    await this.enqueueNavigation(async () => {
+      if (generation !== this.speechGeneration || !this.speechFollowing || this.destroyed) return;
+      if (this.currentPage !== page || !this.wrappers.get(page)?.dataset.rendered) await this.setPage(page);
+      if (generation !== this.speechGeneration || this.destroyed) return;
+      this.paintSpeech(true);
+      // Selected playback may move to another page before the player resize runs.
+      if (this.resizePoint) this.resizePoint = this.readLocation();
+    });
   }
-  private paintSpeech(): void {
+  setSpeechFollowing(enabled: boolean): void {
+    this.speechFollowing = enabled;
+    if (!enabled) ++this.speechGeneration;
+  }
+  private paintSpeech(scroll: boolean): void {
     const segment = this.speechSegment;
     if (!segment?.pdfPage || this.destroyed) return;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
@@ -455,7 +474,7 @@ export class PdfEngine implements ReaderEngine {
       range.setEnd(text, Math.min(item.end, text.textContent!.length));
       ranges.push(range);
     }
-    if (ranges[0] && this.scroller) {
+    if (scroll && ranges[0] && this.scroller) {
       const r = ranges[0].getBoundingClientRect(); const viewport = this.scroller.getBoundingClientRect();
       if (r.top < viewport.top || r.bottom > viewport.bottom) this.scroller.scrollTop += r.top - viewport.top - 24;
     }
@@ -572,6 +591,7 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private handleKey(event: KeyboardEvent): void {
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) this.manualNavigation();
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
     if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.navigate(true); }
     else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.navigate(false); }
@@ -600,34 +620,49 @@ export class PdfEngine implements ReaderEngine {
     }
   }
   async goToChapter(chapterId: string): Promise<void> {
-    this.hooks.onManualNavigation?.();
+    this.manualNavigation();
     const chapter = this.chapters.find((item) => item.pdfStartPage && pdfChapterId(item.pdfStartPage) === chapterId);
-    if (chapter?.pdfStartPage) await this.setPage(chapter.pdfStartPage);
+    if (chapter?.pdfStartPage) await this.enqueueNavigation(() => this.setPage(chapter.pdfStartPage!));
   }
   async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
-    this.hooks.onManualNavigation?.();
+    this.manualNavigation();
     if (!annotation.pdfPage) throw new Error("这条批注没有可用的原文页码");
     const fraction = annotation.itemRanges?.[0]?.rects?.[0]?.y ?? 0;
-    await this.setPage(annotation.pdfPage, Math.max(0, Math.min(1, fraction)));
+    await this.enqueueNavigation(() => this.setPage(annotation.pdfPage!, Math.max(0, Math.min(1, fraction))));
   }
   async next(): Promise<void> {
-    this.hooks.onManualNavigation?.();
-    this.flushVocabulary();
-    if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
-    else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "smooth" });
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary();
+      if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
+      else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "auto" });
+    });
   }
   async prev(): Promise<void> {
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary();
+      if (this.mode === "paginated") { if (this.currentPage > 1) await this.setPage(this.currentPage - 1); }
+      else this.scroller?.scrollBy({ top: -this.scroller.clientHeight * 0.85, behavior: "auto" });
+    });
+  }
+  private manualNavigation(): void {
+    this.resizePoint = null;
     this.hooks.onManualNavigation?.();
-    this.flushVocabulary();
-    if (this.mode === "paginated") { if (this.currentPage > 1) await this.setPage(this.currentPage - 1); }
-    else this.scroller?.scrollBy({ top: -this.scroller.clientHeight * 0.85, behavior: "smooth" });
+  }
+  private enqueueNavigation(action: () => Promise<void>): Promise<void> {
+    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); });
+    this.navigation = next.catch(() => undefined);
+    return next;
   }
   getMode(): ReadMode { return this.mode; }
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || this.destroyed) return;
-    this.reportLocation();
-    this.mode = mode;
-    await this.rebuild();
+    await this.enqueueNavigation(async () => {
+      this.reportLocation();
+      this.mode = mode;
+      await this.rebuild();
+    });
   }
   async applyLayout(_layout: ReadingLayout, theme: ReadingColors): Promise<void> {
     // PDF 保留原始文字和图表，只调整页面外的背景。
@@ -648,10 +683,18 @@ export class PdfEngine implements ReaderEngine {
     const after = (items[last.item]?.str.slice(last.end) ?? "") + " " + items.slice(last.item + 1).map((item) => item.str).join(" ");
     return { before: before.slice(-300), after: after.slice(0, 300) };
   }
+  prepareResize(): void {
+    if (!this.rebuilding && !this.destroyed) this.resizePoint = this.readLocation();
+  }
   resize(): void {
     if (!this.scroller || this.destroyed || this.rebuilding) return;
-    this.reportLocation();
-    void this.rebuild().catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))));
+    void this.enqueueNavigation(async () => {
+      const point = this.resizePoint ?? this.readLocation();
+      this.resizePoint = null;
+      this.currentPage = point.page;
+      this.currentPageFraction = point.fraction;
+      await this.rebuild();
+    }).catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))));
   }
   destroy(): void {
     this.clearSpeech();

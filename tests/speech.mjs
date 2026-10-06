@@ -68,9 +68,10 @@ function windowMock(system = false) {
 }
 function engineMock() {
   return { follows: [], clears: 0, units: [],
+    following: true, setSpeechFollowing(enabled) {this.following=enabled;},
     async speechText(unit) { this.units.push(unit); return unit === undefined ? { segments: [{text:'First.'},{text:'Second.'}], next:1 }
       : {segments:[{text:'Next page.'}],next:null}; },
-    async followSpeech(s) {this.follows.push(s.text);}, clearSpeech() {this.clears++;} };
+    async followSpeech(s) {if(this.following)this.follows.push(s.text);}, clearSpeech() {this.clears++;} };
 }
 const tick = () => new Promise(r => setTimeout(r, 5));
 const wait = async f => { for(let i=0;i<100&&!f();i++) await tick(); assert.ok(f(), 'condition reached'); };
@@ -148,4 +149,18 @@ onlineSeek.play({text:'Selected online.',pdfPage:2,itemRanges:[{item:3,start:2,e
 const activePlays=onlineSeekWin.audios[0].plays;oldNetwork();await tick();
 assert.equal(onlineSeek.current.text,'Selected online.');assert.equal(onlineSeekWin.audios[0].plays,activePlays);
 onlineSeek.stop();
-console.log('Speech: protocol, source-anchored selection, repeated PDF sentences, pause/resume, cross-page ownership and stale-response cleanup passed.');
+// Browsing moves only the reader: narration and its original source sequence continue.
+const browseWin=windowMock(true),browseEngine=engineMock(),browsePlayer=new SpeechPlayer(browseEngine,()=>settings,browseWin,()=>{});
+browsePlayer.play();await wait(()=>browsePlayer.state==='playing');browsePlayer.browse();
+assert.equal(browsePlayer.state,'playing');browseWin.speechSynthesis.active.onend();await wait(()=>browsePlayer.current.text==='Second.');
+assert.equal(browsePlayer.state,'playing');assert.deepEqual(browseEngine.follows,['First.']);
+browsePlayer.pause();browsePlayer.play();await wait(()=>browsePlayer.state==='playing');assert.equal(browseEngine.following,true);
+assert.equal(browseEngine.follows.at(-1),'Second.');browsePlayer.stop();
+globalThis.qrSpeechRequest=async o=>o.method?{status:200,arrayBuffer:audioBuffer()}:auth();
+const browseOnlineWin=windowMock(),browseOnlineEngine=engineMock(),browseOnline=new SpeechPlayer(browseOnlineEngine,()=>settings,browseOnlineWin,()=>{});
+browseOnline.play();await wait(()=>browseOnline.state==='playing');browseOnline.browse();browseOnlineWin.audios[0].onended();
+await wait(()=>browseOnline.current.text==='Second.'&&browseOnline.state==='playing');assert.deepEqual(browseOnlineEngine.follows,['First.']);
+browseOnline.pause();const beforeResume=browseOnlineWin.audios[0].plays;browseOnline.play();await tick();
+assert.equal(browseOnlineEngine.following,true);assert.equal(browseOnlineEngine.follows.at(-1),'Second.');
+assert.equal(browseOnlineWin.audios[0].plays,beforeResume+1);browseOnline.stop();
+console.log('Speech: protocol, anchored selection, independent browsing, pause/resume, source ownership and stale-response cleanup passed.');

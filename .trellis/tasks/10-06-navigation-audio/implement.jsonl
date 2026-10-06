@@ -1,0 +1,2 @@
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"独立朗读、稳定重排及真实隔离验收"}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"保留阅读页覆盖层、原生交互及既有导航"}

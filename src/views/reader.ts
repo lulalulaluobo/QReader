@@ -174,7 +174,6 @@ export class ReaderView extends ItemView {
     const record = this.entry?.reading.annotations.find(record => record.id === id);
     const engine = this.engine;
     if (!record || !engine) throw new Error(this.plugin.t("原笔记或版本已不可用"));
-    this.stopSpeech();
     await engine.goToAnnotation(record);
     if (this.engine === engine) { this.closePanels(); engine.clearSelection(); }
   }
@@ -393,7 +392,11 @@ export class ReaderView extends ItemView {
     const theme = this.resolvedTheme();
     const generation = this.generation;
     const hooks: EngineHooks = {
-      onManualNavigation: () => { if (generation === this.generation) this.stopSpeech(); },
+      onManualNavigation: () => {
+        if (generation !== this.generation) return;
+        this.speechStart = undefined;
+        this.speech?.browse();
+      },
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
       onSelect: (sel) => {
         if (generation !== this.generation) return;
@@ -601,6 +604,7 @@ export class ReaderView extends ItemView {
       return;
     }
     this.chromeHidden = !this.chromeHidden;
+    this.engine?.prepareResize();
     this.root.toggleClass("qr-chrome-hidden", this.chromeHidden);
     this.header.inert = this.bottomBar.inert = this.chromeHidden;
   }
@@ -663,7 +667,6 @@ export class ReaderView extends ItemView {
         if (n.chapterId) {
           row.addClass("qr-toc-link");
           row.onclick = () => {
-            this.stopSpeech();
             void this.engine?.goToChapter(n.chapterId!, n.href)
               .catch((error: unknown) => new Notice(this.plugin.t("跳转失败：{0}", this.plugin.errorText(error))));
             this.closePanels();
@@ -852,6 +855,7 @@ export class ReaderView extends ItemView {
   }
 
   private stopSpeech(): void {
+    this.engine?.prepareResize();
     this.speechControlsOpen = false;
     this.speechRatesOpen = false;
     this.speechStart = undefined;
@@ -945,7 +949,9 @@ export class ReaderView extends ItemView {
     const player = this.speech;
     if (!this.root) return;
     const state = player?.state ?? "idle";
-    this.root.toggleClass("qr-speech-active", !!player && (this.speechControlsOpen || state !== "idle" && state !== "finished"));
+    const speechActive = !!player && (this.speechControlsOpen || state !== "idle" && state !== "finished");
+    if (this.root.hasClass("qr-speech-active") !== speechActive) this.engine?.prepareResize();
+    this.root.toggleClass("qr-speech-active", speechActive);
     const labels: Record<SpeechState, string> = {
       idle: this.plugin.t("准备朗读"), loading: this.plugin.t("正在准备语音……"), playing: this.plugin.t("正在朗读"),
       paused: this.plugin.t("已暂停"), finished: this.plugin.t("朗读结束"), error: this.plugin.localizeStatus(player?.error ?? ""),

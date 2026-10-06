@@ -74,12 +74,15 @@ export interface ReaderEngine {
   clearSelection(): void;
   getSelectionContext(sel: EngineSelection): Promise<{ before: string; after: string }>;
   resize(): void;
+  /** Capture the reader's visible position before controls change the viewport. */
+  prepareResize(): void;
   setVocabulary(words: readonly VocabularyWord[], highlight: boolean, threshold: number): void;
   noteVocabularyLookup(word: string, paragraphId?: string): void;
   flushVocabulary(): void;
   /** An explicit source anchor takes precedence over the visible page on the first batch. */
   speechText(unit?: number, from?: SpeechSegment): Promise<SpeechBatch>;
   followSpeech(segment: SpeechSegment): Promise<void>;
+  setSpeechFollowing(enabled: boolean): void;
   clearSpeech(): void;
   updateChapters?(chapters: ChapterState[]): void;
 }

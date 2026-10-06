@@ -52,6 +52,9 @@ export class EpubEngine implements ReaderEngine {
   private position: RestorePoint;
   private speechGeneration = 0;
   private speechSegment: SpeechSegment | null = null;
+  private speechFollowing = true;
+  private navigation: Promise<void> = Promise.resolve();
+  private resizePoint: { cfi: string; offset: number | null } | null = null;
   private removeSpeechMark: (() => void) | null = null;
   // Only the rendition owns paginated scrolling. Native selection/focus scrolling
   // can otherwise leave a fractional-page offset that next/prev never removes.
@@ -127,6 +130,7 @@ export class EpubEngine implements ReaderEngine {
     if (this.destroyed) return;
     const host = document.createElement("div");
     host.className = "qr-epub-host";
+    host.addEventListener("wheel", () => this.manualNavigation(), { passive: true });
     container.appendChild(host);
     await this.buildRendition(host, this.position);
     if (this.destroyed) return;
@@ -175,13 +179,22 @@ export class EpubEngine implements ReaderEngine {
     this.selectionScroller = null;
     this.selectionScroll = null;
     this.applyTheme();
+    rendition.on("resized", () => {
+      if (generation !== this.generation || this.destroyed) return;
+      const cfi = this.resizePoint?.cfi ?? this.position.cfi;
+      // EPUB.js emits this before restoring location.start.cfi. Replace its stale fallback.
+      if (cfi && rendition.location?.start) rendition.location.start.cfi = cfi;
+    });
     rendition.on("relocated", (location: Location) => {
       if (generation !== this.generation || this.destroyed) return;
       for (const [doc, layer] of this.wordLayers) {
         if (!doc.defaultView?.frameElement?.isConnected) { layer.flush(); layer.destroy(); this.wordLayers.delete(doc); }
         else layer.refresh();
       }
-      if (!this.restoring) this.handleRelocated(location);
+      if (!this.restoring) {
+        this.restoreResizePoint();
+        this.handleRelocated(location);
+      }
       this.paintSpeech();
     });
     rendition.on("selected", (cfi: string, contents: ContentsLike) => {
@@ -274,6 +287,11 @@ export class EpubEngine implements ReaderEngine {
     let touch: { x: number; y: number; time: number } | null = null;
     let swiped = false;
     doc.addEventListener("keydown", this.keyboard);
+    doc.addEventListener("wheel", () => this.manualNavigation(), { passive: true });
+    doc.addEventListener("touchmove", (event) => {
+      const first = event.touches[0];
+      if (touch && first && Math.hypot(first.clientX - touch.x, first.clientY - touch.y) > 10) this.manualNavigation();
+    }, { passive: true });
     doc.addEventListener("touchstart", (event) => {
       const first = event.touches[0];
       touch = first && event.touches.length === 1 ? { x: first.clientX, y: first.clientY, time: Date.now() } : null;
@@ -340,6 +358,7 @@ export class EpubEngine implements ReaderEngine {
     const target = event.target as HTMLElement | null;
     if (target?.nodeType === Node.ELEMENT_NODE && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
+    if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) this.manualNavigation();
     if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.navigate(true); }
     else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.navigate(false); }
   }
@@ -478,47 +497,63 @@ export class EpubEngine implements ReaderEngine {
   }
 
   async goToChapter(chapterId: string, targetHref?: string): Promise<void> {
-    this.hooks.onManualNavigation?.();
+    this.manualNavigation();
     const chapter = this.chapterById(chapterId);
     if (!chapter || chapter.spineIndex === undefined || !this.rendition) return;
-    this.flushVocabulary();
-    this.clearSelection();
-    await this.rendition.display(targetHref ?? chapter.href ?? this.book.spine.get(chapter.spineIndex).href);
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary(); this.clearSelection();
+      await this.rendition?.display(targetHref ?? chapter.href ?? this.book.spine.get(chapter.spineIndex).href);
+    });
   }
 
   async goToAnnotation(annotation: AnnotationRecord): Promise<void> {
-    this.hooks.onManualNavigation?.();
+    this.manualNavigation();
     if (!annotation.cfi || !this.rendition) throw new Error("这条批注没有可用的原文位置");
-    this.flushVocabulary();
-    this.clearSelection();
-    await this.rendition.display(annotation.cfi);
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary(); this.clearSelection();
+      await this.rendition?.display(annotation.cfi!);
+    });
   }
 
   async next(): Promise<void> {
-    this.hooks.onManualNavigation?.();
-    this.flushVocabulary();
-    this.clearSelection();
-    if (this.mode === "scrolled") this.scrollBy(0.85);
-    else await this.rendition?.next();
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary(); this.clearSelection();
+      if (this.mode === "scrolled") this.scrollBy(0.85);
+      else await this.rendition?.next();
+    });
   }
   async prev(): Promise<void> {
-    this.hooks.onManualNavigation?.();
-    this.flushVocabulary();
-    this.clearSelection();
-    if (this.mode === "scrolled") this.scrollBy(-0.85);
-    else await this.rendition?.prev();
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary(); this.clearSelection();
+      if (this.mode === "scrolled") this.scrollBy(-0.85);
+      else await this.rendition?.prev();
+    });
   }
   private scrollBy(fraction: number): void {
     const scroller = this.container?.querySelector<HTMLElement>(".epub-container");
-    scroller?.scrollBy({ top: scroller.clientHeight * fraction, behavior: "smooth" });
+    scroller?.scrollBy({ top: scroller.clientHeight * fraction, behavior: "auto" });
+  }
+  private manualNavigation(): void {
+    this.resizePoint = null;
+    this.hooks.onManualNavigation?.();
+  }
+  private enqueueNavigation(action: () => Promise<void>): Promise<void> {
+    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); });
+    this.navigation = next.catch(() => undefined);
+    return next;
   }
   getMode(): ReadMode { return this.mode; }
 
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || !this.rendition || !this.container) return;
-    this.clearSelection();
-    this.mode = mode;
-    await this.rebuildRendition();
+    await this.enqueueNavigation(async () => {
+      this.clearSelection();
+      this.resizePoint = null;
+      this.mode = mode;
+      await this.rebuildRendition();
+    });
   }
 
   private async rebuildRendition(): Promise<void> {
@@ -599,22 +634,34 @@ export class EpubEngine implements ReaderEngine {
     this.speechSegment = segment;
     const generation = ++this.speechGeneration;
     this.removeSpeechMark?.(); this.removeSpeechMark = null;
-    const cfi = new EpubCFI(segment.cfi);
-    const start = new EpubCFI(segment.cfi); start.collapse(true);
-    const contents = (rendition.getContents() ?? []) as unknown as ContentsLike[];
-    const current = contents.find((content) => content.sectionIndex === cfi.spinePos);
-    let visible = false;
-    if (current && this.container) {
-      const range = cfi.toRange(current.document);
-      const rect = range.getClientRects()[0];
-      const frame = current.window.frameElement?.getBoundingClientRect();
-      const viewport = this.container.getBoundingClientRect();
-      visible = !!rect && !!frame && rect.left + frame.left >= viewport.left - 2 && rect.top + frame.top >= viewport.top - 2
-        && rect.left + frame.left < viewport.right - 2 && rect.top + frame.top < viewport.bottom - 2;
-    }
-    if (!visible) await rendition.display(start.toString());
-    if (generation !== this.speechGeneration || this.destroyed || rendition !== this.rendition) return;
-    this.paintSpeech();
+    if (!this.speechFollowing) { this.paintSpeech(); return; }
+    await this.enqueueNavigation(async () => {
+      if (generation !== this.speechGeneration || !this.speechFollowing || this.destroyed || rendition !== this.rendition) return;
+      const cfi = new EpubCFI(segment.cfi);
+      const start = new EpubCFI(segment.cfi); start.collapse(true);
+      const contents = (rendition.getContents() ?? []) as unknown as ContentsLike[];
+      const current = contents.find((content) => content.sectionIndex === cfi.spinePos);
+      let visible = false;
+      if (current && this.container) {
+        const range = cfi.toRange(current.document);
+        const rect = range.getClientRects()[0];
+        const frame = current.window.frameElement?.getBoundingClientRect();
+        const viewport = this.container.getBoundingClientRect();
+        visible = !!rect && !!frame && rect.left + frame.left >= viewport.left - 2 && rect.top + frame.top >= viewport.top - 2
+          && rect.left + frame.left < viewport.right - 2 && rect.top + frame.top < viewport.bottom - 2;
+      }
+      if (!visible) {
+        // An explicit start wins over the viewport snapshot taken when the player opened.
+        this.resizePoint = { cfi: start.toString(), offset: 0 };
+        await rendition.display(start.toString());
+      }
+      if (generation !== this.speechGeneration || this.destroyed || rendition !== this.rendition) return;
+      this.paintSpeech();
+    });
+  }
+  setSpeechFollowing(enabled: boolean): void {
+    this.speechFollowing = enabled;
+    if (!enabled) ++this.speechGeneration;
   }
   private paintSpeech(): void {
     if (!this.speechSegment?.cfi || !this.rendition || this.destroyed) return;
@@ -636,6 +683,37 @@ export class EpubEngine implements ReaderEngine {
     for (const content of contents) content.window.getSelection()?.removeAllRanges();
   }
 
+  prepareResize(): void {
+    const fallback = this.position.cfi ?? this.rendition?.location?.start?.cfi;
+    if (!fallback || this.destroyed || this.restoring) return;
+    const cfi = this.visibleCfi(fallback);
+    this.resizePoint = { cfi, offset: this.cfiOffset(cfi) };
+    if (this.rendition?.location?.start) this.rendition.location.start.cfi = cfi;
+  }
+  private cfiOffset(cfi: string): number | null {
+    if (!this.container || !this.rendition) return null;
+    const parsed = new EpubCFI(cfi);
+    const contents = (this.rendition.getContents() ?? []) as unknown as ContentsLike[];
+    const content = contents.find((c) => c.sectionIndex === parsed.spinePos);
+    const frame = content?.window.frameElement?.getBoundingClientRect();
+    if (!content || !frame) return null;
+    // Image pages and unloaded/converted sections may have no DOM range for this CFI.
+    let range: Range | null;
+    try { range = parsed.toRange(content.document); } catch { return null; }
+    const rect = range?.getClientRects()[0];
+    return rect ? rect.top + frame.top - this.container.getBoundingClientRect().top : null;
+  }
+  private restoreResizePoint(): void {
+    const point = this.resizePoint;
+    if (!point) return;
+    const offset = this.cfiOffset(point.cfi);
+    if (offset === null) return;
+    this.resizePoint = null;
+    if (this.mode === "scrolled" && point.offset !== null) {
+      const scroller = this.container?.querySelector<HTMLElement>(".epub-container");
+      scroller?.scrollBy({ top: offset - point.offset, behavior: "auto" });
+    }
+  }
   resize(): void {
     const container = this.container;
     if (!container || this.destroyed) return;
@@ -651,11 +729,9 @@ export class EpubEngine implements ReaderEngine {
       return;
     }
     this.clearSelection();
-    const speech = this.speechSegment?.cfi ? new EpubCFI(this.speechSegment.cfi) : null;
-    speech?.collapse(true);
-    // EPUB.js otherwise restores its previous viewport CFI and can move past the spoken sentence.
+    if (!this.resizePoint) this.prepareResize();
     const rendition = this.rendition as (Rendition & { resize(width: number, height: number, cfi?: string): void }) | null;
-    rendition?.resize(width, height, speech?.toString());
+    rendition?.resize(width, height, this.resizePoint?.cfi);
   }
   private reportError(error: unknown): void { this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))); }
   destroy(): void {
