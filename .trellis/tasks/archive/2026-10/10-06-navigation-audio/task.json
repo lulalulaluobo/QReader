@@ -1,0 +1,13 @@
+{
+  "id": "navigation-audio",
+  "name": "navigation-audio",
+  "title": "修复翻页跳动并分离朗读与手动阅读",
+  "status": "completed",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-06",
+  "branch": "main",
+  "completedAt": "2026-10-06",
+  "sourceCommit": "7f513cf8cf38f40dfa230e685c6dc23e666b086f",
+  "release": "https://github.com/lulalulaluobo/QReader/releases/tag/1.2.4"
+}

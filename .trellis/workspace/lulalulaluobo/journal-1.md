@@ -257,3 +257,14 @@
 - build、speech/translation/notes/documents 和 diff 检查通过；原生隔离 Obsidian 验证实际系统/在线选区播放、底部路由、已有标记、PDF TextLayer、六格式、56 组双语/主题/七宽度布局。17 本原书和生词字节、旧历史/批注/整书想法、笔记正文保持完整，只排除既有中英文最近阅读时间的正常更新。
 - 隔离 Obsidian 正常退出、终端无未处理异常。Android 尚无真机验收，手机为视口模拟，不保证锁屏后台。双语 README 与版本更新完成。
 - 源码 `c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc`、main 与注解标签 1.2.3 已原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`945772655ee19fc100f3d43449c0bc5051a705042a29a4f1ac7c85d0a1e29cfa`。详情见 .trellis/tasks/10-05-selection-audio/verification.md。
+
+
+## 会话 19：修复翻页跳动并分离朗读与阅读，发布 1.2.4
+
+**日期**：2026-10-06；**分支**：main；**状态**：已完成。
+
+- 用户修正旧规则：手动上下翻页或跳章不能停止朗读；朗读与读者浏览独立，按停止按钮退出。自由浏览暂时关闭原文跟随，暂停再继续或明确选文起读恢复跟随；换书、离开、销毁仍释放音频。
+- 原翻页停止播放器改变正文高度，EPUB.js 重排旧 CFI 覆盖翻页；离散 smooth 滚动在快速反向操作时重叠。导航排序与代次取消、即时离散滚动、CFI/像素偏移及 PDF 页内比例快照，解决翻页/停止回跳；关闭自动 scroll anchoring，PDF 重绘不强制滚回声音位置。
+- 播放栏重排让位于显式选文起点；笔记原文跳转保留同一播放器；CBZ 空文字 Range 回退，不破坏图片书的工具栏重排或后续切书。
+- build、speech/translation/notes/documents、diff 与任务上下文检查通过；独立 Obsidian 八组 EPUB/PDF/模式/375及768宽度、快速往返、迟到定位、停止保位、真实滚轮/触摸输入、Bing 自然续句不抢位置、暂停续播、跳章补载、笔记两个跳转入口均通过。完整选文及六格式/56组双语主题宽度回归通过，原书、旧笔记和生词完整。Android 无设备，触摸为桌面模拟；最终独立 GUI 正常退出，无收尾未处理异常。
+- 双语 README 与规格更新；源码 `7f513cf8cf38f40dfa230e685c6dc23e666b086f`、main 与注解标签 1.2.4 原子推送，正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`82b2b204d0209c489f0d3cf14f65ba46e45987b55c91284f83efda02ebeaad86`。任务已归档，证据见 .trellis/tasks/archive/2026-10/10-06-navigation-audio/verification.md。

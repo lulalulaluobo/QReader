@@ -26,6 +26,7 @@
 - `navigation-124-annotation.mjs`：ReaderView 与公开笔记跳转两个入口在 EPUB/PDF 中保持同一播放器与短句；CBZ 没有文字 Range 时工具栏重排及切换回文字书正常。
 - `audio-123-selection.mjs` 最终生产包回归完整通过：实际系统/在线起读、重复句和半句选区、底部播放、先开控制栏、已有标记、PDF TextLayer、六格式文本边界；2 语言 × 4 主题 × 7 宽度共 56 组的单行六图标、44px、可访问标签、无溢出及数据完整性均通过（`preserved: true`）。
 - 首轮完整回归揭示 CBZ 空 Range 读取错误，已修复并重建、完整复跑通过；测试窗口隐藏时 EPUB.js 的 RAF 队列暂停，为独立测试窗口关闭后台节流并恢复显示后验收，不改变插件或用户 Vault 设置。
+- 最终独立 Obsidian 正常退出（exit 0），收尾终端没有 Uncaught、unhandled、TypeError 或 ReferenceError。
 - 上述触摸测试在桌面 Obsidian 中模拟输入；没有连接 Android 设备或模拟器，不称为 Android 真机验收。不承诺后台/锁屏持续播放。
 
 ## 发布
@@ -39,4 +40,6 @@
 | styles.css | 39194 | 1ceadd9d0a4ed0c222c3e38cddfa3df58616c85ff9f72fc5bc15ad65f9406785 |
 | QReader-1.2.4.zip | 2943776 | 82b2b204d0209c489f0d3cf14f65ba46e45987b55c91284f83efda02ebeaad86 |
 
-远程发布回执在完成后记录。
+源码提交 `7f513cf8cf38f40dfa230e685c6dc23e666b086f`、main 与注解标签 1.2.4 已原子推送，公开 main 与剥离标签均对应同一源码提交。
+
+[正式 Release 1.2.4](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.4) 为 latest，非草稿、非预发布。四个公开附件 HTTP 200，下载字节、SHA-256、GitHub digest 与本地一致；ZIP 精确三文件逐项一致。收尾提交仅更新任务归档、验收回执和工作日志，不更换源码标签或附件。

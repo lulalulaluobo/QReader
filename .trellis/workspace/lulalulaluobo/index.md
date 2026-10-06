@@ -4,8 +4,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
-- **Last Active**: 2026-10-05
+- **Total Sessions**: 19
+- **Last Active**: 2026-10-06
 <!-- @@@/auto:current-status -->
 
 ## 日志
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~259 | Active |
+| `journal-1.md` | ~270 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 19 | 2026-10-06 | 修复翻页跳动并分离朗读与阅读，发布 1.2.4 | `7f513cf8cf38f40dfa230e685c6dc23e666b086f` | `main` |
 | 18 | 2026-10-05 | 从选中文字和已有标记起读，发布 1.2.3 | `c7fa3519ce593ec5a03a7140ebab0fcf7c11cefc` | `main` |
 | 17 | 2026-10-05 | 阅读页听书、正文跟随与简洁播放栏，发布 1.2.2 | `830f1c8c8b1d57729a0ec41ef007eebc1dfef7ba` | `main` |
 | 16 | 2026-10-05 | 撤下思考线，汇总每书 Markdown 笔记，发布 1.2.1 | `aa7622dc0c171b53b0275ee154cdfdddec973b66` | `main` |
