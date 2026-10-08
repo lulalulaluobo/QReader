@@ -46,4 +46,6 @@ npm run qa:reader -- --isolated-vault /absolute/path/to/test-vault --output tmp/
 
 脚本只连接本机端点，先核验实际 Vault 路径与前台可见性；测试首个健康样本的文字搜索、取消、返回、宽屏双页、PDF 缩放与平移。无文字书标记为无可搜索文字。测试后恢复设置、清除视口模拟；浏览产生的阅读进度和生词出现仍只作用于隔离目录。此脚本不是手机真机测试，手机半页停留和系统帧/内存仍按上述步骤单独采集。
 
+设置专用回归使用相同隔离端点：`npm run qa:settings -- --isolated-vault /absolute/path/to/test-vault --output tmp/settings-ui-report.json`。中英 × 浅深 × 七宽度 × 宿主横向/纵向，共 56 组，检查卡片内容末尾的空白、控件高度、单页可见性、版本、草稿与键盘。移动/主题类应用于实际设置 ownerDocument，运行后恢复，不保存测试输入；另通过实际 GUI 原生设置入口检查桌面分页。不能只依赖主窗口视口模拟或零横向溢出推断手机布局正常。
+
 方法参考 [Obsidian SecretStorage 官方指南](https://docs.obsidian.md/plugins/guides/secret-storage) 与 [android-performance 技能](/Users/luluen/.codex/plugins/cache/openai-curated-remote/test-android-apps/0.1.2/skills/android-performance/SKILL.md)。

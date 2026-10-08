@@ -41,7 +41,8 @@ export class QReaderSettingTab extends PluginSettingTab {
     this.pathDraft = proposedPath;
     this.testStatus = this.plugin.localizeStatus(this.testStatus);
 
-    containerEl.createEl("h2", { text: "QReader" });
+    const title = containerEl.createEl("h2", { text: "QReader", cls: "qr-settings-heading" });
+    title.createSpan({ text: this.plugin.manifest.version, cls: "qr-settings-version" });
 
     new Setting(containerEl).setName(this.plugin.t("语言"))
       .setDesc(this.plugin.t("界面和默认 AI 提示词使用所选语言；已有书籍、笔记、问题和回答保持原样。"))
@@ -426,7 +427,10 @@ export class QReaderSettingTab extends PluginSettingTab {
       }));
     const selectPage = (id: string) => {
       this.page = id;
-      for (const [key, panel] of pages) panel.hidden = key !== id;
+      for (const [key, panel] of pages) {
+        panel.hidden = key !== id;
+        panel.style.display = key === id ? "" : "none";
+      }
       for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) {
         const selected = button.dataset.page === id; button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1;
       }

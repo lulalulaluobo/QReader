@@ -1,0 +1,10 @@
+{
+  "id": "settings-layout",
+  "name": "settings-layout",
+  "title": "修复手机设置卡片撑高并验证桌面分类分页",
+  "status": "in_progress",
+  "creator": "lulalulaluobo",
+  "assignee": "lulalulaluobo",
+  "createdAt": "2026-10-08",
+  "branch": "main"
+}

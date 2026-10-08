@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.3.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.3.0) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.3.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.3.1) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -23,9 +23,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.3.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.3.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 设置布局修复（1.3.1）
+
+手机设置卡片改为内容自适应高度，修复语言和路径卡片的大块空白。窄屏说明与控件上下排列，宽设置容器左右排列；六分类导航保持可见，宽屏一行、窄屏两行，切换只显示当前页。设置标题显示加载版本。升级请同时替换三个文件并重新启动 Obsidian，确认设置标题为 **QReader 1.3.1**。
+
+新增 `npm run qa:settings -- --isolated-vault /absolute/test-vault --output tmp/settings-report.json`，在隔离原生 Obsidian 验证中英、浅深色、七宽度、宿主横向/纵向布局、空白高度、分类显示、输入草稿和键盘。此检查仍不代替 Android 真机。
 
 ### 阅读工具与设置分页（1.3.0）
 
@@ -139,9 +145,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.3.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.3.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Settings layout fix (1.3.1)
+
+Settings cards now size to their content, removing the large empty areas on phones. Labels and controls stack in narrow containers and sit side by side in wide ones. The six category tabs stay visible while scrolling, and only the selected page is shown. The heading displays the loaded version. Replace all three plugin files and restart Obsidian; confirm **QReader 1.3.1** in settings.
+
+Run `npm run qa:settings -- --isolated-vault /absolute/test-vault --output tmp/settings-report.json` for isolated native checks across both languages, light/dark themes, seven widths and both host layout directions, including unwanted empty space, pagination, drafts and keyboard navigation. This is not a physical Android test.
 
 ### Reading tools and settings pages (1.3.0)
 
