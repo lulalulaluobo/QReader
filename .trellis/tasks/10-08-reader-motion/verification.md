@@ -48,7 +48,7 @@ QReader 的主要延迟来自首屏前 `await book.locations.generate(256)`。�
 
 验收脚本保存在忽略目录 `tmp/release-112-smoke/`：`reader-speed-test.mjs`、`reader-motion-test.mjs`、`reader-regression-test.mjs`、`reader-edge-test.mjs`、`reader-mobile-test.mjs`。可持续运行的自动检查为 [tests/reader-performance.mjs](/Users/luluen/ai-project/QReader/tests/reader-performance.mjs)。
 
-最终本地构建为 [main.js](/Users/luluen/ai-project/QReader/main.js)；与 [styles.css](/Users/luluen/ai-project/QReader/styles.css)、[manifest.json](/Users/luluen/ai-project/QReader/manifest.json) 一起构成插件。用户随后明确授权推送与 Release，版本提升为 1.2.6；未覆盖用户实际阅读库或插件配置。公开发布回执另行补录。
+最终本地构建为 [main.js](/Users/luluen/ai-project/QReader/main.js)；与 [styles.css](/Users/luluen/ai-project/QReader/styles.css)、[manifest.json](/Users/luluen/ai-project/QReader/manifest.json) 一起构成插件。用户随后明确授权推送与 Release，版本提升为 1.2.6；未覆盖用户实际阅读库或插件配置。
 
 ## 1.2.6 发布包
 
@@ -62,3 +62,7 @@ QReader 的主要延迟来自首屏前 `await book.locations.generate(256)`。�
 | manifest.json | 254 | 9c281c395c77ece10716d96a8f99d969f446834f8c88d61604418787d0971017 |
 | styles.css | 39248 | 69ed144703290f3c647a5b2ed2d9f184e6a183e87d203d4eeac8ee6e4cef6698 |
 | QReader-1.2.6.zip | 2946643 | 9bc101502b7a8f5437d2a66e72154a0be5e76eaf7432067a30d522f2bdc84bd7 |
+
+源码提交：`f99e8bb1a598e6a0b1a73b81599fdadef059566d`。main 与注解标签 1.2.6 原子推送。
+
+正式 [Release 1.2.6](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.6) 为 latest，非草稿、非预发布。四个公开附件均 HTTP 200，下载与本地构建逐字节一致，GitHub digest 与 SHA-256 一致，公开 ZIP 解压精确三个插件文件且字节一致。核验时远程 main 与标签剥离提交均为上述源码提交；后续发布回执与功能对照仅追加文档，不改变标签或附件。

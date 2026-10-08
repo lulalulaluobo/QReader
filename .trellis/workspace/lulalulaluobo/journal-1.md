@@ -282,9 +282,11 @@
 
 ## 会话 21：参考竞品实现连续翻页与快速开书
 
-**日期**：2026-10-08；**分支**：main；**状态**：源码与验收完成，按用户授权准备发布 1.2.6。
+**日期**：2026-10-08；**分支**：main；**状态**：已完成，发布 1.2.6 与功能对照报告。
 
 - 重新克隆 qiaomu-reader 默认分支 HEAD `efbc811c6decd7bb9034b084f366ec6950321320` 到 references/qiaomu-reader-20261008；分析真实内容带横移与 Foliate 按当前章节渲染。QReader 延迟主因是首屏前全书 locations.generate，每章默认等待 100ms。
 - 六格式横向分页使用 300ms 连续位移；跨章/PDF 保留旧页并准备新页，完成后回收。索引改为首屏后生成，与旧 CFI 完全一致；取消与错误不发布部分索引。词表并行读取，CSS 提前到首轮排版，按目标实际可见性修正恢复。
 - 固定同书同 CFI，正式 1.2.5 对照最终构建：EPUB 中位数 419→141ms，20 章 MOBI 2436→203ms。六格式回归、375px 模拟、旧百分比恢复、取消、失败重试、模式往返、原书字体恢复、六格式朗读边界通过。
 - build、reader/speech/translation/notes/documents 与 diff 检查通过；用户实际阅读库未操作。用户随后要求推送与 Release，并在发布后对照两项目的功能、优缺点与改进方向。版本提升为 1.2.6，记录见 .trellis/tasks/10-08-reader-motion/verification.md。
+- 源码 `f99e8bb1a598e6a0b1a73b81599fdadef059566d`、main 与注解标签 1.2.6 原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/三文件 ZIP 核验一致。ZIP SHA-256：`9bc101502b7a8f5437d2a66e72154a0be5e76eaf7432067a30d522f2bdc84bd7`。
+- 对照参考 4.5.14 当前源码、最新 Release 与官方社区插件目录，报告见 .trellis/tasks/10-08-reader-motion/comparison.md。建议优先补书内搜索/返回、PDF 缩放、真机长书基线与密钥存储；保留听读、生词淡化和自由笔记合并的区别。未将竞品用户观察计时当作同机实测，后续路线只是建议，本轮没有新增这些功能。
