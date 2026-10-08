@@ -13,7 +13,7 @@ import type {
 } from "../types";
 import { chaptersOrdered, isHealthyBook } from "../types";
 import type { QReaderPlugin } from "../main";
-import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, SelectionAnchor } from "../reader/engine";
+import type { EngineSelection, EngineLocation, EngineHooks, ReaderEngine, SelectionAnchor, SearchResult } from "../reader/engine";
 import { EpubEngine } from "../reader/epub-engine";
 import { PdfEngine } from "../reader/pdf-engine";
 import { el, genId, fmtDateTime } from "../util";
@@ -26,6 +26,9 @@ import { VocabularyStore } from "../core/vocabulary";
 import { VaultFs } from "../core/fs";
 import { singleWord } from "../translation/youdao";
 import { translateSentence } from "../translation/sentence";
+import { contextualMeaning, contextQuote } from "../translation/context";
+import { vocabularyMarkdown } from "../core/vocabulary-export";
+import type { TranslationResult } from "../translation/youdao";
 import { SpeechPlayer, BING_VOICES } from "../reader/speech";
 import type { SpeechState } from "../reader/speech";
 
@@ -78,10 +81,17 @@ export class ReaderView extends ItemView {
   private unsubVocabulary: (() => void) | null = null;
   private vocabularyJobs = new Set<Promise<void>>();
   private translationAudio: HTMLAudioElement | null = null;
+  private wordContextAbort: AbortController | null = null;
   private speech: SpeechPlayer | null = null;
   private speechControlsOpen = false;
   private speechRatesOpen = false;
   private speechStart: EngineSelection | undefined;
+  private searchAbort: AbortController | null = null;
+  private searchResults: SearchResult[] = [];
+  private searchQuery = "";
+  private searchIndex = -1;
+  private returnPoints: EngineLocation[] = [];
+  private returnButton: HTMLButtonElement | null = null;
 
   constructor(leaf: WorkspaceLeaf, private plugin: QReaderPlugin) {
     super(leaf);
@@ -123,6 +133,7 @@ export class ReaderView extends ItemView {
       if (document.hidden) void this.persistProgress(true);
     });
     this.registerDomEvent(this.contentEl, "keydown", (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); this.openSearch(); return; }
       if (event.key === "Escape") {
         this.closePanels();
         this.engine?.clearSelection();
@@ -174,6 +185,7 @@ export class ReaderView extends ItemView {
     const record = this.entry?.reading.annotations.find(record => record.id === id);
     const engine = this.engine;
     if (!record || !engine) throw new Error(this.plugin.t("原笔记或版本已不可用"));
+    this.rememberJump();
     await engine.goToAnnotation(record);
     if (this.engine === engine) { this.closePanels(); engine.clearSelection(); }
   }
@@ -236,7 +248,10 @@ export class ReaderView extends ItemView {
     setIcon(moreBtn, "more-horizontal");
     moreBtn.setAttribute("aria-label", this.plugin.t("更多阅读操作"));
     moreBtn.onclick = (e) => this.openMoreMenu(e);
-    actions.append(moreBtn);
+    const search = el("button", "qr-icon-btn"); setIcon(search, "search"); search.setAttribute("aria-label", this.plugin.t("书内搜索")); search.onclick = () => this.openSearch();
+    const backTo = el("button", "qr-icon-btn"); setIcon(backTo, "undo-2"); backTo.setAttribute("aria-label", this.plugin.t("返回刚才的位置"));
+    backTo.hidden = !this.returnPoints.length; backTo.onclick = () => void this.returnToReading(); this.returnButton = backTo;
+    actions.append(search, backTo, moreBtn);
     top.append(back, title, actions);
 
     const host = refreshControls ? this.contentHost : el("div", "qr-reader-content");
@@ -307,6 +322,7 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ open book
 
   async openBook(bookId: string): Promise<void> {
+    const openingStarted = performance.now();
     if (!this.opened) return;
     const entry = this.plugin.library.get(bookId);
     if (!entry || !isHealthyBook(entry)) {
@@ -336,6 +352,7 @@ export class ReaderView extends ItemView {
     if (previous) await this.releaseSource(previous);
     if (generation !== this.generation) return;
     this.entry = entry;
+    this.returnPoints = []; this.searchResults = []; this.searchQuery = ""; this.searchIndex = -1;
     this.lastLoc = null;
     this.lastProgressSave = 0;
     this.draft = null;
@@ -366,7 +383,9 @@ export class ReaderView extends ItemView {
     })();
 
     try {
+      const sourceStarted = performance.now();
       const engine = await this.createEngine(entry);
+      const sourceMs = performance.now() - sourceStarted;
       if (generation !== this.generation) {
         engine.destroy();
         return;
@@ -375,6 +394,10 @@ export class ReaderView extends ItemView {
       this.updateVocabulary();
       this.contentHost.empty();
       await engine.mount(this.contentHost);
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        if (this.opened && generation === this.generation) this.plugin.metrics.record({ kind: "open", format: engine.format,
+          ms: performance.now() - openingStarted, sourceMs });
+      }));
     } catch (e) {
       if (generation !== this.generation) return;
       this.engine?.destroy();
@@ -393,7 +416,7 @@ export class ReaderView extends ItemView {
   }
 
   private async createEngine(entry: HealthyBookEntry): Promise<ReaderEngine> {
-    const layout = this.plugin.settings.reading;
+    const layout = this.plugin.readingLayout();
     const theme = this.resolvedTheme();
     const generation = this.generation;
     const hooks: EngineHooks = {
@@ -402,6 +425,8 @@ export class ReaderView extends ItemView {
         this.speechStart = undefined;
         this.speech?.browse();
       },
+      onSearch: () => this.openSearch(),
+      onJump: () => this.rememberJump(),
       onLocation: (loc) => { if (generation === this.generation) this.onEngineLocation(loc); },
       onSelect: (sel) => {
         if (generation !== this.generation) return;
@@ -430,7 +455,8 @@ export class ReaderView extends ItemView {
         cfi: progress.cfi ?? null,
         percent: progress.percent,
         chapterId: progress.chapterId,
-      }, hooks, entry.reading.annotations, { mode: this.mode, layout, theme, format: entry.reading.book.format });
+      }, hooks, entry.reading.annotations, { mode: this.mode, layout, theme, format: entry.reading.book.format,
+        locationCache: this.plugin.cache.locations(book) });
     }
     const doc = await this.plugin.cache.getPdf(entry);
     const progress = entry.reading.progress;
@@ -450,6 +476,7 @@ export class ReaderView extends ItemView {
     if (word) this.engine.noteVocabularyLookup(word, paragraphId);
     const generation = this.generation;
     const store = this.vocabulary;
+    const sourceEngine = this.engine, sourceEntry = this.entry;
     const sheet = this.createReadingSheet(word ? text : this.plugin.t("AI 翻译"), "qr-translation-sheet");
     const session = this.panelSession;
     const current = (): boolean => this.opened && generation === this.generation && session === this.panelSession && sheet.isConnected;
@@ -478,6 +505,7 @@ export class ReaderView extends ItemView {
         try {
           await store.remove(word);
           removed = true;
+          this.wordContextAbort?.abort();
           if (current()) { button.remove(); new Notice(this.plugin.t("已从本书生词表移除")); }
         } catch (error) {
           if (current()) { button.disabled = false; new Notice(this.plugin.t("生词删除失败：{0}", this.plugin.errorText(error))); }
@@ -485,12 +513,44 @@ export class ReaderView extends ItemView {
       };
       body.appendChild(button);
     };
+    const appendContextActions = (result: TranslationResult): void => {
+      if (!word || !selection || !store || removed) return;
+      const quote = async () => {
+        const context = await sourceEngine.getSelectionContext(selection);
+        return contextQuote(selection.text, context.before, context.after);
+      };
+      const actions = el("div", "qr-search-controls"), meaning = el("button", "qr-btn", this.plugin.t("上下文词义")), keep = el("button", "qr-btn", this.plugin.t("保留原句"));
+      const explanation = el("p", "qr-context-meaning"); explanation.setAttribute("aria-live", "polite");
+      meaning.onclick = async () => {
+        if (!current() || removed) return;
+        this.wordContextAbort?.abort(); const controller = this.wordContextAbort = new AbortController();
+        meaning.disabled = true; explanation.setText(this.plugin.t("正在解读……"));
+        const config = { ...getAiConfig(this.plugin.settings.ai) };
+        try {
+          const passage = await quote(); if (!current() || removed || controller.signal.aborted) return;
+          const reply = await contextualMeaning(config, word, passage, sourceEntry.reading.book.title, this.plugin.settings.language, controller.signal);
+          if (current() && !removed && !controller.signal.aborted) explanation.setText(reply);
+        } catch (error) { if (current() && !controller.signal.aborted) explanation.setText(this.plugin.errorText(error)); }
+        finally { if (current()) meaning.disabled = false; }
+      };
+      keep.onclick = async () => {
+        keep.disabled = true;
+        try {
+          const passage = await quote(); if (!current() || removed) return;
+          await store.keep({ word, translation: result.translation, quote: passage, cfi: selection.cfi,
+            pdfPage: selection.pdfPage, chapterId: selection.chapterId, savedAt: new Date().toISOString() });
+          if (current()) keep.setText(this.plugin.t("已保留原句"));
+        } catch (error) { if (current()) { keep.disabled = false; new Notice(this.plugin.errorText(error)); } }
+      };
+      actions.append(meaning, keep); body.append(actions, explanation);
+    };
     const request = async (refresh = false): Promise<void> => {
       if (!current() || removing) return;
       const id = ++requestId;
+      this.wordContextAbort?.abort();
       const latest = (): boolean => current() && id === requestId;
       status.setText(this.plugin.t("正在翻译……"));
-      body.querySelectorAll("button,.qr-translation-phonetic").forEach((element) => element.remove());
+      body.querySelectorAll("button,.qr-translation-phonetic,.qr-search-controls,.qr-context-meaning").forEach((element) => element.remove());
       try {
         const cached = !refresh && word ? store?.words.find((record) => record.word === word) : undefined;
         const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cached.word)}&type=2` }
@@ -518,7 +578,7 @@ export class ReaderView extends ItemView {
           try { await store.lookup(result, paragraphId, this.plugin.settings.translation.autoAdd); }
           catch (error) { if (latest()) new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); }
         }
-        if (latest()) appendDeleteAction();
+        if (latest()) { appendDeleteAction(); appendContextActions(result); }
       } catch (error) {
         if (!latest()) return;
         status.setText(this.plugin.errorText(error));
@@ -629,7 +689,7 @@ export class ReaderView extends ItemView {
     this.root.style.setProperty("--qr-reading-fg", colors.foreground);
     this.root.style.setProperty("--qr-reading-muted", colors.muted);
     if (this.engine) {
-      return this.engine.applyLayout(this.plugin.settings.reading, colors)
+      return this.engine.applyLayout(this.plugin.readingLayout(), colors)
         .catch((error: unknown) => { new Notice(this.plugin.t("布局更新失败：{0}", this.plugin.errorText(error))); });
     }
   }
@@ -672,6 +732,7 @@ export class ReaderView extends ItemView {
         if (n.chapterId) {
           row.addClass("qr-toc-link");
           row.onclick = () => {
+            this.rememberJump();
             void this.engine?.goToChapter(n.chapterId!, n.href)
               .catch((error: unknown) => new Notice(this.plugin.t("跳转失败：{0}", this.plugin.errorText(error))));
             this.closePanels();
@@ -767,8 +828,132 @@ export class ReaderView extends ItemView {
     nameInput.focus();
   }
 
+  private openVocabulary(): void {
+    const store = this.vocabulary, entry = this.entry, engine = this.engine;
+    if (!store || !entry || !engine) return;
+    const box = this.createReadingSheet(this.plugin.t("本书生词")), body = el("div", "qr-reading-sheet-body"); box.appendChild(body);
+    const exportButton = el("button", "qr-btn", this.plugin.t("导出 Markdown"));
+    exportButton.onclick = async () => {
+      exportButton.disabled = true;
+      try {
+        const base = `${entry.dir}/生词导出-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+        let path = base + ".md", number = 1;
+        while (await this.app.vault.adapter.exists(path)) path = `${base}-${number++}.md`;
+        const file = await this.app.vault.create(path, vocabularyMarkdown(entry.reading.book.title, store.words, store.saved));
+        if (box.isConnected) { this.closePanels(); await this.app.workspace.getLeaf("tab").openFile(file); }
+      } catch (error) { if (box.isConnected) new Notice(this.plugin.errorText(error)); }
+      finally { exportButton.disabled = false; }
+    };
+    body.append(exportButton, el("p", "qr-reading-help", this.plugin.t("动态生词仍会自动淡化；主动保留的原句不会随出现次数删除。导出创建新文件，不覆盖已有笔记。")));
+    body.appendChild(el("h3", undefined, this.plugin.t("动态生词")));
+    for (const word of store.words) body.appendChild(el("p", undefined, `${word.word} — ${word.translation}`));
+    body.appendChild(el("h3", undefined, this.plugin.t("保留原句")));
+    for (const word of store.saved) {
+      const row = el("button", "qr-search-result"); row.append(el("strong", undefined, `${word.word} — ${word.translation}`), el("span", undefined, word.quote));
+      row.onclick = () => {
+        this.rememberJump(); this.closePanels();
+        void engine.goToLocation({ cfi: word.cfi, pdfPage: word.pdfPage, percent: 0, chapterId: word.chapterId ?? null })
+          .catch(error => new Notice(this.plugin.errorText(error)));
+      };
+      body.appendChild(row);
+    }
+  }
+
+  private rememberJump(point = this.engine?.captureLocation()): void {
+    if (!point || !point.cfi && !point.pdfPage) return;
+    this.returnPoints.push({ ...point });
+    if (this.returnPoints.length > 20) this.returnPoints.shift();
+    if (this.returnButton) this.returnButton.hidden = false;
+  }
+  private async returnToReading(): Promise<void> {
+    const point = this.returnPoints.at(-1), engine = this.engine;
+    if (!point || !engine) return;
+    this.closePanels();
+    try {
+      await engine.goToLocation(point);
+      if (engine !== this.engine) return;
+      this.returnPoints.pop(); this.searchResults = []; this.searchIndex = -1;
+      if (this.returnButton) this.returnButton.hidden = !this.returnPoints.length;
+    } catch (error) { new Notice(this.plugin.errorText(error)); }
+  }
+  private openSearch(): void {
+    const engine = this.engine;
+    if (!engine) return;
+    const origin = engine.captureLocation();
+    const box = this.createReadingSheet(this.plugin.t("书内搜索"), "qr-search-sheet");
+    const body = el("div", "qr-reading-sheet-body"); box.appendChild(body);
+    if (engine.format === "cbz") { body.appendChild(el("p", "qr-reading-help", this.plugin.t("图片书没有可搜索的文字"))); return; }
+    const session = this.panelSession;
+    const current = () => this.engine === engine && session === this.panelSession && box.isConnected;
+    const form = el("form", "qr-search-form"), input = el("input"); input.type = "search"; input.value = this.searchQuery;
+    input.placeholder = this.plugin.t("搜索书中内容"); input.setAttribute("aria-label", this.plugin.t("搜索书中内容"));
+    const submit = el("button", "qr-btn", this.plugin.t("搜索")); submit.type = "submit";
+    const cancel = el("button", "qr-btn", this.plugin.t("取消")); cancel.type = "button";
+    const status = el("p", "qr-settings-status"); status.setAttribute("role", "status");
+    const results = el("div", "qr-search-results");
+    const choose = async (index: number) => {
+      const result = this.searchResults[index]; if (!result || !current()) return;
+      if (this.searchIndex < 0) this.rememberJump(origin);
+      this.searchIndex = index; this.closePanels();
+      try { await engine.showSearchResult(result); }
+      catch (error) { if (this.engine === engine) new Notice(this.plugin.errorText(error)); }
+    };
+    const append = (batch: SearchResult[]) => {
+      for (const result of batch) {
+        const index = this.searchResults.indexOf(result), button = el("button", "qr-search-result");
+        button.append(el("strong", undefined, engine.format === "pdf" ? this.plugin.t("第 {0} 页", result.title) : result.title), el("span", undefined, result.excerpt));
+        button.onclick = () => void choose(index); results.appendChild(button);
+      }
+    };
+    const controls = el("div", "qr-search-controls");
+    for (const direction of [-1, 1]) {
+      const button = el("button", "qr-btn", this.plugin.t(direction < 0 ? "上一处" : "下一处"));
+      button.onclick = () => {
+        const count = this.searchResults.length;
+        if (count) void choose(this.searchIndex < 0 ? (direction < 0 ? count - 1 : 0) : (this.searchIndex + direction + count) % count);
+      };
+      controls.appendChild(button);
+    }
+    const back = el("button", "qr-btn", this.plugin.t("返回刚才的位置")); back.disabled = !this.returnPoints.length; back.onclick = () => void this.returnToReading(); controls.appendChild(back);
+    form.append(input, submit, cancel); body.append(form, status, controls, results); append(this.searchResults);
+    cancel.onclick = () => { this.searchAbort?.abort(); this.searchAbort = null; status.setText(this.plugin.t("搜索已取消")); submit.disabled = false; };
+    form.onsubmit = event => {
+      event.preventDefault(); const query = input.value.trim(); if (!query) return;
+      this.searchAbort?.abort(); const controller = this.searchAbort = new AbortController();
+      this.searchQuery = query; this.searchResults = []; this.searchIndex = -1; results.empty(); submit.disabled = true;
+      status.setText(this.plugin.t("正在搜索……"));
+      void engine.search(query, controller.signal, batch => {
+        if (!current() || controller.signal.aborted) return;
+        this.searchResults.push(...batch); append(batch); status.setText(this.plugin.t("找到 {0} 处", this.searchResults.length));
+      }).then(() => {
+        if (current() && !controller.signal.aborted) status.setText(this.searchResults.length >= 500
+          ? this.plugin.t("显示前 500 处，请缩小搜索范围") : this.plugin.t("找到 {0} 处", this.searchResults.length));
+      }).catch(error => { if (current() && !controller.signal.aborted) status.setText(this.plugin.errorText(error)); })
+        .finally(() => { if (current() && this.searchAbort === controller) { submit.disabled = false; this.searchAbort = null; } });
+    };
+    status.setText(this.plugin.t("找到 {0} 处", this.searchResults.length));
+  }
+  private openPdfZoom(): void {
+    const engine = this.engine; if (!(engine instanceof PdfEngine)) return;
+    const box = this.createReadingSheet(this.plugin.t("PDF 缩放")), body = el("div", "qr-reading-sheet-body"); box.appendChild(body);
+    const status = el("p", "qr-settings-status"), actions = el("div", "qr-search-controls");
+    const update = async (value: number | "width" | "page") => {
+      try { await engine.setZoom(value); if (box.isConnected) status.setText(`${Math.round(engine.getZoom().value * 100)}%`); }
+      catch (error) { new Notice(this.plugin.errorText(error)); }
+    };
+    for (const [label, action] of [
+      [this.plugin.t("缩小"), () => engine.getZoom().value - 0.25], [this.plugin.t("放大"), () => engine.getZoom().value + 0.25],
+      [this.plugin.t("适合宽度"), () => "width" as const], [this.plugin.t("整页"), () => "page" as const],
+    ] as const) { const button = el("button", "qr-btn", label); button.onclick = () => void update(action()); actions.appendChild(button); }
+    body.append(actions, status, el("p", "qr-reading-help", this.plugin.t("缩放后可横向和纵向平移；恢复适合宽度后可左右拖页。Ctrl/Cmd +、−、0 可缩放和恢复。")));
+    status.setText(`${Math.round(engine.getZoom().value * 100)}%`);
+  }
+
   private openMoreMenu(e: MouseEvent): void {
     const menu = new Menu();
+    if (this.vocabulary) menu.addItem(item => item.setTitle(this.plugin.t("本书生词")).setIcon("languages").onClick(() => this.openVocabulary()));
+    menu.addItem(item => item.setTitle(this.plugin.t("书内搜索")).setIcon("search").onClick(() => this.openSearch()));
+    if (this.engine instanceof PdfEngine) menu.addItem(item => item.setTitle(this.plugin.t("PDF 缩放")).setIcon("zoom-in").onClick(() => this.openPdfZoom()));
     menu.addItem((item) =>
       item
         .setTitle(this.mode === "paginated" ? this.plugin.t("切换为上下滚动") : this.plugin.t("切换为左右翻页"))
@@ -828,9 +1013,10 @@ export class ReaderView extends ItemView {
         body.appendChild(this.sliderRow(this.plugin.t("字号"), 12, 28, 1, s.fontSize, (value) => { s.fontSize = value; }));
         body.appendChild(this.sliderRow(this.plugin.t("行距"), 1.4, 2.4, 0.05, s.lineHeight, (value) => { s.lineHeight = value; }));
         body.appendChild(this.sliderRow(this.plugin.t("页边距"), 12, 48, 2, s.pageMargin, (value) => { s.pageMargin = value; }));
-        body.appendChild(this.selectRow(this.plugin.t("字体"), { original: this.plugin.t("原书字体"), sans: this.plugin.t("系统黑体"), serif: this.plugin.t("系统宋体") },
+        body.appendChild(this.selectRow(this.plugin.t("字体"), { original: this.plugin.t("原书字体"), sans: this.plugin.t("系统黑体"), serif: this.plugin.t("系统宋体"),
+          ...(s.fontPath ? { custom: s.fontLabel ?? this.plugin.t("导入字体") } : {}) },
           s.fontFamily, async (value) => {
-            s.fontFamily = value === "sans" || value === "serif" ? value : "original";
+            s.fontFamily = value === "sans" || value === "serif" || value === "custom" ? value : "original";
             await this.saveReadingSettings();
           }));
         const row = el("label", "qr-reading-toggle");
@@ -856,6 +1042,8 @@ export class ReaderView extends ItemView {
           await this.persistProgress(true);
           await this.saveReadingSettings();
         }));
+      if (this.engine?.reflowable) body.appendChild(this.selectRow(this.plugin.t("页面布局"), { single: this.plugin.t("单页"), double: this.plugin.t("宽屏双页") },
+        s.spread ?? "single", async value => { s.spread = value === "double" ? "double" : "single"; await this.saveReadingSettings(); }));
     }
   }
 
@@ -1190,6 +1378,7 @@ export class ReaderView extends ItemView {
         if (!engine) return;
         jump.disabled = true;
         try {
+          this.rememberJump();
           await engine.goToAnnotation(record);
           if (this.engine !== engine) return;
           this.closePanels();
@@ -1269,6 +1458,7 @@ export class ReaderView extends ItemView {
     if (index < 0) index = 0;
     const [id, chapter] = chapters[Math.max(0, Math.min(chapters.length - 1, index + dir))];
     try {
+      this.rememberJump();
       await this.engine?.goToChapter(id, chapter.href);
     } catch (error) {
       new Notice(this.plugin.t("章节跳转失败：{0}", this.plugin.errorText(error)));
@@ -1346,7 +1536,7 @@ export class ReaderView extends ItemView {
     const selection = this.markSelection(target);
     if (selection) {
       addAction(this.plugin.t("复制"), "copy", () => void this.copySelection(selection, target));
-      addAction(this.plugin.t(singleWord(selection.text) ? "查词" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId));
+      addAction(this.plugin.t(singleWord(selection.text) ? "查词" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId, selection));
       const play = addAction(this.plugin.t("从这里朗读"), "play", () => this.playSpeech(selection));
       play.dataset.action = "speech-selection";
     }
@@ -1939,6 +2129,8 @@ export class ReaderView extends ItemView {
   // ------------------------------------------------------------ panels
 
   private closePanels(): void {
+    this.wordContextAbort?.abort(); this.wordContextAbort = null;
+    this.searchAbort?.abort(); this.searchAbort = null;
     this.speechRatesOpen = false;
     this.speechSheetCleanup?.(); this.speechSheetCleanup = null;
     this.translationAudio?.pause(); this.translationAudio = null;

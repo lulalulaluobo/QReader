@@ -11,7 +11,8 @@ export class EpubSlideManager extends DefaultViewManager {
 
   private get sliding(): boolean {
     return this.isPaginated && this.settings.axis === "horizontal"
-      && this.settings.direction !== "rtl" && !this.settings.fullsize && this.layout.divisor === 1;
+      && this.settings.direction !== "rtl" && !this.settings.fullsize
+      && (this.layout.divisor === 1 || this.layout.name !== "pre-paginated");
   }
   get canDrag(): boolean { return this.sliding && !this.turning && !!this.views.length; }
   get supportsDrag(): boolean { return this.sliding; }

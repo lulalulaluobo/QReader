@@ -4,7 +4,7 @@ export type BookFormat = "epub" | "pdf" | "fb2" | "mobi" | "azw3" | "cbz";
 export type QuestionType = "core" | "logic" | "retell";
 export type ReadMode = "paginated" | "scrolled";
 export type ReadingTheme = "auto" | "light" | "sepia" | "sage" | "dark";
-export type ReadingFont = "original" | "sans" | "serif";
+export type ReadingFont = "original" | "sans" | "serif" | "custom";
 export type HighlightColor = "yellow" | "green" | "blue" | "pink" | "purple";
 export type BookReadStatus = "unread" | "read";
 
@@ -184,6 +184,8 @@ export interface ReadingLayout {
   pageMargin: number; // px
   fontFamily: ReadingFont;
   paragraphIndent: boolean;
+  spread?: "single" | "double";
+  fontCss?: string; // runtime-only imported font rule
 }
 
 export interface ReadingColors {

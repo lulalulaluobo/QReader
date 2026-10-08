@@ -174,7 +174,8 @@ async function resourceType(blob: Blob): Promise<string> {
 }
 
 /** Only new formats are converted. Generated spine/anchor/resource order is deterministic. */
-export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: BookFormat): Promise<ArrayBuffer> {
+export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: BookFormat, signal?: AbortSignal): Promise<ArrayBuffer> {
+  signal?.throwIfAborted();
   if (format === "epub") return bytes;
   if (format === "pdf") throw new Error("PDF 必须使用 PDF.js 打开");
   let source: FoliateBook | undefined;
@@ -196,6 +197,7 @@ export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: B
     return path;
   };
   const rewriteResources = async (text: string, prefix: string): Promise<string> => {
+    signal?.throwIfAborted();
     for (const url of new Set(text.match(/blob:[^\s"'<>\)]+|data:text\/css;charset=utf-8,[^\s"<>]+/g) ?? [])) {
       if (url.startsWith("blob:")) urls.add(url);
       let path = resourcePaths.get(url);
@@ -261,6 +263,7 @@ export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: B
         if (info.querySelector("Manga")?.textContent?.trim() === "YesAndRightToLeft") direction = "rtl";
       }
       for (const page of pages) {
+        signal?.throwIfAborted();
         const type = imageTypes[page.name.split(".").pop()!.toLowerCase()];
         const data = await page.async("arraybuffer");
         const size = await imageSize(new Blob([data], { type }));
@@ -283,6 +286,7 @@ export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: B
       fixed = source.rendition?.layout === "pre-paginated";
       direction = source.dir === "rtl" ? "rtl" : "ltr";
       for (const section of source.sections) {
+        signal?.throwIfAborted();
         if (!section.load) { sections.push({ doc: sectionDoc(`<html xmlns="${XHTML}"><head/><body/></html>`), linear: false }); continue; }
         const url = await section.load();
         if (!url.startsWith("blob:")) throw new Error("格式解析器返回了非内嵌章节");
@@ -358,6 +362,7 @@ export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: B
     if (!sections.some((section) => section.linear)) throw new Error("原书不包含可阅读的主线章节");
     const serializer = new XMLSerializer();
     for (let index = 0; index < sections.length; index++) {
+      signal?.throwIfAborted();
       addFile(`EPUB/sections/s${index}.xhtml`, await rewriteResources(serializer.serializeToString(sections[index].doc), "../"));
     }
     const renderToc = (items: ConvertedToc[]): string => `<ol>${items.map((item) => `<li><a href="${xml(item.href)}">${xml(item.label)}</a>${item.children.length ? renderToc(item.children) : ""}</li>`).join("")}</ol>`;
@@ -375,7 +380,8 @@ export async function bookAsEpub(bytes: ArrayBuffer, fileName: string, format: B
     const spine = sections.map((section, index) => `<itemref idref="s${index}"${section.linear ? "" : ' linear="no"'}${section.pageSpread ? ` properties="page-spread-${xml(section.pageSpread)}"` : ""}/>`).join("");
     addFile("META-INF/container.xml", '<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="EPUB/package.opf" media-type="application/oebps-package+xml"/></rootfiles></container>');
     addFile("EPUB/package.opf", `<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">qreader-converted-${format}</dc:identifier><dc:title>${xml(title)}</dc:title><dc:creator>${xml(author)}</dc:creator><dc:language>${xml(language)}</dc:language><meta property="dcterms:modified">2000-01-01T00:00:00Z</meta><meta property="rendition:layout">${fixed ? "pre-paginated" : "reflowable"}</meta><meta property="rendition:spread">none</meta>${coverResource ? `<meta name="cover" content="${coverResource.id}"/>` : ""}</metadata><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>${manifest}</manifest><spine page-progression-direction="${direction}">${spine}</spine></package>`);
-    return await zip.generateAsync({ type: "arraybuffer", compression: "STORE" });
+    signal?.throwIfAborted();
+    return await zip.generateAsync({ type: "arraybuffer", compression: "STORE" }, () => signal?.throwIfAborted());
   } catch (error) { throw new Error(`${format.toUpperCase()} 无法读取：${error instanceof Error ? error.message : String(error)}`); }
   finally {
     source?.destroy();

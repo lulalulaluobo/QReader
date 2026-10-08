@@ -8,7 +8,8 @@ export interface VocabularyWord extends TranslationResult {
   noLookupCount: number;
   seenParagraphs: string[];
 }
-export interface VocabularyFile { version: 1; words: VocabularyWord[] }
+export interface SavedVocabularyWord { word: string; translation: string; quote: string; chapterId?: string; cfi?: string; pdfPage?: number; savedAt: string }
+export interface VocabularyFile { version: 1; words: VocabularyWord[]; saved?: SavedVocabularyWord[] }
 export interface WordExposure { word: string; paragraphId: string; lookupCount: number }
 const queues = new WeakMap<object, Map<string, Promise<void>>>();
 const subscriptions = new WeakMap<object, Map<string, Set<(file: VocabularyFile) => void>>>();
@@ -30,10 +31,23 @@ export function validateVocabulary(raw: unknown): VocabularyFile {
     keys.add(entry.word);
     words.push({ word: entry.word, query: typeof entry.query === "string" ? entry.query : entry.word, translation: entry.translation, phonetic: typeof entry.phonetic === "string" ? entry.phonetic : "", audioUrl: safeAudioUrl(entry.audioUrl), lookupCount: entry.lookupCount as number, exposureCount: entry.exposureCount as number, noLookupCount: entry.noLookupCount as number, seenParagraphs: [...new Set(paragraphIds.filter((id): id is string => typeof id === "string"))] });
   }
-  return { version: 1, words };
+  let saved: SavedVocabularyWord[] | undefined;
+  if ("saved" in raw && raw.saved !== undefined) {
+    if (!Array.isArray(raw.saved)) throw new Error("生词原句记录无效");
+    saved = raw.saved.map(item => {
+      if (!object(item) || typeof item.word !== "string" || singleWord(item.word) !== item.word || typeof item.translation !== "string"
+        || typeof item.quote !== "string" || item.quote.length > 2000 || typeof item.savedAt !== "string"
+        || item.cfi !== undefined && (typeof item.cfi !== "string" || !/^epubcfi\(.+\)$/.test(item.cfi))
+        || item.pdfPage !== undefined && (!Number.isSafeInteger(item.pdfPage) || (item.pdfPage as number) < 1)
+        || item.chapterId !== undefined && typeof item.chapterId !== "string") throw new Error("生词原句记录无效");
+      return { word: item.word, translation: item.translation, quote: item.quote, savedAt: item.savedAt,
+        cfi: item.cfi as string | undefined, pdfPage: item.pdfPage as number | undefined, chapterId: item.chapterId as string | undefined };
+    });
+  }
+  return { version: 1, words, ...(saved ? { saved } : {}) };
 }
 
-/** One per-book file. No vocabulary history, decks or permanent translation cache. */
+/** Dynamic words fade normally; only explicit saves retain a quoted source. */
 export class VocabularyStore {
   private current: VocabularyFile = { version: 1, words: [] };
   constructor(private fs: FsLike, readonly path: string) {}
@@ -52,6 +66,14 @@ export class VocabularyStore {
     for (const listener of subscriptions.get(this.fs.queueScope ?? this.fs)?.get(this.path) ?? []) listener(file);
   }
   get words(): readonly VocabularyWord[] { return this.current.words; }
+  get saved(): readonly SavedVocabularyWord[] { return this.current.saved ?? []; }
+  keep(record: SavedVocabularyWord): Promise<void> {
+    return this.change(file => {
+      const saved = file.saved ??= [];
+      if (saved.some(item => item.word === record.word && item.quote === record.quote && item.cfi === record.cfi && item.pdfPage === record.pdfPage)) return false;
+      saved.push({ ...record }); return true;
+    });
+  }
   private async readDisk(): Promise<{ value: VocabularyFile; raw: string | null }> {
     if (!await this.fs.exists(this.path)) return { value: { version: 1, words: [] }, raw: null };
     const raw = await this.fs.read(this.path);

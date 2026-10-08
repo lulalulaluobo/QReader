@@ -5,7 +5,10 @@ import type { App } from "obsidian";
 import { DEFAULT_SETTINGS, validateLibraryPath } from "./settings";
 import type { QReaderSettings } from "./settings";
 import { loadAiSettings } from "./ai/providers";
+import { AiSecrets } from "./ai/secrets";
+import type { SecretStorageAccess } from "./ai/secrets";
 import { BookCache } from "./core/book-source";
+import { ReaderDiskCache } from "./core/reader-cache";
 import { LibraryManager } from "./core/library";
 import { traceSources, traceKey, validateRef } from "./core/note-history";
 import type { TraceRef, TraceSource } from "./core/note-history";
@@ -18,6 +21,9 @@ import { localizeMessage, localizedError, normalizeLanguage, translate } from ".
 import type { MessageKey } from "./i18n";
 import { loadTranslationSettings, YoudaoClient } from "./translation/youdao";
 import { loadSpeechSettings } from "./reader/speech";
+import { ReaderFonts } from "./reader/fonts";
+import type { ReadingLayout } from "./types";
+import { ReaderMetrics } from "./reader/metrics";
 
 export type SettingsChangeReason = "settings" | "language" | "translation" | "speech";
 
@@ -35,7 +41,11 @@ export class QReaderPlugin extends Plugin {
   declare settings: QReaderSettings;
   library!: LibraryManager;
   cache!: BookCache;
+  fonts!: ReaderFonts;
   translation = new YoudaoClient();
+  metrics = new ReaderMetrics();
+  secrets = new AiSecrets();
+  private settingsWrites: Promise<void> = Promise.resolve();
   private libraryListeners = new Set<() => void>();
   private settingsListeners = new Set<(reason: SettingsChangeReason) => void>();
   private ribbon: HTMLElement | null = null;
@@ -44,7 +54,11 @@ export class QReaderPlugin extends Plugin {
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.cache = new BookCache(this.app.vault.adapter);
+    this.fonts = new ReaderFonts(this.app.vault.adapter, `${this.app.vault.configDir}/plugins/${this.manifest.id}/fonts`);
+    if (this.settings.reading.fontPath) void this.fonts.load(this.settings.reading.fontPath)
+      .then(() => this.notifySettingsChanged()).catch(() => new Notice(this.t("导入字体无法读取，已使用系统字体")));
+    this.cache = new BookCache(this.app.vault.adapter, new ReaderDiskCache(this.app.vault.adapter,
+      `${this.app.vault.configDir}/plugins/${this.manifest.id}/reader-cache`));
     this.library = new LibraryManager(
       {
         app: this.app,
@@ -122,6 +136,8 @@ export class QReaderPlugin extends Plugin {
   localizeStatus(text: string): string { return localizeMessage(this.settings.language, text); }
 
   onunload(): void {
+    this.fonts?.dispose();
+    this.metrics.stop();
     this.translation.clear();
     this.app.workspace.detachLeavesOfType(VIEW_TYPE_READER);
     this.app.workspace.detachLeavesOfType(LEGACY_ANSWER_VIEW);
@@ -141,6 +157,12 @@ export class QReaderPlugin extends Plugin {
     const data = typeof raw === "object" && raw !== null ? raw as Partial<QReaderSettings> : {};
     const libraryPath = typeof data.libraryPath === "string" ? validateLibraryPath(data.libraryPath) : null;
     const ai = loadAiSettings(data.ai);
+    this.secrets = new AiSecrets((this.app as App & { secretStorage?: SecretStorageAccess }).secretStorage);
+    try { this.secrets.hydrate(ai); }
+    catch {
+      this.secrets = new AiSecrets();
+      new Notice(translate(normalizeLanguage(data.language), "密钥读取失败，请检查 Obsidian SecretStorage"));
+    }
     const reading = typeof data.reading === "object" && data.reading !== null ? data.reading : DEFAULT_SETTINGS.reading;
     this.settings = {
       language: normalizeLanguage(data.language),
@@ -160,17 +182,42 @@ export class QReaderPlugin extends Plugin {
           ? Math.max(1.4, Math.min(2.4, reading.lineHeight)) : DEFAULT_SETTINGS.reading.lineHeight,
         pageMargin: typeof reading.pageMargin === "number" && Number.isFinite(reading.pageMargin)
           ? Math.max(12, Math.min(48, reading.pageMargin)) : DEFAULT_SETTINGS.reading.pageMargin,
-        fontFamily: reading.fontFamily === "sans" || reading.fontFamily === "serif" ? reading.fontFamily : "original",
+        fontFamily: reading.fontFamily === "sans" || reading.fontFamily === "serif" || reading.fontFamily === "custom" ? reading.fontFamily : "original",
+        fontPath: typeof reading.fontPath === "string" ? reading.fontPath : undefined,
+        fontLabel: typeof reading.fontLabel === "string" ? reading.fontLabel : undefined,
+        spread: reading.spread === "double" ? "double" : "single",
         paragraphIndent: reading.paragraphIndent === true,
         theme: reading.theme === "dark" || reading.theme === "light" || reading.theme === "sepia" || reading.theme === "sage"
           ? reading.theme : "auto",
         defaultMode: reading.defaultMode === "scrolled" ? "scrolled" : "paginated",
       },
     };
+    if (this.secrets.supported && (ai.deepseekApiKey || ai.agnesApiKey || ai.custom.apiKey)) {
+      try { await this.saveSettings(); }
+      catch { new Notice(this.t("密钥迁移失败，原配置已保留，请重试")); }
+    }
   }
 
   async saveSettings(): Promise<void> {
-    await this.saveData(this.settings);
+    const snapshot = structuredClone(this.settings);
+    const write = this.settingsWrites.then(async () => {
+      snapshot.ai = this.secrets.snapshot(snapshot.ai);
+      await this.saveData(snapshot);
+      Object.assign(this.settings.ai.secretIds, snapshot.ai.secretIds);
+    });
+    this.settingsWrites = write.catch(() => {});
+    await write;
+  }
+  readingLayout(): ReadingLayout {
+    return { ...this.settings.reading, fontCss: this.fonts?.css(this.settings.reading.fontPath) ?? "" };
+  }
+  async exportPerformance(): Promise<void> {
+    this.metrics.stop();
+    const name = `QReader-性能-${new Date().toISOString().replace(/[:.]/g, "-")}.json`;
+    const report = this.metrics.report({ pluginVersion: this.manifest.version, userAgent: navigator.userAgent,
+      width: window.innerWidth, height: window.innerHeight, devicePixelRatio: window.devicePixelRatio });
+    await this.app.vault.create(name, JSON.stringify(report, null, 2) + "\n");
+    new Notice(this.t("性能报告已保存：{0}", name));
   }
 
   // ------------------------------------------------------------- events

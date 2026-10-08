@@ -9,7 +9,7 @@ declare module "epubjs/src/managers/default/index.js" {
   export default class DefaultViewManager {
     container: HTMLElement;
     settings: { axis: string; direction: string; fullsize: boolean };
-    layout: { delta: number; divisor: number };
+    layout: { delta: number; divisor: number; name: string };
     isPaginated: boolean;
     scrollLeft: number;
     scrollTop: number;

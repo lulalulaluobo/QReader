@@ -7,6 +7,7 @@ import { openPdf } from "../reader/pdfjs-setup";
 import type { DataAdapter } from "obsidian";
 import { isReviewableChapter, reviewExclusionFromSemantics } from "./review-chapters";
 import { bookAsEpub } from "./book-formats";
+import type { ReaderDiskCache } from "./reader-cache";
 
 function epubHrefKey(book: Book, href: string, base = book.path.toString()): string {
   return new URL(href, new URL(base, "https://qreader.invalid/")).href;
@@ -192,22 +193,56 @@ export class BookCache {
   private epubs = new Map<string, Promise<Book>>();
   private pdfs = new Map<string, Promise<PDFDocumentProxy>>();
   private reviewExclusions = new Map<string, Promise<ReadonlyMap<string, boolean>>>();
-  constructor(private adapter: DataAdapter) {}
+  private sourceKeys = new WeakMap<Book, string>();
+  private controllers = new Map<string, AbortController>();
+  constructor(private adapter: DataAdapter, readonly disk?: ReaderDiskCache) {}
 
   private requireHealthy(entry: BookEntry): HealthyBookEntry {
     if (!isHealthyBook(entry)) throw new Error("书籍数据已损坏，请先恢复");
     return entry;
   }
 
-  private async openEpub(entry: HealthyBookEntry): Promise<Book> {
+  private async openEpub(entry: HealthyBookEntry, signal?: AbortSignal, skipCached = false): Promise<Book> {
     const bytes = await this.adapter.readBinary(`${entry.dir}/${entry.reading.book.fileName}`);
+    signal?.throwIfAborted();
+    const format = entry.reading.book.format;
+    const key = this.disk ? await this.disk.contentKey(bytes, `epub-v1-${format}`) : null;
+    const cached = key && format !== "epub" && !skipCached ? await this.disk!.read(key) : null;
     const book = new Book();
     try {
-      await book.open(await bookAsEpub(bytes, entry.reading.book.fileName, entry.reading.book.format), "binary");
+      const converted = cached ?? await bookAsEpub(bytes, entry.reading.book.fileName, format, signal);
+      signal?.throwIfAborted();
+      await book.open(converted, "binary");
       await book.ready;
       await book.loaded.navigation;
+      signal?.throwIfAborted();
+      if (key) {
+        this.sourceKeys.set(book, key);
+        if (!cached && format !== "epub") void this.disk!.write(key, converted, signal);
+      }
       return book;
-    } catch (error) { book.destroy(); throw error; }
+    } catch (error) {
+      book.destroy();
+      if (cached && !signal?.aborted) return this.openEpub(entry, signal, true);
+      throw error;
+    }
+  }
+
+  locations(book: Book): { read(): Promise<string[] | null>; write(value: string, signal: AbortSignal): Promise<void> } | undefined {
+    const sourceKey = this.sourceKeys.get(book);
+    if (!sourceKey || !this.disk) return;
+    const disk = this.disk, key = `locations-256-v1-${sourceKey}`;
+    return {
+      read: async () => {
+        try {
+          const bytes = await disk.read(key);
+          if (!bytes) return null;
+          const value: unknown = JSON.parse(new TextDecoder().decode(bytes));
+          return Array.isArray(value) && value.length <= 3000000 && value.every(item => typeof item === "string" && /^epubcfi\(.+\)$/.test(item)) ? value : null;
+        } catch { return null; }
+      },
+      write: async (value, signal) => { await disk.write(key, new TextEncoder().encode(value).buffer as ArrayBuffer, signal); },
+    };
   }
 
   private async openPdf(entry: HealthyBookEntry): Promise<PDFDocumentProxy> {
@@ -219,7 +254,9 @@ export class BookCache {
     const healthy = this.requireHealthy(entry);
     let pending = this.epubs.get(entry.dir);
     if (!pending) {
-      pending = this.openEpub(healthy);
+      const controller = new AbortController();
+      this.controllers.set(entry.dir, controller);
+      pending = this.openEpub(healthy, controller.signal);
       this.epubs.set(entry.dir, pending);
       void pending.catch(() => { if (this.epubs.get(entry.dir) === pending) this.epubs.delete(entry.dir); });
     }
@@ -291,6 +328,9 @@ export class BookCache {
   }
 
   async invalidate(idOrDir: string): Promise<void> {
+    for (const [path, controller] of this.controllers) if (path === idOrDir || path.endsWith(`/${idOrDir}`)) {
+      controller.abort(); this.controllers.delete(path);
+    }
     // Invalidation also drops read-only legacy classifications for this source.
     for (const key of this.reviewExclusions.keys()) {
       const [path] = JSON.parse(key) as [string];

@@ -1,12 +1,12 @@
 /** A transient highlight, independent of the user's persisted annotations. */
-export function speechHighlight(doc: Document, ranges: Range[]): () => void {
+export function speechHighlight(doc: Document, ranges: Range[], name = "qr-speaking"): () => void {
   const win = doc.defaultView as (Window & { CSS?: { highlights?: Map<string, unknown> }; Highlight?: new (...ranges: Range[]) => unknown }) | null;
   const style = doc.createElement("style");
-  style.textContent = "::highlight(qr-speaking){background-color:rgba(100,155,235,.32);color:inherit;}";
+  style.textContent = `::highlight(${name}){background-color:rgba(100,155,235,.32);color:inherit;}`;
   (doc.head ?? doc.documentElement).appendChild(style);
   if (win?.CSS?.highlights && win.Highlight) {
-    win.CSS.highlights.set("qr-speaking", new win.Highlight(...ranges));
-    return () => { win.CSS?.highlights?.delete("qr-speaking"); style.remove(); };
+    win.CSS.highlights.set(name, new win.Highlight(...ranges));
+    return () => { win.CSS?.highlights?.delete(name); style.remove(); };
   }
   const overlay = doc.createElement("div");
   overlay.className = "qr-speech-overlay";

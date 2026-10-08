@@ -17,6 +17,15 @@ export interface EngineLocation {
   cfi?: string | null;
   pdfPage?: number | null;
   pageFraction?: number | null; // scroll position inside the page
+  pixelOffset?: number | null; // transient return anchor after a layout change
+  horizontalFraction?: number;
+}
+export interface SearchResult {
+  id: string;
+  title: string;
+  excerpt: string;
+  location: EngineLocation;
+  itemRanges?: PdfItemRange[];
 }
 
 /** A transient anchor in the host window's viewport, never persisted. */
@@ -52,6 +61,8 @@ export interface EngineHooks {
   /** Background rendering failures, never a fabricated successful blank page. */
   onError?(error: Error): void;
   onManualNavigation?(): void;
+  onSearch?(): void;
+  onJump?(): void;
 }
 
 export interface SpeechSegment { text: string; cfi?: string; pdfPage?: number; itemRanges?: PdfItemRange[] }
@@ -66,6 +77,11 @@ export interface ReaderEngine {
   goToAnnotation(annotation: AnnotationRecord): Promise<void>;
   next(): Promise<void>;
   prev(): Promise<void>;
+  captureLocation(): EngineLocation;
+  goToLocation(location: EngineLocation): Promise<void>;
+  search(query: string, signal: AbortSignal, receive: (results: SearchResult[]) => void): Promise<void>;
+  showSearchResult(result: SearchResult): Promise<void>;
+  clearSearch(): void;
   getMode(): ReadMode;
   setMode(mode: ReadMode): Promise<void>;
   applyLayout(layout: ReadingLayout, theme: ReadingColors): Promise<void>;

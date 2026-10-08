@@ -17,6 +17,8 @@ export interface QReaderSettings {
   categories: string[];
   highlightColor: HighlightColor;
   reading: ReadingLayout & {
+    fontPath?: string;
+    fontLabel?: string;
     theme: ReadingTheme;
     defaultMode: ReadMode;
   };
@@ -37,6 +39,7 @@ export const DEFAULT_SETTINGS: QReaderSettings = {
     pageMargin: 24,
     fontFamily: "original",
     paragraphIndent: false,
+    spread: "single",
     theme: "auto",
     defaultMode: "paginated",
   },
@@ -58,6 +61,7 @@ export const HIGHLIGHT_COLORS: Record<HighlightColor, { label: MessageKey; fill:
 };
 
 export const READING_FONTS = {
+  custom: '"QReaderImported", sans-serif',
   original: "",
   sans: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif',
   serif: '"Songti SC", "STSong", "SimSun", serif',

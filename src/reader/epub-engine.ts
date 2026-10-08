@@ -4,7 +4,8 @@ import type { Book, Rendition, Location } from "epubjs";
 import { EpubCFI } from "epubjs";
 import type Section from "epubjs/types/section";
 import type { AnnotationRecord, BookFormat, ChapterState, ReadMode, ReadingLayout, ReadingColors } from "../types";
-import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment } from "./engine";
+import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment, SearchResult } from "./engine";
+import { searchEpub } from "./search";
 import { epubSpeechSegments } from "./speech-text";
 import { speechHighlight } from "./speech-highlight";
 import { epubChapterId } from "../types";
@@ -49,10 +50,12 @@ export class EpubEngine implements ReaderEngine {
   private destroyed = false;
   private locationController = new AbortController();
   private locationIndex: Promise<void> | null = null;
+  private locationCache?: { read(): Promise<string[] | null>; write(value: string, signal: AbortSignal): Promise<void> };
   private restoring = false;
   private suspended = false;
   private generation = 0;
   private renderedMargin = 0;
+  private renderedSpread: "single" | "double" = "single";
   private spineLen = 1;
   private position: RestorePoint;
   private speechGeneration = 0;
@@ -65,6 +68,7 @@ export class EpubEngine implements ReaderEngine {
   private gestures = new Map<Document, { index: number; cleanup: () => void }>();
   private resizePoint: { cfi: string; offset: number | null } | null = null;
   private removeSpeechMark: (() => void) | null = null;
+  private removeSearchMark: (() => void) | null = null;
   // Only the rendition owns paginated scrolling. Native selection/focus scrolling
   // can otherwise leave a fractional-page offset that next/prev never removes.
   private selectionScroll: { left: number; top: number } | null = null;
@@ -109,7 +113,8 @@ export class EpubEngine implements ReaderEngine {
     start: RestorePoint,
     private hooks: EngineHooks,
     annotations: AnnotationRecord[],
-    opts: { mode: ReadMode; layout: ReadingLayout; theme: ReadingColors; format: Exclude<BookFormat, "pdf"> }
+    opts: { mode: ReadMode; layout: ReadingLayout; theme: ReadingColors; format: Exclude<BookFormat, "pdf">;
+      locationCache?: { read(): Promise<string[] | null>; write(value: string, signal: AbortSignal): Promise<void> } }
   ) {
     this.format = opts.format;
     this.reflowable = this.book.packaging.metadata.layout !== "pre-paginated";
@@ -117,6 +122,7 @@ export class EpubEngine implements ReaderEngine {
     this.mode = opts.mode;
     this.layout = opts.layout;
     this.theme = opts.theme;
+    this.locationCache = opts.locationCache;
     this.chapters = [...chapters].sort((a, b) => a.index - b.index);
     const ordinals = new Map<number, number>();
     for (const chapter of this.chapters) {
@@ -166,7 +172,16 @@ export class EpubEngine implements ReaderEngine {
   }
 
   private ensureLocations(): Promise<void> {
-    return this.locationIndex ??= generateEpubLocations(this.book, this.locationController.signal);
+    return this.locationIndex ??= (async () => {
+      const signal = this.locationController.signal;
+      const cached = await this.locationCache?.read();
+      if (signal.aborted) return;
+      if (cached?.length) this.book.locations.load(JSON.stringify(cached));
+      else {
+        await generateEpubLocations(this.book, signal);
+        if (!signal.aborted && this.book.locations.length()) await this.locationCache?.write(this.book.locations.save(), signal);
+      }
+    })();
   }
 
   private chapterById(id: string): ChapterState | undefined {
@@ -189,8 +204,10 @@ export class EpubEngine implements ReaderEngine {
     this.restoring = true;
     // epub.js 的分页左右 padding 来自 gap / 2，不能只用书内 CSS 覆盖。
     this.renderedMargin = this.layout.pageMargin;
+    this.renderedSpread = this.layout.spread ?? "single";
     const options = {
-      width: "100%", height: "100%", spread: "none",
+      width: "100%", height: "100%", spread: this.reflowable && this.renderedSpread === "double" ? "always" : "none",
+      minSpreadWidth: 900,
       flow: this.mode === "scrolled" ? "scrolled-doc" : "paginated",
       manager: this.mode === "scrolled" ? "continuous" : EpubSlideManager,
       gap: this.reflowable ? this.renderedMargin * 2 : undefined,
@@ -227,6 +244,12 @@ export class EpubEngine implements ReaderEngine {
     rendition.hooks.content.register((contents: ContentsLike) => { if (generation === this.generation && !this.destroyed) this.bindContents(contents); });
     rendition.on("removed", () => { if (generation === this.generation) this.releaseDetachedContents(); });
     try {
+      await rendition.started;
+      // EPUB.js start() overwrites render options from OPF spread metadata.
+      // Apply the reader's preference after start, without mutating the book.
+      if (this.reflowable && (rendition.settings.spread === "none") !== (this.renderedSpread === "single")) {
+        rendition.spread(this.renderedSpread === "double" ? "auto" : "none", 900);
+      }
       let displayed = false;
       let restoreCfi: string | null = null;
       if (point.cfi) {
@@ -388,6 +411,7 @@ export class EpubEngine implements ReaderEngine {
           event.stopImmediatePropagation();
           return;
         }
+        this.hooks.onJump?.();
         return;
       }
       if (swiped || element?.closest(`.${HL_CLASS}`)) { swiped = false; return; }
@@ -423,6 +447,7 @@ export class EpubEngine implements ReaderEngine {
   }
 
   private handleKey(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); this.hooks.onSearch?.(); return; }
     const target = event.target as HTMLElement | null;
     if (target?.nodeType === Node.ELEMENT_NODE && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
@@ -439,6 +464,7 @@ export class EpubEngine implements ReaderEngine {
       const font = READING_FONTS[this.layout.fontFamily];
       const family = font ? `font-family: ${font} !important;` : "";
       this.readingCss = `
+        ${this.layout.fontCss ?? ""}
         html, body { background: ${background} !important; color: ${foreground} !important; }
         body, p, div, li, blockquote, td, span {
           font-size: ${this.layout.fontSize}px !important;
@@ -625,6 +651,7 @@ export class EpubEngine implements ReaderEngine {
     scroller?.scrollBy({ top: scroller.clientHeight * fraction, behavior: "auto" });
   }
   private manualNavigation(): void {
+    this.clearSearch();
     this.resizePoint = null;
     this.hooks.onManualNavigation?.();
   }
@@ -659,6 +686,40 @@ export class EpubEngine implements ReaderEngine {
     return next;
   }
   getMode(): ReadMode { return this.mode; }
+  captureLocation(): EngineLocation {
+    const fallback = this.position.cfi ?? this.rendition?.location?.start?.cfi;
+    const cfi = fallback ? this.visibleCfi(fallback) : null;
+    return { cfi, chapterId: this.position.chapterId ?? null, percent: this.position.percent ?? 0,
+      pixelOffset: cfi ? this.cfiOffset(cfi) : null };
+  }
+  async goToLocation(location: EngineLocation): Promise<void> {
+    if (!location.cfi || !this.rendition) return;
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.flushVocabulary(); this.clearSelection(); this.clearSearch();
+      this.resizePoint = { cfi: location.cfi!, offset: location.pixelOffset ?? null };
+      await this.rendition?.display(location.cfi!);
+      await this.rendition?.reportLocation();
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    });
+  }
+  async search(query: string, signal: AbortSignal, receive: (batch: SearchResult[]) => void): Promise<void> {
+    if (this.format === "cbz") return;
+    await searchEpub(this.book, query, signal, batch => receive(batch.map(result => {
+      const id = result.location.cfi ? this.chapterForCfi(result.location.cfi) : undefined;
+      const chapter = id ? this.chapterById(id) : undefined;
+      return { ...result, title: chapter?.title ?? result.title, location: { ...result.location, chapterId: id ?? null } };
+    })));
+  }
+  async showSearchResult(result: SearchResult): Promise<void> {
+    await this.goToLocation(result.location);
+    if (!result.location.cfi || !this.rendition || this.destroyed) return;
+    const cfi = new EpubCFI(result.location.cfi);
+    const contents = this.rendition.getContents() as unknown as ContentsLike[];
+    const current = contents.find(content => content.sectionIndex === cfi.spinePos);
+    if (current) { const range = cfi.toRange(current.document); if (range) this.removeSearchMark = speechHighlight(current.document, [range], "qr-search"); }
+  }
+  clearSearch(): void { this.removeSearchMark?.(); this.removeSearchMark = null; }
 
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || !this.rendition || !this.container) return;
@@ -671,6 +732,7 @@ export class EpubEngine implements ReaderEngine {
   }
 
   private async rebuildRendition(): Promise<void> {
+    this.clearSearch();
     for (const gesture of this.gestures.values()) gesture.cleanup();
     this.gestures.clear();
     for (const layer of this.wordLayers.values()) layer.destroy();
@@ -699,7 +761,7 @@ export class EpubEngine implements ReaderEngine {
       return;
     }
     // 隐藏时 EPUB.js 会把 iframe 暂时缩成一页；恢复后重建，不能在未重排的 DOM 上定位。
-    if (this.suspended || this.reflowable && this.rendition && layout.pageMargin !== this.renderedMargin) {
+    if (this.suspended || this.reflowable && this.rendition && (layout.pageMargin !== this.renderedMargin || (layout.spread ?? "single") !== this.renderedSpread)) {
       await this.rebuildRendition();
       return;
     }
@@ -866,6 +928,7 @@ export class EpubEngine implements ReaderEngine {
   }
   private reportError(error: unknown): void { this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))); }
   destroy(): void {
+    this.clearSearch();
     if (this.destroyed) return;
     this.clearSpeech();
     this.destroyed = true;

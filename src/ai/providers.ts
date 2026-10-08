@@ -4,6 +4,7 @@ export type AiProvider = "deepseek" | "agnes" | "custom";
 
 export interface AiSettings {
   provider: AiProvider;
+  secretIds: Partial<Record<AiProvider, string>>;
   deepseekApiKey: string;
   agnesApiKey: string;
   deepseekBaseUrl: string;
@@ -40,6 +41,8 @@ export function loadAiSettings(raw: unknown): AiSettings {
   }
   return {
     provider: value.provider === "agnes" || value.provider === "custom" ? value.provider : "deepseek",
+    secretIds: isConfigObject(value.secretIds) ? Object.fromEntries(Object.entries(value.secretIds)
+      .filter(([key, id]) => ["deepseek", "agnes", "custom"].includes(key) && typeof id === "string" && /^[a-z0-9-]+$/.test(id))) : {},
     deepseekApiKey: typeof value.deepseekApiKey === "string" ? value.deepseekApiKey : "",
     agnesApiKey: typeof value.agnesApiKey === "string" ? value.agnesApiKey : "",
     deepseekBaseUrl: typeof value.deepseekBaseUrl === "string" ? value.deepseekBaseUrl : AI_PRESETS.deepseek.baseUrl,

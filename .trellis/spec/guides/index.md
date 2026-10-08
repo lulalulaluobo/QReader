@@ -2,5 +2,6 @@
 
 - [代码复用](code-reuse-thinking-guide.md)：修改前检查已有模式。
 - [跨层契约](cross-layer-thinking-guide.md)：数据、身份、生命周期与失败边界。
+- [阅读性能验收](reader-performance.md)：隔离 Vault、六格式、手机操作、20 次基线及帧/内存采集。
 
 发现可复现的新风险时更新对应规范，不重复创建第二份规则。

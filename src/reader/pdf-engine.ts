@@ -5,7 +5,8 @@ import type { PDFDocumentProxy, PDFPageProxy, RenderTask } from "pdfjs-dist";
 import type { TextItem } from "pdfjs-dist/types/src/display/api";
 import type { AnnotationRecord, ChapterState, PdfItemRange, ReadMode, ReadingLayout, ReadingColors } from "../types";
 import { pdfChapterId } from "../types";
-import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment } from "./engine";
+import type { EngineHooks, EngineLocation, EngineSelection, ReaderEngine, SpeechBatch, SpeechSegment, SearchResult } from "./engine";
+import { searchPdf } from "./search";
 import { pdfSpeechSegments } from "./speech-text";
 import { speechHighlight } from "./speech-highlight";
 import { HIGHLIGHT_COLORS } from "../settings";
@@ -61,6 +62,9 @@ export class PdfEngine implements ReaderEngine {
   private dragCleanup: (() => void) | null = null;
   private resizePoint: { page: number; fraction: number } | null = null;
   private removeSpeechMark: (() => void) | null = null;
+  private removeSearchMark: (() => void) | null = null;
+  private zoom = 1;
+  private zoomMode: "width" | "page" | "custom" = "width";
   private ro: ResizeObserver | null = null;
   private touchStart: { x: number; y: number; time: number } | null = null;
   private swiped = false;
@@ -123,7 +127,8 @@ export class PdfEngine implements ReaderEngine {
     scroller.addEventListener("touchend", this.selectionListener, { passive: true });
     scroller.style.touchAction = "pan-y pinch-zoom";
     this.dragCleanup = bindPageDrag(scroller, {
-      enabled: () => this.mode === "paginated" && !this.destroyed && !this.rebuilding && !this.pendingNavigation,
+      enabled: () => this.mode === "paginated" && !this.destroyed && !this.rebuilding && !this.pendingNavigation
+        && this.zoomMode !== "custom",
       width: () => scroller.clientWidth,
       selected: () => !!scroller.ownerDocument.getSelection() && !scroller.ownerDocument.getSelection()!.isCollapsed,
       claim: () => { this.swiped = true; },
@@ -140,7 +145,11 @@ export class PdfEngine implements ReaderEngine {
     this.ro.observe(container);
   }
 
-  private availableWidth(): number { return Math.max(100, (this.container?.clientWidth ?? 600) - 32); }
+  private availableWidth(dims?: PageDims): number {
+    const width = Math.max(100, (this.container?.clientWidth ?? 600) - 32);
+    if (this.zoomMode === "page" && dims) return Math.min(width, Math.max(100, (this.container?.clientHeight ?? 800) - 32) * dims.width / dims.height);
+    return width * this.zoom;
+  }
 
   private async pageDims(pageNumber: number): Promise<PageDims> {
     const known = this.dims.get(pageNumber);
@@ -157,7 +166,7 @@ export class PdfEngine implements ReaderEngine {
     wrapper.className = "qr-pdf-page";
     wrapper.dataset.page = String(page);
     wrapper.style.position = "relative";
-    const width = this.availableWidth();
+    const width = this.availableWidth(dims);
     wrapper.style.width = `${width}px`;
     wrapper.style.height = `${dims.height * width / dims.width}px`;
     this.wrappers.set(page, wrapper);
@@ -167,6 +176,8 @@ export class PdfEngine implements ReaderEngine {
   private async rebuild(): Promise<void> {
     const scroller = this.scroller;
     if (!scroller || this.destroyed) return;
+    this.clearSearch();
+    this.pageDrag?.cancel();
     this.pageTurnController?.abort();
     const page = this.currentPage;
     const fraction = this.currentPageFraction;
@@ -255,7 +266,7 @@ export class PdfEngine implements ReaderEngine {
       state.page = page;
       const base = page.getViewport({ scale: 1 });
       this.dims.set(number, { width: base.width, height: base.height });
-      const scale = this.availableWidth() / base.width;
+      const scale = this.availableWidth({ width: base.width, height: base.height }) / base.width;
       const viewport = page.getViewport({ scale });
       const anchor = this.readLocation();
       wrapper.style.width = `${viewport.width}px`;
@@ -627,6 +638,11 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private handleKey(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "f") { event.preventDefault(); event.stopPropagation(); this.hooks.onSearch?.(); return; }
+    if ((event.ctrlKey || event.metaKey) && ["+", "=", "-", "0"].includes(event.key)) {
+      event.preventDefault(); event.stopPropagation();
+      void this.setZoom(event.key === "0" ? "width" : this.zoom + (event.key === "-" ? -0.25 : 0.25)); return;
+    }
     if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) this.manualNavigation();
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); this.hooks.onZoneTap(); return; }
     if (["ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.navigate(true); }
@@ -738,6 +754,7 @@ export class PdfEngine implements ReaderEngine {
     });
   }
   private manualNavigation(): void {
+    this.clearSearch();
     this.resizePoint = null;
     this.hooks.onManualNavigation?.();
   }
@@ -763,6 +780,53 @@ export class PdfEngine implements ReaderEngine {
     this.navigation = next.catch(() => undefined);
     return next;
   }
+  getZoom(): { value: number; mode: "width" | "page" | "custom" } { return { value: this.zoom, mode: this.zoomMode }; }
+  async setZoom(value: number | "width" | "page"): Promise<void> {
+    await this.enqueueNavigation(async () => {
+      const point = this.captureLocation();
+      this.zoom = typeof value === "number" && Number.isFinite(value) ? Math.max(0.5, Math.min(3, value)) : 1;
+      this.zoomMode = typeof value === "number" ? "custom" : value;
+      this.currentPage = point.pdfPage ?? 1; this.currentPageFraction = point.pageFraction ?? 0;
+      if (this.scroller) this.scroller.style.touchAction = this.zoomMode === "custom" ? "pan-x pan-y pinch-zoom" : "pan-y pinch-zoom";
+      await this.rebuild();
+      if (this.scroller) this.scroller.scrollLeft = (point.horizontalFraction ?? 0) * (this.wrappers.get(this.currentPage)?.clientWidth ?? 1);
+    });
+  }
+  captureLocation(): EngineLocation {
+    const point = this.readLocation();
+    return { chapterId: this.chapterForPage(point.page), percent: (point.page - 1 + point.fraction) / this.doc.numPages,
+      pdfPage: point.page, pageFraction: point.fraction,
+      horizontalFraction: (this.scroller?.scrollLeft ?? 0) / (this.wrappers.get(point.page)?.clientWidth ?? 1) };
+  }
+  async goToLocation(location: EngineLocation): Promise<void> {
+    if (!location.pdfPage) return;
+    this.manualNavigation();
+    await this.enqueueNavigation(async () => {
+      this.clearSelection(); this.clearSearch();
+      await this.setPage(location.pdfPage!, location.pageFraction ?? 0);
+      if (this.scroller) this.scroller.scrollLeft = (location.horizontalFraction ?? 0) * (this.wrappers.get(location.pdfPage!)?.clientWidth ?? 1);
+    });
+  }
+  async search(query: string, signal: AbortSignal, receive: (batch: SearchResult[]) => void): Promise<void> {
+    await searchPdf(this.doc, query, signal, receive, number => this.renders.has(number));
+  }
+  async showSearchResult(result: SearchResult): Promise<void> {
+    await this.goToLocation(result.location);
+    const wrapper = this.wrappers.get(result.location.pdfPage ?? 0), ranges: Range[] = [];
+    for (const item of result.itemRanges ?? []) {
+      const node = wrapper?.querySelector(`.qr-pdf-text [data-i='${item.item}']`)?.firstChild;
+      if (!node || node.nodeType !== 3) continue;
+      const range = node.ownerDocument!.createRange(), length = node.textContent?.length ?? 0;
+      range.setStart(node, Math.min(item.start, length)); range.setEnd(node, Math.min(item.end, length)); ranges.push(range);
+    }
+    if (ranges.length && this.scroller) {
+      const rect = ranges[0].getBoundingClientRect(), view = this.scroller.getBoundingClientRect();
+      this.scroller.scrollTop += rect.top - view.top - 24;
+      if (rect.left < view.left || rect.right > view.right) this.scroller.scrollLeft += rect.left - view.left - 24;
+      this.removeSearchMark = speechHighlight(wrapper!.ownerDocument, ranges, "qr-search"); this.reportLocation();
+    }
+  }
+  clearSearch(): void { this.removeSearchMark?.(); this.removeSearchMark = null; }
   getMode(): ReadMode { return this.mode; }
   async setMode(mode: ReadMode): Promise<void> {
     if (mode === this.mode || this.destroyed) return;
@@ -805,6 +869,7 @@ export class PdfEngine implements ReaderEngine {
     }).catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error))));
   }
   destroy(): void {
+    this.clearSearch();
     this.clearSpeech();
     for (const layer of this.wordLayers.values()) layer.destroy(); this.wordLayers.clear();
     if (this.destroyed) return;

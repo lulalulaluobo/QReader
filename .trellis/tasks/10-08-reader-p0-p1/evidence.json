@@ -1,0 +1,455 @@
+{
+  "environment": {
+    "obsidian": "1.14.4",
+    "qreader": "1.3.0",
+    "platform": "macOS",
+    "physicalMobileDevice": false
+  },
+  "tools": [
+    {
+      "format": "mobi",
+      "hits": 89,
+      "hasText": true,
+      "searchReturned": true,
+      "cancelledResults": 0,
+      "double": {
+        "divisor": 2,
+        "anchorVisible": true
+      },
+      "zoom": null
+    },
+    {
+      "format": "azw3",
+      "hits": 0,
+      "hasText": false,
+      "searchReturned": null,
+      "cancelledResults": 0,
+      "double": {
+        "divisor": 2,
+        "anchorVisible": true
+      },
+      "zoom": null
+    },
+    {
+      "format": "fb2",
+      "hits": 1,
+      "hasText": true,
+      "searchReturned": true,
+      "cancelledResults": 0,
+      "double": {
+        "divisor": 2,
+        "anchorVisible": true
+      },
+      "zoom": null
+    },
+    {
+      "format": "pdf",
+      "hits": 64,
+      "hasText": true,
+      "searchReturned": true,
+      "cancelledResults": 0,
+      "double": null,
+      "zoom": {
+        "canvasAligned": true,
+        "canPan": true,
+        "fitsPage": true
+      }
+    },
+    {
+      "format": "epub",
+      "hits": 1,
+      "hasText": true,
+      "searchReturned": true,
+      "cancelledResults": 0,
+      "double": {
+        "divisor": 2,
+        "anchorVisible": true
+      },
+      "zoom": null
+    },
+    {
+      "format": "cbz",
+      "hits": 0,
+      "hasText": false,
+      "searchReturned": null,
+      "cancelledResults": 0,
+      "double": null,
+      "zoom": null
+    }
+  ],
+  "settings": {
+    "layoutCases": 14,
+    "result": {
+      "font": {
+        "loaded": true,
+        "css": true,
+        "path": ".obsidian/plugins/qreader/fonts/525979822591a3447cfc49d943d6f7683508e25543407871c0ed8fed05fd2bd9.ttf",
+        "label": "Arial.ttf"
+      },
+      "secrets": {
+        "noPlaintext": true,
+        "refs": 3,
+        "restored": true
+      },
+      "metrics": {
+        "count": 1,
+        "afterStop": 1,
+        "summaries": [
+          {
+            "group": "open:epub",
+            "runs": 1,
+            "p50": 131.30000001192093,
+            "p95": null,
+            "enoughSamples": false
+          }
+        ]
+      }
+    }
+  },
+  "settingsWidths": [
+    {
+      "language": "zh-CN",
+      "viewportWidth": 320,
+      "contentWidth": 257,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 375,
+      "contentWidth": 312,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 414,
+      "contentWidth": 351,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 768,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 1024,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 1280,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "zh-CN",
+      "viewportWidth": 1440,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 320,
+      "contentWidth": 257,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 375,
+      "contentWidth": 312,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 414,
+      "contentWidth": 351,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 768,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 1024,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 1280,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    },
+    {
+      "language": "en",
+      "viewportWidth": 1440,
+      "contentWidth": 611,
+      "maxOverflow": 0
+    }
+  ],
+  "touch": [
+    {
+      "format": "epub",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 1,
+      "releaseMs": 56,
+      "finalViews": 1,
+      "gestures": 1,
+      "layers": 1
+    },
+    {
+      "format": "mobi",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 1,
+      "releaseMs": 46,
+      "finalViews": 1,
+      "gestures": 1,
+      "layers": 1
+    },
+    {
+      "format": "azw3",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 2,
+      "releaseMs": 63,
+      "finalViews": 1,
+      "gestures": 1,
+      "layers": 1
+    },
+    {
+      "format": "fb2",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 2,
+      "releaseMs": 59,
+      "finalViews": 1,
+      "gestures": 1,
+      "layers": 1
+    },
+    {
+      "format": "cbz",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 2,
+      "releaseMs": 45,
+      "finalViews": 1,
+      "gestures": 1,
+      "layers": 0
+    },
+    {
+      "format": "pdf",
+      "width": 331,
+      "heldDistance": 198.5999755859375,
+      "heldViews": 2,
+      "releaseMs": 12,
+      "finalViews": 1,
+      "layers": 1
+    }
+  ],
+  "cache": {
+    "coldMs": 244.19999998807907,
+    "warmRuns": 20,
+    "warmP50": 145,
+    "warmP95": 166.90000000596046,
+    "sameCfi": true,
+    "sameIndex": true,
+    "stats": {
+      "bytes": 373605,
+      "count": 2
+    },
+    "recovery": true,
+    "regenerated": true,
+    "originalUnchanged": true,
+    "samples": [
+      {
+        "run": 0,
+        "ms": 244.19999998807907
+      },
+      {
+        "run": 1,
+        "ms": 143.39999997615814
+      },
+      {
+        "run": 2,
+        "ms": 146.5
+      },
+      {
+        "run": 3,
+        "ms": 143.7000000178814
+      },
+      {
+        "run": 4,
+        "ms": 146.69999998807907
+      },
+      {
+        "run": 5,
+        "ms": 143.2999999821186
+      },
+      {
+        "run": 6,
+        "ms": 166.90000000596046
+      },
+      {
+        "run": 7,
+        "ms": 144.90000000596046
+      },
+      {
+        "run": 8,
+        "ms": 145.2000000178814
+      },
+      {
+        "run": 9,
+        "ms": 143
+      },
+      {
+        "run": 10,
+        "ms": 145.39999997615814
+      },
+      {
+        "run": 11,
+        "ms": 145.7000000178814
+      },
+      {
+        "run": 12,
+        "ms": 145
+      },
+      {
+        "run": 13,
+        "ms": 151.7000000178814
+      },
+      {
+        "run": 14,
+        "ms": 151.80000001192093
+      },
+      {
+        "run": 15,
+        "ms": 142.90000000596046
+      },
+      {
+        "run": 16,
+        "ms": 143
+      },
+      {
+        "run": 17,
+        "ms": 144
+      },
+      {
+        "run": 18,
+        "ms": 227.90000000596046
+      },
+      {
+        "run": 19,
+        "ms": 142.90000000596046
+      },
+      {
+        "run": 20,
+        "ms": 159.90000000596046
+      }
+    ]
+  },
+  "context": {
+    "closedStaysClosed": true,
+    "meaning": "本句中表示维持努力。",
+    "noReadded": true,
+    "kept": true,
+    "returnAnchor": true,
+    "savedQuote": true,
+    "savedLocation": true,
+    "exported": true,
+    "protocolFixture": true,
+    "calls": 3
+  },
+  "regression": [
+    {
+      "format": "mobi",
+      "roundtrip": true,
+      "indexEqual": true,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 11,
+      "continuous": true,
+      "simultaneous": false,
+      "annotationsUnchanged": true
+    },
+    {
+      "format": "azw3",
+      "roundtrip": true,
+      "indexEqual": true,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 11,
+      "continuous": true,
+      "simultaneous": true,
+      "annotationsUnchanged": true
+    },
+    {
+      "format": "fb2",
+      "roundtrip": true,
+      "indexEqual": true,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 11,
+      "continuous": true,
+      "simultaneous": true,
+      "annotationsUnchanged": true
+    },
+    {
+      "format": "pdf",
+      "roundtrip": true,
+      "indexEqual": null,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 10,
+      "continuous": true,
+      "simultaneous": true,
+      "annotationsUnchanged": true
+    },
+    {
+      "format": "epub",
+      "roundtrip": true,
+      "indexEqual": true,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 11,
+      "continuous": true,
+      "simultaneous": false,
+      "annotationsUnchanged": true
+    },
+    {
+      "format": "cbz",
+      "roundtrip": true,
+      "indexEqual": null,
+      "restored": true,
+      "rapid": true,
+      "shrinking": true,
+      "frames": 11,
+      "continuous": true,
+      "simultaneous": true,
+      "annotationsUnchanged": true
+    }
+  ],
+  "secretStartupFailure": {
+    "loaded": true,
+    "readFailureFallback": true,
+    "configUnchanged": true,
+    "noPartialLeak": true
+  },
+  "cacheFixture": {
+    "format": "mobi",
+    "bytes": 241000,
+    "sha256": "1b4222ffdf1862a39d0fae6d42c588f28a34c12ad73cc21c2849fe2646cac3e1",
+    "sourceVersion": "epub-v1-mobi"
+  }
+}

@@ -8,7 +8,8 @@ export class AiError extends Error {
   constructor(message: string, public status?: number) { super(message); this.name = "AiError"; }
 }
 
-export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opts?: { temperature?: number; maxTokens?: number; timeoutMs?: number }): Promise<string> {
+export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opts?: { temperature?: number; maxTokens?: number; timeoutMs?: number; signal?: AbortSignal }): Promise<string> {
+  opts?.signal?.throwIfAborted();
   if (!cfg.baseUrl.trim()) throw new AiError("未配置 AI Base URL");
   if (!cfg.model.trim()) throw new AiError("未配置 AI Model");
   if (!cfg.apiKey.trim()) throw new AiError("未配置 API Key");
@@ -28,16 +29,22 @@ export async function chatCompletion(cfg: AiConfig, messages: ChatMessage[], opt
   }
   let response: RequestUrlResponse;
   let timer: number | NodeJS.Timeout | undefined;
+  let abort: (() => void) | undefined;
   try {
     response = await Promise.race([
       requestUrl({ url: endpoint.toString(), method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${cfg.apiKey.trim()}` }, body: JSON.stringify(body), throw: false }),
       new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new AiError("AI 请求超时，请检查网络和接口配置")), opts?.timeoutMs ?? 90000); }),
+      new Promise<never>((_, reject) => {
+        abort = () => reject(new AiError("AI 请求已取消"));
+        opts?.signal?.addEventListener("abort", abort, { once: true });
+        if (opts?.signal?.aborted) abort();
+      }),
     ]);
   } catch (error) {
     if (error instanceof AiError) throw error;
     // Transport errors may echo the authorization header. Never expose them.
     throw new AiError("AI 请求失败，请检查网络、Base URL 和接口配置");
-  } finally { clearTimeout(timer); }
+  } finally { clearTimeout(timer); if (abort) opts?.signal?.removeEventListener("abort", abort); }
   if (response.status < 200 || response.status >= 300) {
     const hints: Record<number, string> = { 401: "API Key 无效或已失效", 403: "接口拒绝访问", 404: "接口路径或模型不存在", 429: "接口限流或额度不足" };
     throw new AiError(`AI 接口返回 ${response.status}：${hints[response.status] ?? "请检查服务端及模型配置"}`, response.status);

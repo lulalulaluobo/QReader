@@ -909,6 +909,21 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   -webkit-overflow-scrolling: touch;
   overflow-anchor: none;
 }
+.qr-settings-tabs { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; margin: 12px 0 20px; }
+.qr-settings-tabs button { min-height: 44px; white-space: normal; padding: 8px; }
+.qr-settings-tabs button[aria-selected="true"] { background: var(--interactive-accent); color: var(--text-on-accent); }
+.qr-settings-page[hidden], .qr-top-actions button[hidden] { display: none !important; }
+.qr-settings-page { min-width: 0; }
+.qr-settings-page .setting-item-control { flex-wrap: wrap; }
+.qr-settings-page .setting-item { flex-wrap: wrap; gap: 12px; }
+.qr-settings-page .setting-item-info { flex: 1 1 200px; min-width: 0; }
+.qr-settings-page .setting-item-control { flex: 1 1 200px; min-width: 0; position: relative; overflow-x: clip; }
+.qr-settings-page :is(input,select,textarea) { max-width: 100%; min-width: 0; }
+.qr-search-form { display: flex; flex-wrap: wrap; gap: 8px; }
+.qr-search-form input { flex: 1 1 140px; min-width: 0; min-height: 44px; }
+.qr-search-controls { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.qr-search-result { display: flex; flex-direction: column; align-items: flex-start; text-align: start; white-space: normal; width: 100%; height: auto; min-height: 64px; gap: 6px; padding: 12px; margin: 8px 0; }
+.qr-search-result span { font-weight: normal; overflow-wrap: anywhere; }
 .qr-epub-host .epub-container { overflow-anchor: none; }
 .qr-pdf-scroll.qr-pdf-turning { overflow-x: hidden; }
 .qr-pdf-page {

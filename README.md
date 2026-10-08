@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.7](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.7) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.3.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.3.0) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -11,6 +11,8 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 - EPUB、PDF、FB2（含 `.fb2.zip`）、未加密 MOBI、AZW3 和 CBZ；原文件保存在 Vault 中。
 - 每页四本真实封面卡片，支持搜索、未读/已读和自定义分类。
 - 沉浸阅读、翻页/滚动、字体和背景设置，自动保存阅读位置。
+- 书内全文搜索、结果高亮与返回刚才的位置；PDF 可缩放、平移、适合宽度或整页。
+- 导入字体、宽屏文字双页、有界本地转换/索引缓存；设置分为六个分类页。
 - 阅读页听书，从当前位置逐句朗读、临时标示原文并自动跟随翻页；支持暂停、停止、语速和声音选择。
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
 - 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
@@ -21,9 +23,21 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.7.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.3.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 阅读工具与设置分页（1.3.0）
+
+阅读页顶部的搜索按钮或 Ctrl/Cmd+F 可搜索全文，结果分批显示、可取消，最多显示 500 处；点击结果高亮原文，可切换上一处/下一处或返回刚才的位置。目录、章节、批注和主动保留的原句跳转也可返回。搜索不做 OCR。
+
+PDF 的缩放入口支持 50%–300%、适合宽度和整页，放大后可平移，切换时保持页码与页内位置。阅读设置可导入不超过 10MB 的 TTF/OTF/WOFF/WOFF2；宽屏双页适用于 EPUB、MOBI、AZW3、FB2，可用宽度不足 900px 时仍显示单页。PDF 和 CBZ 保留物理单页。
+
+设置分为 **基本、阅读、AI、生词、听书、缓存** 六页，切页保留尚未提交的输入。缓存按原书内容和转换版本识别，转换结果与 256 字符位置索引合计上限 128MiB；损坏或写入失败回退原书，清理仅影响可再生成的缓存。导入字体另存于插件目录。
+
+单词卡先显示词典释义，再按需请求“上下文词义”；“保留原句”主动保存原句与定位，不随生词淡化而删除。本书生词面板可导出 Markdown，每次创建新文件。
+
+缓存页可主动采集并导出本地性能诊断。统计至少 20 次才给出 P95，RAF 间隔不等同于系统掉帧。开发验收命令与 Android/iOS 流程见[性能验收指南](.trellis/spec/guides/reader-performance.md)；本轮尚未连接真机。
 
 ### 手机跟手翻页（1.2.7）
 
@@ -96,15 +110,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 查询成功的单词默认自动保存到当前书籍的 `vocabulary.json`，重新查询会清零连续未查询次数并恢复最强高亮。词形按原样记录，忽略大小写，不自动猜词根。可分别关闭自动加入和后续高亮。
 
-生词所在段落真正进入视口后，在离开段落或翻页时计一次有效出现。同词同段只计一次，回看、重排和重开不重复；重新查询开启新一轮。连续 **5 次**有效出现且未查询后，逐渐淡化的高亮和单词记录一起删除。设置可选择 **3 / 4 / 5**，或自定义 **1–100** 次。没有单词历史库、背诵、测试或复习任务。
+生词所在段落真正进入视口后，在离开段落或翻页时计一次有效出现。同词同段只计一次，回看、重排和重开不重复；重新查询开启新一轮。连续 **5 次**有效出现且未查询后，逐渐淡化的高亮和动态单词记录一起删除。设置可选择 **3 / 4 / 5**，或自定义 **1–100** 次。主动保留的原句独立保存，没有背诵、测试或复习任务。
 
 活跃生词优先读取本书保存的释义。其他单词查询使用最多 128 条、30 分钟有效的会话缓存，关闭插件后清空；整句译文仅显示在当前卡片，不建立永久翻译库。
 
 ### 数据与限制
 
-每本书的目录保存原书、`reading.json` 和 `批注.md`；首次成功加入生词后只多一个 `vocabulary.json`。语言切换不改旧文件名或数据。AI 密钥保存在插件本地 `data.json` 中，未加密，请保护 Vault 同步和备份。升级保留现有生词，旧有道凭据不再使用并在下一次保存设置时移除。AI 解读或整句翻译会将相应文本发送至所选接口；连接测试仅发送探针。有道仅接收主动查询的单词和播放发音的单词。查词释义与整句译文使用中文，不随界面语言改变。
+每本书的目录保存原书、`reading.json` 和 `批注.md`；生词和主动保留的原句使用 `vocabulary.json`。语言切换不改旧文件名或数据。Obsidian 1.11.4+ 的 AI 密钥经写入与回读核验后迁入 Vault 本地 [SecretStorage](https://docs.obsidian.md/plugins/guides/secret-storage)，插件 `data.json` 只保留标识；该接口不承诺跨设备同步。旧版 Obsidian 保留原明文配置，已有 SecretStorage 标识在旧主机上无法读取时不覆盖。请保护本地存储与备份。AI 解读、整句翻译或主动上下文词义会将相应文本发送至所选接口；取消后丢弃迟到结果，但 requestUrl 不提供底层网络中止。连接测试仅发送探针。有道仅接收主动查询或播放发音的单词。查词释义与整句译文使用中文，不随界面语言改变。
 
-CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。免密有道单词查询与音频已实际连通；AI 整句译文质量和 Android/iOS 真机尚未验证。桌面验收使用 macOS Obsidian 1.13.7 独立 Vault，窄屏使用移动 CSS 模拟。
+CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字层和段落布局。DRM/加密书籍不受支持。免密有道单词查询与音频已实际连通；AI 译文质量和 Android/iOS 真机尚未验证。1.3.0 桌面验收使用 macOS Obsidian 1.14.4 独立 Vault，窄屏使用移动 CSS 模拟。
 
 ## English
 
@@ -113,6 +127,8 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - Read EPUB, PDF, FB2 (including `.fb2.zip`), unencrypted MOBI, AZW3 and CBZ. Original files stay in your Vault.
 - Four real cover cards per page, search, unread/read filters and your own categories.
 - Immersive reading, paginated or scrolling layouts, font/background controls and saved reading positions.
+- Full-text book search, temporary result highlights and return navigation; PDF zoom, pan, fit width and fit page.
+- Imported fonts, wide-screen text spreads, bounded derivative/index caches and six settings pages.
 - Listening in the reader, starting at the current sentence with temporary source highlights and automatic page following; pause, stop, speed and voice controls.
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
 - Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
@@ -123,9 +139,19 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.7.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.3.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Reading tools and settings pages (1.3.0)
+
+Search inside a book with the top search button or Ctrl/Cmd+F. Results arrive in batches, can be cancelled and are limited to 500. Select a result to highlight it, move to adjacent matches or return to your earlier reading point. Return also works after chapter, annotation and saved-passage jumps. Search does not perform OCR.
+
+PDF supports 50%–300% zoom, panning, fit width and fit page while preserving location. Import TTF/OTF/WOFF/WOFF2 fonts up to 10MB. Optional two-page spreads apply to reflowable EPUB/MOBI/AZW3/FB2 at widths of at least 900px; PDF and CBZ retain physical single pages.
+
+Settings have six pages: General, Reading, AI, Vocabulary, Listening and Cache. Switching pages preserves unsubmitted input. Conversion and location-index caches use source-content and implementation-version keys, with a combined 128MiB limit. Failed or damaged caches fall back to the original. Imported font files are stored separately.
+
+Word cards show dictionary definitions first. Contextual meaning is an explicit AI request. Keep original sentence saves its text and source separately from fading vocabulary. Export creates a new Markdown file. Optional local diagnostics and reusable Android/iOS checks are described in the [performance guide](.trellis/spec/guides/reader-performance.md); no physical mobile device was tested in this release.
 
 ### Finger-controlled page turns (1.2.7)
 
@@ -196,15 +222,15 @@ The public dictionary does not return sentence translations. Select a passage an
 
 Successful single-word lookups are saved in the current book's `vocabulary.json` by default. Another lookup resets the consecutive missed-lookup count and restores the strongest highlight. Words are case-insensitive but are not stemmed. Automatic saving and highlighting can be disabled separately.
 
-A paragraph must actually enter the reading viewport. An appearance is counted when leaving that paragraph or turning a page; the same word in the same paragraph counts once. Rereading, reflowing and reopening do not count again. A new lookup starts another round. After **5 consecutive appearances without a lookup**, the word and its fading highlight are removed. Choose **3 / 4 / 5** or a custom **1–100** in settings. There is no vocabulary history, memorization, testing or review schedule.
+A paragraph must actually enter the reading viewport. An appearance is counted when leaving that paragraph or turning a page; the same word in the same paragraph counts once. Rereading, reflowing and reopening do not count again. A new lookup starts another round. After **5 consecutive appearances without a lookup**, the dynamic word and its fading highlight are removed. Choose **3 / 4 / 5** or a custom **1–100** in settings. Explicitly kept passages remain separate; there is no memorization, testing or review schedule.
 
 Active words use their saved per-book definitions first. Other word lookups use a session cache of at most 128 entries, valid for 30 minutes and cleared when the plugin closes. Sentence translations appear only in the current card. There is no permanent translation archive.
 
 ### Data and limitations
 
-Each book folder keeps the original file, `reading.json` and `批注.md`. A first successful saved-word lookup adds only `vocabulary.json`. Language changes preserve existing files and data. AI keys are stored unencrypted in the plugin's local `data.json`; protect your Vault sync and backups. Upgrades retain vocabulary; old Youdao credentials are unused and removed on the next settings save. AI sends relevant text to your chosen endpoint for AI features and sentence translation; connection tests send only a probe. Youdao receives only words you actively look up or play. Definitions and sentence translations use Chinese regardless of interface language.
+Each book folder keeps the original file, `reading.json` and `批注.md`; dynamic words and kept passages use `vocabulary.json`. Language changes preserve files and data. On Obsidian 1.11.4+, keys migrate to Vault-local [SecretStorage](https://docs.obsidian.md/plugins/guides/secret-storage) after write/read verification; plugin settings retain identifiers. This API does not guarantee cross-device sync. Older hosts retain legacy plaintext settings and cannot edit unreadable migrated identifiers. Protect local storage and backups. Explicit AI features send the relevant passage to your configured endpoint. Cancellation discards late responses; requestUrl cannot abort the underlying HTTP request. Connection tests send only a probe. Youdao receives only words you actively look up or play. Definitions and sentence translations use Chinese regardless of interface language.
 
-CBZ and scanned PDFs have no queryable text; other PDFs depend on their text layer and paragraph layout. DRM/encrypted books are unsupported. Live keyless Youdao word and audio requests passed. AI sentence translation quality and Android/iOS devices have not been tested. Desktop validation uses an isolated macOS Obsidian 1.13.7 Vault; narrow layouts use mobile CSS simulation.
+CBZ and scanned PDFs have no queryable text; other PDFs depend on their text layer and paragraph layout. DRM/encrypted books are unsupported. Live keyless Youdao word and audio requests passed. AI translation quality and Android/iOS devices have not been tested. Version 1.3.0 uses an isolated macOS Obsidian 1.14.4 Vault for desktop validation; narrow content layouts use mobile CSS simulation.
 
 ## 从源码构建 / Build from source
 

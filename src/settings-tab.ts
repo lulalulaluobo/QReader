@@ -8,6 +8,7 @@ import { testConnection } from "./ai/client";
 import { normalizeLanguage } from "./i18n";
 import { AI_PRESETS, getAiConfig } from "./ai/providers";
 import type { AiProvider } from "./ai/providers";
+import { BING_VOICES } from "./reader/speech";
 
 export class QReaderSettingTab extends PluginSettingTab {
   private testStatus = "";
@@ -15,6 +16,7 @@ export class QReaderSettingTab extends PluginSettingTab {
   private configRevision = 0;
   private renderAi: (() => void) | null = null;
   private pathDraft: string | null = null;
+  private page = "basic";
 
   constructor(app: App, private plugin: QReaderPlugin) {
     super(app, plugin);
@@ -28,9 +30,12 @@ export class QReaderSettingTab extends PluginSettingTab {
   }
 
   display(preserveDraft = false): void {
-    const { containerEl } = this;
-    containerEl.empty();
+    const root = this.containerEl;
+    root.empty();
+    root.addClass("qr-settings");
+    const containerEl = root.createDiv();
     const s = this.plugin.settings;
+    root.lang = s.language;
     containerEl.lang = s.language;
     let proposedPath = preserveDraft ? this.pathDraft ?? s.libraryPath : s.libraryPath;
     this.pathDraft = proposedPath;
@@ -175,7 +180,9 @@ export class QReaderSettingTab extends PluginSettingTab {
       const keyLabel = provider === "custom" ? this.plugin.t("自定义接口 API Key") : `${AI_PRESETS[provider].name} API Key`;
       const apiKey = provider === "deepseek" ? ai.deepseekApiKey : provider === "agnes" ? ai.agnesApiKey : ai.custom.apiKey;
       new Setting(aiContainer).setName(keyLabel)
-        .setDesc(this.plugin.t("保存在插件本地 data.json 中，未加密。请保护 Vault 同步和备份；不同服务的密钥互不继承。"))
+        .setDesc(this.plugin.t(this.plugin.secrets.supported
+          ? "密钥保存在 Obsidian SecretStorage，插件配置只保存引用；每个服务独立保存。"
+          : "此 Obsidian 版本没有 SecretStorage，旧密钥继续保存在本地配置；已迁移密钥需升级 Obsidian 后使用。"))
         .addText((text) => {
           text.inputEl.type = "password";
           text.inputEl.autocomplete = "off";
@@ -186,6 +193,7 @@ export class QReaderSettingTab extends PluginSettingTab {
             else ai.custom.apiKey = value;
             await persistAiChange();
           });
+          if (!this.plugin.secrets.supported && ai.secretIds[provider]) text.setDisabled(true);
         });
       new Setting(aiContainer).setName(this.plugin.t("测试连接"))
         .setDesc(this.plugin.t("选文与相关上下文会按需发送到所选接口，用于解读和整句翻译。连接测试只发送探针。"))
@@ -296,10 +304,11 @@ export class QReaderSettingTab extends PluginSettingTab {
     });
     new Setting(containerEl).setName(this.plugin.t("字体")).addDropdown((dropdown) => {
       dropdown.selectEl.setAttribute("aria-label", this.plugin.t("字体"));
-      return dropdown.addOptions({ original: this.plugin.t("原书字体"), sans: this.plugin.t("系统黑体"), serif: this.plugin.t("系统宋体") })
+      return dropdown.addOptions({ original: this.plugin.t("原书字体"), sans: this.plugin.t("系统黑体"), serif: this.plugin.t("系统宋体"),
+        ...(s.reading.fontPath ? { custom: s.reading.fontLabel ?? this.plugin.t("导入字体") } : {}) })
         .setValue(s.reading.fontFamily)
         .onChange(async (value) => {
-          s.reading.fontFamily = value === "sans" || value === "serif" ? value : "original";
+          s.reading.fontFamily = value === "sans" || value === "serif" || value === "custom" ? value : "original";
           await this.plugin.saveSettings();
           this.plugin.notifySettingsChanged();
         })
@@ -347,5 +356,92 @@ export class QReaderSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         })
     });
+    new Setting(containerEl).setName(this.plugin.t("宽屏双页"))
+      .setDesc(this.plugin.t("可重排书籍正文宽度达到 900px 时显示两页；手机自动显示单页。"))
+      .addToggle(toggle => toggle.setValue(s.reading.spread === "double").onChange(async value => {
+        s.reading.spread = value ? "double" : "single"; await this.plugin.saveSettings(); this.plugin.notifySettingsChanged();
+      }));
+    new Setting(containerEl).setName(this.plugin.t("导入字体"))
+      .setDesc(s.reading.fontLabel ?? this.plugin.t("TTF、OTF、WOFF、WOFF2，最多 10MB；缺字由系统字体补齐。"))
+      .addButton(button => button.setButtonText(this.plugin.t("选择字体")).onClick(() => {
+        const input = document.createElement("input"); input.type = "file"; input.accept = ".ttf,.otf,.woff,.woff2";
+        input.onchange = async () => {
+          const file = input.files?.[0]; if (!file) return;
+          button.setDisabled(true);
+          try {
+            const font = await this.plugin.fonts.import(file);
+            s.reading.fontPath = font.path; s.reading.fontLabel = font.label; s.reading.fontFamily = "custom";
+            await this.plugin.saveSettings(); this.plugin.notifySettingsChanged(); this.display(true);
+          } catch { new Notice(this.plugin.t("字体导入失败，请选择有效字体")); }
+          finally { button.setDisabled(false); }
+        }; input.click();
+      }));
+
+    const pages = new Map<string, HTMLElement>();
+    const names = { basic: this.plugin.t("基本"), reading: this.plugin.t("阅读"), ai: this.plugin.t("AI 配置"),
+      words: this.plugin.t("生词"), speech: this.plugin.t("听书"), cache: this.plugin.t("缓存") };
+    const heading = containerEl.querySelector("h2")!; root.prepend(heading);
+    const tabs = root.createDiv({ cls: "qr-settings-tabs" }); tabs.setAttribute("role", "tablist"); tabs.setAttribute("aria-label", this.plugin.t("设置分类"));
+    for (const id of Object.keys(names)) {
+      const panel = root.createDiv({ cls: "qr-settings-page" }); panel.id = `qr-settings-${id}`; panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", `qr-settings-tab-${id}`); pages.set(id, panel);
+    }
+    let section = "basic";
+    for (const node of Array.from(containerEl.children)) {
+      if (node.hasClass("qr-ai-settings")) { pages.get("ai")!.appendChild(node); section = "words"; continue; }
+      if (node.tagName === "H3" && node.textContent === this.plugin.t("阅读设置")) section = "reading";
+      pages.get(section)!.appendChild(node);
+    }
+    containerEl.remove();
+    const speech = pages.get("speech")!;
+    const saveSpeech = async () => { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("speech"); };
+    new Setting(speech).setName(this.plugin.t("语音方式")).addDropdown(dd => dd.addOptions({ auto: this.plugin.t("自动选择"), system: this.plugin.t("系统语音"), bing: this.plugin.t("Bing 在线语音") })
+      .setValue(s.speech.provider).onChange(async value => { s.speech.provider = value === "system" || value === "bing" ? value : "auto"; await saveSpeech(); }));
+    new Setting(speech).setName(this.plugin.t("语速")).addSlider(slider => slider.setLimits(0.5, 2, 0.1).setValue(s.speech.rate).setDynamicTooltip()
+      .onChange(async value => { s.speech.rate = value; await saveSpeech(); }));
+    new Setting(speech).setName(this.plugin.t("声音")).addDropdown(dd => {
+      dd.addOption("auto", this.plugin.t("自动识别中英文"));
+      for (const [id, voice] of Object.entries(BING_VOICES)) dd.addOption(id, this.plugin.t(voice.lang === "zh-CN"
+        ? voice.gender === "Female" ? "中文 · 女声" : "中文 · 男声" : voice.gender === "Female" ? "英语 · 女声" : "英语 · 男声"));
+      dd.setValue(s.speech.voice).onChange(async value => { s.speech.voice = value; await saveSpeech(); });
+    });
+    const cache = pages.get("cache")!;
+    new Setting(cache).setName(this.plugin.t("阅读缓存")).setDesc(this.plugin.t("缓存转换书籍与位置索引，按原书内容失效，最多 128MB；原书、笔记和生词不受影响。"));
+    const cacheStatus = cache.createEl("p", { cls: "qr-settings-status" });
+    const updateStats = async () => { const stats = await this.plugin.cache.disk?.stats(); if (cacheStatus.isConnected && stats) cacheStatus.setText(this.plugin.t("{0} 个文件，{1} MB", stats.count, (stats.bytes / 1048576).toFixed(1))); };
+    void updateStats();
+    new Setting(cache).setName(this.plugin.t("清除阅读缓存")).addButton(button => button.setButtonText(this.plugin.t("清除缓存")).onClick(async () => {
+      button.setDisabled(true);
+      try { await this.plugin.cache.disk?.clear(); await updateStats(); }
+      catch { new Notice(this.plugin.t("缓存清除失败，请重试")); }
+      finally { button.setDisabled(false); }
+    }));
+    new Setting(cache).setName(this.plugin.t("性能记录"))
+      .setDesc(this.plugin.t("仅主动开启时在内存记录开书时间与帧间隔；报告保存在 Vault，不包含书文或密钥。"))
+      .addButton(button => button.setButtonText(this.plugin.t("开始记录")).onClick(() => {
+        this.plugin.metrics.start(window); new Notice(this.plugin.t("性能记录已开始"));
+      }))
+      .addButton(button => button.setButtonText(this.plugin.t("停止并导出")).onClick(async () => {
+        try { await this.plugin.exportPerformance(); } catch { new Notice(this.plugin.t("性能报告保存失败，请重试")); }
+      }));
+    const selectPage = (id: string) => {
+      this.page = id;
+      for (const [key, panel] of pages) panel.hidden = key !== id;
+      for (const button of tabs.querySelectorAll<HTMLButtonElement>("button")) {
+        const selected = button.dataset.page === id; button.setAttribute("aria-selected", String(selected)); button.tabIndex = selected ? 0 : -1;
+      }
+      root.scrollTop = 0;
+    };
+    for (const [id, name] of Object.entries(names)) {
+      const button = tabs.createEl("button", { text: name }); button.dataset.page = id; button.id = `qr-settings-tab-${id}`;
+      button.setAttribute("role", "tab"); button.setAttribute("aria-controls", `qr-settings-${id}`); button.onclick = () => selectPage(id);
+      button.onkeydown = event => {
+        const ids = Object.keys(names), index = ids.indexOf(this.page);
+        const next = event.key === "ArrowRight" ? (index + 1) % ids.length : event.key === "ArrowLeft" ? (index + ids.length - 1) % ids.length
+          : event.key === "Home" ? 0 : event.key === "End" ? ids.length - 1 : -1;
+        if (next >= 0) { event.preventDefault(); selectPage(ids[next]); tabs.querySelector<HTMLButtonElement>(`[data-page='${ids[next]}']`)?.focus(); }
+      };
+    }
+    selectPage(this.page);
   }
 }
