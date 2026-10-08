@@ -57,4 +57,9 @@
 | styles.css | 39248 | 69ed144703290f3c647a5b2ed2d9f184e6a183e87d203d4eeac8ee6e4cef6698 |
 | QReader-1.2.7.zip | 2943494 | 10842cff26b5e8a3e008ef60a8488f73bfd6e374375be90160aa0bf7bd0dd6fb |
 
-发布回执将在推送、Release 与公开下载核验完成后补入本文件。
+## 发布回执
+
+- 源码提交：`dc33bbc7e861658fe433ce50d9007a9c53f96c69`。main 与注解标签 1.2.7 已原子推送，远程 main/标签解引用均核验为该提交；随后只补充这份发布回执与开发日志。
+- [QReader 1.2.7 Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.7) 已发布为 latest，`draft=false`、`prerelease=false`。
+- 四附件的公开下载均 HTTP 200，字节、长度、SHA-256 和 GitHub asset digest 均与本地通过验收的发布文件一致。ZIP 文件列表与内部三个文件逐字节核验通过。
+- 用户功能对照报告仍见 [.trellis/tasks/10-08-reader-motion/comparison.md](../10-08-reader-motion/comparison.md)，其中 1.2.6 的程序翻页动画验收不等于本轮补齐的跟手拖页验收。

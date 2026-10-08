@@ -293,9 +293,10 @@
 
 ## 会话 22：修正手机跟手拖页、半页停留与快速吸附
 
-**日期**：2026-10-08；**分支**：main；**状态**：已完成实现与验证，准备发布 1.2.7。
+**日期**：2026-10-08；**分支**：main；**状态**：已完成，发布 1.2.7。
 
 - 用户反馈 Android 1.2.6 无法拖到两页之间停住，且慢于参考项目。根因是 touchmove 无视觉位移、touchend 700ms 限制和松手后固定 300ms 动画；先前遗漏了真正按住手指的验收。参考 Foliate touchmove 更新偏移、默认不启用 animated 的直接吸附。
 - 共用 PageDrag 与屏幕坐标手势，六格式 LTR 横向单页跟手移动并无限时停留；松手直接吸附，按钮/键盘 120ms。保留 CFI 与开书优化。反向、选词、纵向、双指、跨 iframe 和剩余触点结束均安全取消；导航/布局/销毁回收预览，预览不保存位置或增加生词计数。
 - 正式 build、reader/speech/translation/notes/documents 与 diff 检查通过。独立 Obsidian 六格式 CDP Touch 拖至 60% 按住约 1.25 秒保持位置，最终单轮松手到一帧 20–66ms；反向、取消、跨页双指、模式切换、导航/销毁与六格式原定位/批注/听书边界回归通过。生产文件与测试插件逐字节一致，独立 GUI 正常退出码 0。无 Android 设备，这些数据不作为真机或竞品同机性能结论。
 - 双语 README、规格与版本同步 1.2.7。细节见 .trellis/tasks/10-08-mobile-drag/verification.md；延续用户已授权的推送与 Release 流程。
+- 源码 `dc33bbc7e861658fe433ce50d9007a9c53f96c69`、main 与注解标签 1.2.7 已原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`10842cff26b5e8a3e008ef60a8488f73bfd6e374375be90160aa0bf7bd0dd6fb`。
