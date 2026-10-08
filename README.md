@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.5](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.5) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.6](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.6) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -21,9 +21,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.5.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.6.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 连续翻页与快速开书（1.2.6）
+
+横向翻页时，当前页连续移出，下一页逐渐进入；跨章节与 PDF 页面也保留两页直到滑动结束。系统开启减少动态效果时直接切换。听书自动跟随、跳章和位置恢复不额外加入手动翻页动画。
+
+先显示当前阅读位置，再在后台建立全书进度索引。固定同书、同位置的独立桌面测试中，EPUB 打开中位数从 419ms 降到 141ms，20 章 MOBI 从 2436ms 降到 203ms。初始百分比可能随后校准，已保存的 CFI 位置和批注继续兼容；只有百分比的旧记录仍按需等待索引。大型文件转换和图片解码仍影响耗时，以上不代表手机真机速度。
 
 ### 听书（1.2.5）
 
@@ -113,9 +119,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.5.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.6.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Continuous page turns and faster opening (1.2.6)
+
+Horizontal turns move the current page out while the next page moves in. Both real pages remain available during chapter and PDF page transitions. Reduced motion switches immediately. Speech following, chapter jumps and position restoration do not add a manual page-turn animation.
+
+The current position appears before the full-book progress index is built in the background. Fixed-book, fixed-position desktop tests reduced median EPUB opening from 419ms to 141ms and a 20-chapter MOBI from 2436ms to 203ms. Initial progress percentages may refine afterward; existing CFI positions and annotations remain compatible. Older percentage-only positions still wait for the index when needed. Large-file conversion and image decoding affect timing; these figures are not mobile-device benchmarks.
 
 ### Listening (1.2.5)
 

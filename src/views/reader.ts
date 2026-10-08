@@ -351,15 +351,19 @@ export class ReaderView extends ItemView {
     this.renderProgress(entry.reading.progress.percent);
     this.contentHost.appendChild(el("div", "qr-empty qr-status", this.plugin.t("正在打开书籍……")));
 
-    if (entry.reading.book.format !== "cbz") {
+    // Vocabulary I/O can finish independently while the source and first page
+    // load. Generation guards prevent a late result from attaching to a new book.
+    const vocabularyReady = (async () => {
+      if (entry.reading.book.format === "cbz") return;
       const vocabulary = new VocabularyStore(new VaultFs(this.app.vault.adapter), `${entry.dir}/vocabulary.json`);
       try {
         await vocabulary.load();
         if (generation !== this.generation) return;
         this.vocabulary = vocabulary;
         this.unsubVocabulary = vocabulary.subscribe(() => this.updateVocabulary());
-      } catch (error) { new Notice(this.plugin.t("生词文件无法读取：{0}", this.plugin.errorText(error))); }
-    }
+        this.updateVocabulary();
+      } catch (error) { if (generation === this.generation) new Notice(this.plugin.t("生词文件无法读取：{0}", this.plugin.errorText(error))); }
+    })();
 
     try {
       const engine = await this.createEngine(entry);
@@ -385,6 +389,7 @@ export class ReaderView extends ItemView {
     }
     if (generation !== this.generation) return;
     this.app.workspace.requestSaveLayout();
+    await vocabularyReady;
   }
 
   private async createEngine(entry: HealthyBookEntry): Promise<ReaderEngine> {

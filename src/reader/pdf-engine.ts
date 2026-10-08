@@ -10,6 +10,7 @@ import { pdfSpeechSegments } from "./speech-text";
 import { speechHighlight } from "./speech-highlight";
 import { HIGHLIGHT_COLORS } from "../settings";
 import { WordLayer } from "./word-layer";
+import { animatePageOffset } from "./page-motion";
 import type { VocabularyWord } from "../core/vocabulary";
 
 interface PageDims { width: number; height: number; }
@@ -42,6 +43,7 @@ export class PdfEngine implements ReaderEngine {
   private currentPage: number;
   private currentPageFraction: number;
   private destroyed = false;
+  private pageTurnController: AbortController | null = null;
   private generation = 0;
   private rebuilding = false;
   private scrollTimer: number | undefined;
@@ -152,6 +154,7 @@ export class PdfEngine implements ReaderEngine {
   private async rebuild(): Promise<void> {
     const scroller = this.scroller;
     if (!scroller || this.destroyed) return;
+    this.pageTurnController?.abort();
     const page = this.currentPage;
     const fraction = this.currentPageFraction;
     const generation = ++this.generation;
@@ -638,6 +641,61 @@ export class PdfEngine implements ReaderEngine {
       this.reportLocation();
     }
   }
+
+  private async turnPage(page: number, direction: 1 | -1): Promise<void> {
+    const scroller = this.scroller;
+    const oldPage = this.currentPage;
+    const old = this.wrappers.get(oldPage);
+    if (!scroller || !old || this.destroyed) return;
+    const generation = this.generation;
+    const controller = this.pageTurnController = new AbortController();
+    const width = scroller.clientWidth;
+    this.rebuilding = true;
+    let incoming: HTMLElement | null = null;
+    let completed = false;
+    try {
+      const dims = await this.pageDims(page);
+      if (controller.signal.aborted || generation !== this.generation) return;
+      incoming = this.makeWrapper(page, dims);
+      // Render offscreen while the existing canvas/text/highlights stay visible.
+      incoming.style.position = "absolute";
+      incoming.style.left = "16px";
+      incoming.style.top = `${scroller.scrollTop}px`;
+      incoming.style.transform = `translate3d(${direction * width}px,0,0)`;
+      scroller.classList.add("qr-pdf-turning");
+      scroller.appendChild(incoming);
+      await this.renderPage(page);
+      if (controller.signal.aborted || generation !== this.generation) return;
+      completed = await animatePageOffset(scroller.ownerDocument.defaultView!, 0, -direction * width, offset => {
+        old.style.transform = `translate3d(${offset}px,0,0)`;
+        incoming!.style.transform = `translate3d(${direction * width + offset}px,0,0)`;
+      }, controller.signal);
+      if (!completed || generation !== this.generation) return;
+      this.dropPage(oldPage);
+      this.wrappers.delete(oldPage);
+      old.remove();
+      incoming.style.position = "relative";
+      incoming.style.left = incoming.style.top = incoming.style.transform = "";
+      this.currentPage = page;
+      this.currentPageFraction = 0;
+      this.restoreScroll(page, 0);
+      this.wordLayers.get(page)?.refresh();
+    } finally {
+      if (this.pageTurnController === controller) {
+        this.pageTurnController = null;
+        scroller.classList.remove("qr-pdf-turning");
+        if (!completed && incoming && generation === this.generation) {
+          this.dropPage(page); this.wrappers.delete(page); incoming.remove();
+          old.style.transform = "";
+        }
+        if (!this.destroyed && generation === this.generation) {
+          this.rebuilding = false;
+          this.reportLocation();
+          if (scroller.clientWidth !== width) this.resize();
+        }
+      }
+    }
+  }
   async goToChapter(chapterId: string): Promise<void> {
     this.manualNavigation();
     const chapter = this.chapters.find((item) => item.pdfStartPage && pdfChapterId(item.pdfStartPage) === chapterId);
@@ -653,7 +711,8 @@ export class PdfEngine implements ReaderEngine {
     this.manualNavigation();
     await this.enqueueNavigation(async () => {
       this.flushVocabulary();
-      if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.setPage(this.currentPage + 1); }
+      this.clearSelection();
+      if (this.mode === "paginated") { if (this.currentPage < this.doc.numPages) await this.turnPage(this.currentPage + 1, 1); }
       else this.scroller?.scrollBy({ top: this.scroller.clientHeight * 0.85, behavior: "auto" });
     });
   }
@@ -661,7 +720,8 @@ export class PdfEngine implements ReaderEngine {
     this.manualNavigation();
     await this.enqueueNavigation(async () => {
       this.flushVocabulary();
-      if (this.mode === "paginated") { if (this.currentPage > 1) await this.setPage(this.currentPage - 1); }
+      this.clearSelection();
+      if (this.mode === "paginated") { if (this.currentPage > 1) await this.turnPage(this.currentPage - 1, -1); }
       else this.scroller?.scrollBy({ top: -this.scroller.clientHeight * 0.85, behavior: "auto" });
     });
   }
@@ -720,6 +780,7 @@ export class PdfEngine implements ReaderEngine {
     for (const layer of this.wordLayers.values()) layer.destroy(); this.wordLayers.clear();
     if (this.destroyed) return;
     this.destroyed = true;
+    this.pageTurnController?.abort();
     this.generation++;
     this.observer?.disconnect();
     this.ro?.disconnect();

@@ -10,6 +10,8 @@ import { speechHighlight } from "./speech-highlight";
 import { epubChapterId } from "../types";
 import { HIGHLIGHT_COLORS, READING_FONTS } from "../settings";
 import { WordLayer } from "./word-layer";
+import { EpubSlideManager } from "./epub-slide-manager";
+import { generateEpubLocations } from "./epub-locations";
 import type { VocabularyWord } from "../core/vocabulary";
 
 const HL_CLASS = "qr-hl";
@@ -44,6 +46,8 @@ export class EpubEngine implements ReaderEngine {
   private ro: ResizeObserver | null = null;
   private resizeTimer: number | undefined;
   private destroyed = false;
+  private locationController = new AbortController();
+  private locationIndex: Promise<void> | null = null;
   private restoring = false;
   private suspended = false;
   private generation = 0;
@@ -84,6 +88,15 @@ export class EpubEngine implements ReaderEngine {
     policy.setAttribute("content", "default-src 'none'; img-src blob: data:; style-src 'unsafe-inline' blob: data:; font-src blob: data:; media-src blob: data:; script-src 'none'; connect-src 'none'; form-action 'none'");
     const head = doc.head ?? doc.querySelector("head");
     if (head) head.prepend(policy);
+    if (head && this.readingCss) {
+      // Use EPUB.js's own named style node, so later font/theme changes replace
+      // these rules. The first column layout already has the final reading CSS.
+      const id = "epubjs-inserted-css-qreader-reading";
+      const style = doc.getElementById(id) ?? doc.createElementNS("http://www.w3.org/1999/xhtml", "style");
+      style.id = id;
+      style.textContent = this.readingCss;
+      if (!style.parentNode) head.appendChild(style);
+    }
   };
 
   constructor(
@@ -116,6 +129,7 @@ export class EpubEngine implements ReaderEngine {
     this.container = container;
     container.tabIndex = 0;
     container.addEventListener("keydown", this.keyboard);
+    this.applyTheme();
     this.contentHook = this.book.spine.hooks.content;
     this.contentHook.register(this.sanitize);
     this.spineLen = Math.max(1, (await this.book.loaded.spine).length);
@@ -123,18 +137,19 @@ export class EpubEngine implements ReaderEngine {
     this.book.spine.each((section: Section) => {
       if (section.document) this.sanitize(section.document);
     });
-    // Phone-sized text segments keep percentage fallback near the saved page,
-    // including books whose chapters are shorter than a conventional print page.
-    if (this.book.packaging.metadata.layout !== "pre-paginated" && !this.book.locations.length()) {
-      await this.book.locations.generate(256);
-    }
-    if (this.destroyed) return;
     const host = document.createElement("div");
     host.className = "qr-epub-host";
     host.addEventListener("wheel", () => this.manualNavigation(), { passive: true });
     container.appendChild(host);
     await this.buildRendition(host, this.position);
     if (this.destroyed) return;
+    // First paint needs only the current chapter. Whole-book progress indexing
+    // yields between chapters and never gates a valid saved CFI or page one.
+    if (this.reflowable) void this.ensureLocations().then(() => {
+      return this.navigation.then(() => {
+        if (!this.destroyed && !this.restoring && this.rendition?.location?.start) this.handleRelocated(this.rendition.location);
+      });
+    }).catch((error: unknown) => { if (!this.destroyed) this.reportError(error); });
     this.ro = new ResizeObserver(() => {
       window.clearTimeout(this.resizeTimer);
       if (!container.clientWidth || !container.clientHeight) {
@@ -144,6 +159,10 @@ export class EpubEngine implements ReaderEngine {
       this.resizeTimer = window.setTimeout(() => this.resize(), 250);
     });
     this.ro.observe(container);
+  }
+
+  private ensureLocations(): Promise<void> {
+    return this.locationIndex ??= generateEpubLocations(this.book, this.locationController.signal);
   }
 
   private chapterById(id: string): ChapterState | undefined {
@@ -169,7 +188,7 @@ export class EpubEngine implements ReaderEngine {
     const options = {
       width: "100%", height: "100%", spread: "none",
       flow: this.mode === "scrolled" ? "scrolled-doc" : "paginated",
-      manager: this.mode === "scrolled" ? "continuous" : "default",
+      manager: this.mode === "scrolled" ? "continuous" : EpubSlideManager,
       gap: this.reflowable ? this.renderedMargin * 2 : undefined,
       allowScriptedContent: false,
     };
@@ -204,9 +223,9 @@ export class EpubEngine implements ReaderEngine {
     rendition.hooks.content.register((contents: ContentsLike) => { if (generation === this.generation && !this.destroyed) this.bindContents(contents); });
     try {
       let displayed = false;
-      let restoredCfi = false;
+      let restoreCfi: string | null = null;
       if (point.cfi) {
-        try { await rendition.display(point.cfi); displayed = restoredCfi = true; } catch { /* Try the saved percentage next. */ }
+        try { await rendition.display(point.cfi); displayed = true; restoreCfi = point.cfi; } catch { /* Try the saved percentage next. */ }
       }
       if (!displayed && typeof point.percent === "number" && Number.isFinite(point.percent)) {
         if (this.book.packaging.metadata.layout === "pre-paginated") {
@@ -215,9 +234,13 @@ export class EpubEngine implements ReaderEngine {
           displayed = true;
         }
         if (!displayed) {
+          // Only legacy percentage-only records need the full index before
+          // restoration. A valid CFI remains the fast and exact default path.
+          if (point.percent > 0) await this.ensureLocations();
+          if (this.destroyed || generation !== this.generation) return;
           const cfi = this.book.locations.cfiFromPercentage(Math.max(0, Math.min(1, point.percent)));
           if (cfi) {
-            try { await rendition.display(cfi); displayed = true; } catch { /* Fall through to the chapter start. */ }
+            try { await rendition.display(cfi); displayed = true; restoreCfi = cfi; } catch { /* Fall through to the chapter start. */ }
           }
         }
       }
@@ -232,20 +255,37 @@ export class EpubEngine implements ReaderEngine {
         this.selectionScroller?.addEventListener("scroll", this.guardSelectionScroll);
       }
       for (const annotation of this.marks.values()) this.attachHighlight(annotation);
-      // reportLocation resolves on epub.js's animation-frame relocation. Keep the
-      // intermediate default chapter suppressed throughout that frame.
+      // EPUB.js's report promise queues a relocation frame; it does not await
+      // that frame. Let content CSS/layout and the actual location settle first.
       await rendition.reportLocation();
-      if (restoredCfi && point.cfi && !this.destroyed && generation === this.generation) {
-        // Converted books can finish their first layout after the initial CFI
-        // display. Reapply the saved target once that layout has been measured.
-        await rendition.display(point.cfi);
+      await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+      if (restoreCfi && this.reflowable && !this.cfiIsVisible(restoreCfi) && !this.destroyed && generation === this.generation) {
+        // Late chapter styling can move the restored target to another column.
+        // Reapply only when it is actually outside the reading viewport.
+        await rendition.display(restoreCfi);
         await rendition.reportLocation();
+        await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
       }
+      if (this.destroyed || generation !== this.generation) return;
       this.restoring = false;
       if (rendition.location?.start) this.handleRelocated(rendition.location);
     } finally {
       if (generation === this.generation) this.restoring = false;
     }
+  }
+
+  private cfiIsVisible(cfi: string): boolean {
+    try {
+      const range = this.rendition?.getRange(cfi)?.cloneRange();
+      if (!range) return false;
+      range.collapse(true);
+      const rect = range.getClientRects()[0];
+      const frame = range.startContainer.ownerDocument?.defaultView?.frameElement?.getBoundingClientRect();
+      const surface = this.container?.getBoundingClientRect();
+      return !!rect && !!frame && !!surface && rect.left + frame.left >= surface.left - 1
+        && rect.left + frame.left < surface.right && rect.bottom + frame.top > surface.top
+        && rect.top + frame.top < surface.bottom;
+    } catch { return false; }
   }
 
   private bindContents(contents: ContentsLike): void {
@@ -454,7 +494,8 @@ export class EpubEngine implements ReaderEngine {
     const measured = this.reflowable ? this.book.locations.percentageFromCfi(cfi) : -1;
     const percent = !this.reflowable
       ? (start.index + 1) / this.spineLen
-      : Number.isFinite(measured) && measured >= 0 ? measured : start.index / this.spineLen;
+      : Number.isFinite(measured) && measured >= 0 ? measured
+        : (start.index + Math.max(0, start.displayed.page - 1) / Math.max(1, start.displayed.total)) / this.spineLen;
     const out: EngineLocation = { chapterId: this.chapterForCfi(cfi) ?? null, percent: Math.max(0, Math.min(1, percent)), cfi };
     this.position = out;
     this.hooks.onLocation(out);
@@ -773,6 +814,7 @@ export class EpubEngine implements ReaderEngine {
     if (this.destroyed) return;
     this.clearSpeech();
     this.destroyed = true;
+    this.locationController.abort();
     for (const layer of this.wordLayers.values()) layer.destroy();
     this.wordLayers.clear();
     this.generation++;

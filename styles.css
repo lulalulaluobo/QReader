@@ -910,6 +910,7 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
   overflow-anchor: none;
 }
 .qr-epub-host .epub-container { overflow-anchor: none; }
+.qr-pdf-scroll.qr-pdf-turning { overflow-x: hidden; }
 .qr-pdf-page {
   position: relative;
   margin: 16px auto;

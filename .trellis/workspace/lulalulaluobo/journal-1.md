@@ -279,3 +279,12 @@
 - build、speech/translation/notes/documents、diff 和任务上下文检查通过。原生独立 Obsidian 八组 EPUB/PDF/模式/375及768宽度、同页暂留/跨页返回、重复周期、队列优先级、停止保位通过；真实 Bing 音频自然续句返回且继续播放。六格式边界与切书通过，36 个原书/生词/笔记受保护文件完整。
 - 本轮隔离 Electron 系统语音未触发 start 回调，未计作实际发声验收；系统队列/控制器检查和真实在线音频验收区分记录。Android 无真机，手机为桌面视口模拟。隔离 GUI 已正常退出，收尾无未处理异常。
 - 双语 README 与规格更新；源码 `43aff8b980b4d3c51bd6618fe501053778f3d362`、main 与注解标签 1.2.5 原子推送，正式 latest Release 四附件 HTTP 200/字节/SHA-256/digest/精确三文件 ZIP 一致。ZIP SHA-256：`ee29e607d513408ef932fe3d98ff89d2196649659cda6e8beb49027135b340e1`。证据见 .trellis/tasks/archive/2026-10/10-06-speech-following/verification.md。
+
+## 会话 21：参考竞品实现连续翻页与快速开书
+
+**日期**：2026-10-08；**分支**：main；**状态**：源码与验收完成，按用户授权准备发布 1.2.6。
+
+- 重新克隆 qiaomu-reader 默认分支 HEAD `efbc811c6decd7bb9034b084f366ec6950321320` 到 references/qiaomu-reader-20261008；分析真实内容带横移与 Foliate 按当前章节渲染。QReader 延迟主因是首屏前全书 locations.generate，每章默认等待 100ms。
+- 六格式横向分页使用 300ms 连续位移；跨章/PDF 保留旧页并准备新页，完成后回收。索引改为首屏后生成，与旧 CFI 完全一致；取消与错误不发布部分索引。词表并行读取，CSS 提前到首轮排版，按目标实际可见性修正恢复。
+- 固定同书同 CFI，正式 1.2.5 对照最终构建：EPUB 中位数 419→141ms，20 章 MOBI 2436→203ms。六格式回归、375px 模拟、旧百分比恢复、取消、失败重试、模式往返、原书字体恢复、六格式朗读边界通过。
+- build、reader/speech/translation/notes/documents 与 diff 检查通过；用户实际阅读库未操作。用户随后要求推送与 Release，并在发布后对照两项目的功能、优缺点与改进方向。版本提升为 1.2.6，记录见 .trellis/tasks/10-08-reader-motion/verification.md。
