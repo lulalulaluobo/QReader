@@ -31,4 +31,6 @@
 | styles.css | 41451 | 9cd9af7c6404a88b688d623057d5b4395bc992f0c713df8fcae1e0240d89315b |
 | QReader-1.3.1.zip | 2956080 | 692a1e4cea7dc617cabe82df2c222ac2b3f7db83a59db4080c8b54f5c2e26737 |
 
-远程提交、标签与公开附件回执在发布后补入。
+源码提交 `6db8231fc75c93b650bd852b5d461ab729175e6c`，main 与注解标签 1.3.1 已原子推送。[正式 Release](https://github.com/lulalulaluobo/QReader/releases/tag/1.3.1) 于 2026-10-08 08:08:34 UTC 发布，draft=false、prerelease=false，latest 接口指向 1.3.1。
+
+四个公开附件均 HTTP 200，字节、大小、SHA-256 与本地及 GitHub digest 一致。公开 ZIP 精确三文件，内容与单独附件一致。

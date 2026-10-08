@@ -315,9 +315,10 @@
 
 ## 会话 24：手机设置高度与桌面分类分页补丁
 
-**日期**：2026-10-08；**分支**：main；**状态**：代码完成，1.3.1 发布核验中。
+**日期**：2026-10-08；**分支**：main；**状态**：已完成，发布 1.3.1。
 
 - 用户 Android 截图显示设置卡片大片空白，桌面入口为 Obsidian 设置 → QReader。复现 1.3.0：纵向宿主中说明/控件各 200px flex-basis 变高度，基本页每项 444px；上轮只验横向溢出漏掉高度。
 - 使用 mobile-responsive 技能；改内容自适应网格和容器查询，移除高度 basis，紧凑控件/六分类、导航粘滞、代码同步隐藏页，并显示加载版本。独立 1.3.0 桌面原生入口已有分类，不推断用户旧版本；1.3.1 原生实际点击基本/阅读/缓存与截图通过。
 - 新 qa:settings 56 组覆盖中英、浅深、七宽度和两种宿主方向，检查真实空白高度、溢出、可见页、草稿/键盘；375px 语言/路径约 146/198px。build、reader/tools、六格式 qa:reader 与语法/diff 通过。用户实际阅读库未操作，未宣称手机真机。
-- 双语 README、质量规范和复用指南更新，细节见 .trellis/tasks/10-08-settings-layout/verification.md。按此前授权发布补丁 1.3.1，待公开附件核验回执。
+- 双语 README、质量规范和复用指南更新，细节见 .trellis/tasks/10-08-settings-layout/verification.md。按此前授权发布补丁 1.3.1。
+- 源码 `6db8231fc75c93b650bd852b5d461ab729175e6c`、main 与注解标签 1.3.1 原子推送；正式 latest Release 四附件公开 HTTP 200/字节/大小/SHA-256/GitHub digest 一致，ZIP 精确三文件。ZIP SHA-256：`692a1e4cea7dc617cabe82df2c222ac2b3f7db83a59db4080c8b54f5c2e26737`；隔离 GUI 正常退出码 0。
