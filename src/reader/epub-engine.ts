@@ -12,6 +12,7 @@ import { HIGHLIGHT_COLORS, READING_FONTS } from "../settings";
 import { WordLayer } from "./word-layer";
 import { EpubSlideManager } from "./epub-slide-manager";
 import { generateEpubLocations } from "./epub-locations";
+import { bindPageDrag, type PageDrag } from "./page-gesture";
 import type { VocabularyWord } from "../core/vocabulary";
 
 const HL_CLASS = "qr-hl";
@@ -59,6 +60,9 @@ export class EpubEngine implements ReaderEngine {
   private speechFollowing = true;
   private speechPageEnd: string | null = null;
   private navigation: Promise<void> = Promise.resolve();
+  private pendingNavigation = 0;
+  private pageDrag: PageDrag | null = null;
+  private gestures = new Map<Document, { index: number; cleanup: () => void }>();
   private resizePoint: { cfi: string; offset: number | null } | null = null;
   private removeSpeechMark: (() => void) | null = null;
   // Only the rendition owns paginated scrolling. Native selection/focus scrolling
@@ -221,6 +225,7 @@ export class EpubEngine implements ReaderEngine {
       if (generation === this.generation && !this.destroyed) this.handleSelected(cfi, contents);
     });
     rendition.hooks.content.register((contents: ContentsLike) => { if (generation === this.generation && !this.destroyed) this.bindContents(contents); });
+    rendition.on("removed", () => { if (generation === this.generation) this.releaseDetachedContents(); });
     try {
       let displayed = false;
       let restoreCfi: string | null = null;
@@ -288,13 +293,21 @@ export class EpubEngine implements ReaderEngine {
     } catch { return false; }
   }
 
+  private releaseDetachedContents(): void {
+    for (const [doc, gesture] of this.gestures) if (!doc.defaultView?.frameElement?.isConnected) {
+      gesture.cleanup(); this.gestures.delete(doc);
+      this.wordLayers.get(doc)?.destroy(); this.wordLayers.delete(doc);
+    }
+  }
   private bindContents(contents: ContentsLike): void {
+    this.releaseDetachedContents();
     const doc = contents.document;
     this.wordLayers.get(doc)?.destroy();
     if (this.container && this.format !== "cbz") {
       const words = new WordLayer(doc, doc.body, this.container, `epub:${contents.sectionIndex}`, this.hooks.onWordExposure);
       this.wordLayers.set(doc, words);
       words.set(this.vocabulary, this.vocabularyHighlight, this.vocabularyThreshold);
+      words.setPaused(!!this.pageDrag);
     }
     contents.addStylesheetCss(this.readingCss, "qreader-reading");
     for (const chapter of this.chapters) {
@@ -339,6 +352,8 @@ export class EpubEngine implements ReaderEngine {
       swiped = false;
     }, { passive: true });
     doc.addEventListener("touchend", (event) => {
+      if (this.slideManager()?.supportsDrag) { touch = null; return; }
+      if (swiped) { touch = null; return; }
       const first = event.changedTouches[0];
       const selected = contents.window.getSelection();
       if (!touch || !first || this.mode !== "paginated" || (selected && !selected.isCollapsed)) return;
@@ -350,6 +365,18 @@ export class EpubEngine implements ReaderEngine {
       }
       touch = null;
     }, { passive: true });
+    doc.documentElement.style.touchAction = "pan-y pinch-zoom";
+    this.gestures.get(doc)?.cleanup();
+    const cleanup = bindPageDrag(doc, {
+      enabled: () => this.mode === "paginated" && !this.destroyed && !this.restoring && !this.pendingNavigation
+        && !!this.slideManager()?.canDrag,
+      width: () => this.slideManager()?.pageWidth ?? this.container?.clientWidth ?? 1,
+      selected: () => !!contents.window.getSelection() && !contents.window.getSelection()!.isCollapsed,
+      claim: () => { swiped = true; },
+      interrupt: () => this.pageDrag?.cancel(),
+      start: drag => this.startPageDrag(drag),
+    });
+    this.gestures.set(doc, { index: contents.sectionIndex, cleanup });
     doc.addEventListener("click", (event) => {
       const target = event.target as Element | null;
       const element = target?.nodeType === Node.ELEMENT_NODE ? target : null;
@@ -601,8 +628,33 @@ export class EpubEngine implements ReaderEngine {
     this.resizePoint = null;
     this.hooks.onManualNavigation?.();
   }
-  private enqueueNavigation(action: () => Promise<void>): Promise<void> {
-    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); });
+  private slideManager(): EpubSlideManager | null {
+    const manager = (this.rendition as (Rendition & { manager?: unknown }) | null)?.manager;
+    return manager instanceof EpubSlideManager ? manager : null;
+  }
+  private startPageDrag(drag: PageDrag): void {
+    this.manualNavigation();
+    this.pageDrag = drag;
+    for (const layer of this.wordLayers.values()) layer.setPaused(true);
+    void this.enqueueNavigation(async () => {
+      const manager = this.slideManager();
+      if (!manager) { drag.cancel(); return; }
+      if (await manager.dragPage(drag)) this.flushVocabulary();
+      if (!this.destroyed) {
+        await this.rendition?.reportLocation();
+        await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()));
+      }
+    }, drag).catch(error => this.reportError(error)).finally(() => {
+      drag.cancel();
+      if (this.pageDrag === drag) this.pageDrag = null;
+      for (const layer of this.wordLayers.values()) layer.setPaused(false);
+    });
+  }
+  private enqueueNavigation(action: () => Promise<void>, drag?: PageDrag): Promise<void> {
+    if (!drag) this.pageDrag?.cancel();
+    ++this.pendingNavigation;
+    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); })
+      .finally(() => { --this.pendingNavigation; });
     this.navigation = next.catch(() => undefined);
     return next;
   }
@@ -619,6 +671,8 @@ export class EpubEngine implements ReaderEngine {
   }
 
   private async rebuildRendition(): Promise<void> {
+    for (const gesture of this.gestures.values()) gesture.cleanup();
+    this.gestures.clear();
     for (const layer of this.wordLayers.values()) layer.destroy();
     this.wordLayers.clear();
     const cfi = this.position.cfi ?? this.rendition?.location?.start?.cfi;
@@ -760,6 +814,7 @@ export class EpubEngine implements ReaderEngine {
   }
 
   prepareResize(): void {
+    if (this.pageDrag) { this.pageDrag.cancel(); return; }
     const fallback = this.position.cfi ?? this.rendition?.location?.start?.cfi;
     if (!fallback || this.destroyed || this.restoring) return;
     const cfi = this.visibleCfi(fallback);
@@ -814,6 +869,9 @@ export class EpubEngine implements ReaderEngine {
     if (this.destroyed) return;
     this.clearSpeech();
     this.destroyed = true;
+    this.pageDrag?.cancel();
+    for (const gesture of this.gestures.values()) gesture.cleanup();
+    this.gestures.clear();
     this.locationController.abort();
     for (const layer of this.wordLayers.values()) layer.destroy();
     this.wordLayers.clear();

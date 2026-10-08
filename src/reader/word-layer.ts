@@ -27,6 +27,7 @@ export class WordLayer {
   private resize: ResizeObserver;
   private frame: number | null = null;
   private destroyed = false;
+  private paused = false;
   private highlighted = true;
   private threshold = 5;
   private win: HighlightWindow;
@@ -117,8 +118,9 @@ export class WordLayer {
       return new DOMRect(left, top, Math.max(0, right - left), Math.max(0, bottom - top));
     }).filter((rect) => rect.width > 0 && rect.height > 0);
   }
+  setPaused(paused: boolean): void { this.paused = paused; if (!paused) this.schedule(); }
   private sample(): void {
-    if (this.destroyed || !this.root.isConnected || !this.host.isConnected) return;
+    if (this.destroyed || this.paused || !this.root.isConnected || !this.host.isConnected) return;
     if (this.win.frameElement && !this.win.frameElement.isConnected) return;
     // A sheet, background tab or hidden leaf pauses observation; it is not a miss.
     if (this.doc.hidden || this.host.ownerDocument.hidden || this.host.closest("[inert]") || this.host.getBoundingClientRect().width === 0) return;

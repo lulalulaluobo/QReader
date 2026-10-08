@@ -290,3 +290,12 @@
 - build、reader/speech/translation/notes/documents 与 diff 检查通过；用户实际阅读库未操作。用户随后要求推送与 Release，并在发布后对照两项目的功能、优缺点与改进方向。版本提升为 1.2.6，记录见 .trellis/tasks/10-08-reader-motion/verification.md。
 - 源码 `f99e8bb1a598e6a0b1a73b81599fdadef059566d`、main 与注解标签 1.2.6 原子推送；正式 latest Release 四附件公开 HTTP 200/字节/SHA-256/digest/三文件 ZIP 核验一致。ZIP SHA-256：`9bc101502b7a8f5437d2a66e72154a0be5e76eaf7432067a30d522f2bdc84bd7`。
 - 对照参考 4.5.14 当前源码、最新 Release 与官方社区插件目录，报告见 .trellis/tasks/10-08-reader-motion/comparison.md。建议优先补书内搜索/返回、PDF 缩放、真机长书基线与密钥存储；保留听读、生词淡化和自由笔记合并的区别。未将竞品用户观察计时当作同机实测，后续路线只是建议，本轮没有新增这些功能。
+
+## 会话 22：修正手机跟手拖页、半页停留与快速吸附
+
+**日期**：2026-10-08；**分支**：main；**状态**：已完成实现与验证，准备发布 1.2.7。
+
+- 用户反馈 Android 1.2.6 无法拖到两页之间停住，且慢于参考项目。根因是 touchmove 无视觉位移、touchend 700ms 限制和松手后固定 300ms 动画；先前遗漏了真正按住手指的验收。参考 Foliate touchmove 更新偏移、默认不启用 animated 的直接吸附。
+- 共用 PageDrag 与屏幕坐标手势，六格式 LTR 横向单页跟手移动并无限时停留；松手直接吸附，按钮/键盘 120ms。保留 CFI 与开书优化。反向、选词、纵向、双指、跨 iframe 和剩余触点结束均安全取消；导航/布局/销毁回收预览，预览不保存位置或增加生词计数。
+- 正式 build、reader/speech/translation/notes/documents 与 diff 检查通过。独立 Obsidian 六格式 CDP Touch 拖至 60% 按住约 1.25 秒保持位置，最终单轮松手到一帧 20–66ms；反向、取消、跨页双指、模式切换、导航/销毁与六格式原定位/批注/听书边界回归通过。生产文件与测试插件逐字节一致，独立 GUI 正常退出码 0。无 Android 设备，这些数据不作为真机或竞品同机性能结论。
+- 双语 README、规格与版本同步 1.2.7。细节见 .trellis/tasks/10-08-mobile-drag/verification.md；延续用户已授权的推送与 Release 流程。

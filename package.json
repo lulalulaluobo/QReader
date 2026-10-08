@@ -1,6 +1,6 @@
 {
   "name": "qreader",
-  "version": "1.2.6",
+  "version": "1.2.7",
   "description": "Six-format immersive reader for Obsidian with on-demand explanations and local notes",
   "main": "main.js",
   "scripts": {

@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.2.6](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.6) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.2.7](https://github.com/lulalulaluobo/QReader/releases/tag/1.2.7) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -21,9 +21,13 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.6.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.2.7.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 手机跟手翻页（1.2.7）
+
+手机横向拖动时，书页实时跟随手指，可以按住停在两页之间；松手按距离与速度直接吸附到整页，拖回或取消则返回原页。移除原先 700ms 手势限制和松手后 300ms 动画，按钮/键盘翻页保留 120ms 短动画。选词、双指和纵向滚动不触发横向翻页，切书与布局切换取消拖动；中间位置不保存，不计作生词的有效出现。
 
 ### 连续翻页与快速开书（1.2.6）
 
@@ -119,9 +123,13 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.2.6.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.2.7.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Finger-controlled page turns (1.2.7)
+
+Horizontal touch drags move the real pages with your finger, allowing you to hold them between pages. Release snaps directly according to distance and velocity; dragging back or cancelling returns to the original page. The old 700ms gesture limit and 300ms post-release animation are removed; buttons and keys use a short 120ms animation. Selection, multi-touch and vertical scrolling keep their own behavior. Book/layout changes cancel the drag, and intermediate positions are neither saved nor counted as vocabulary appearances.
 
 ### Continuous page turns and faster opening (1.2.6)
 

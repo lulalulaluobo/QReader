@@ -11,6 +11,7 @@ import { speechHighlight } from "./speech-highlight";
 import { HIGHLIGHT_COLORS } from "../settings";
 import { WordLayer } from "./word-layer";
 import { animatePageOffset } from "./page-motion";
+import { bindPageDrag, type PageDrag } from "./page-gesture";
 import type { VocabularyWord } from "../core/vocabulary";
 
 interface PageDims { width: number; height: number; }
@@ -55,6 +56,9 @@ export class PdfEngine implements ReaderEngine {
   private speechFollowing = true;
   private speechPageEnd: { page: number; item: number; end: number } | null = null;
   private navigation: Promise<void> = Promise.resolve();
+  private pendingNavigation = 0;
+  private pageDrag: PageDrag | null = null;
+  private dragCleanup: (() => void) | null = null;
   private resizePoint: { page: number; fraction: number } | null = null;
   private removeSpeechMark: (() => void) | null = null;
   private ro: ResizeObserver | null = null;
@@ -116,7 +120,16 @@ export class PdfEngine implements ReaderEngine {
       const first = event.touches[0];
       if (this.touchStart && first && Math.hypot(first.clientX - this.touchStart.x, first.clientY - this.touchStart.y) > 10) this.manualNavigation();
     }, { passive: true });
-    scroller.addEventListener("touchend", (event) => { this.handleSwipe(event); this.selectionListener(); }, { passive: true });
+    scroller.addEventListener("touchend", this.selectionListener, { passive: true });
+    scroller.style.touchAction = "pan-y pinch-zoom";
+    this.dragCleanup = bindPageDrag(scroller, {
+      enabled: () => this.mode === "paginated" && !this.destroyed && !this.rebuilding && !this.pendingNavigation,
+      width: () => scroller.clientWidth,
+      selected: () => !!scroller.ownerDocument.getSelection() && !scroller.ownerDocument.getSelection()!.isCollapsed,
+      claim: () => { this.swiped = true; },
+      interrupt: () => this.pageDrag?.cancel(),
+      start: drag => this.startPageDrag(drag),
+    });
     document.addEventListener("selectionchange", this.selectionListener);
     await this.rebuild();
     if (this.destroyed) return;
@@ -318,6 +331,7 @@ export class PdfEngine implements ReaderEngine {
       if (this.scroller) {
         const words = new WordLayer(layer.ownerDocument, layer, this.scroller, `pdf:${number}`, this.hooks.onWordExposure, true);
         this.wordLayers.set(number, words);
+        words.setPaused(!!this.pageDrag);
         words.set(this.vocabulary, this.vocabularyHighlight, this.vocabularyThreshold);
       }
       this.paintHighlights(number);
@@ -619,17 +633,6 @@ export class PdfEngine implements ReaderEngine {
     else if (["ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.navigate(false); }
   }
   private navigate(forward: boolean): void { void (forward ? this.next() : this.prev()).catch((error: unknown) => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error)))); }
-  private handleSwipe(event: TouchEvent): void {
-    const first = event.changedTouches[0];
-    const start = this.touchStart;
-    this.touchStart = null;
-    const selection = window.getSelection();
-    if (!first || !start || this.mode !== "paginated" || (selection && !selection.isCollapsed)) return;
-    const dx = first.clientX - start.x;
-    const dy = first.clientY - start.y;
-    if (Date.now() - start.time < 700 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 2) { this.swiped = true; this.navigate(dx < 0); }
-  }
-
   private async setPage(page: number, fraction = 0): Promise<void> {
     this.flushVocabulary();
     this.currentPage = Math.max(1, Math.min(page, this.doc.numPages));
@@ -642,11 +645,11 @@ export class PdfEngine implements ReaderEngine {
     }
   }
 
-  private async turnPage(page: number, direction: 1 | -1): Promise<void> {
+  private async turnPage(page: number, direction: 1 | -1, drag?: PageDrag): Promise<void> {
     const scroller = this.scroller;
     const oldPage = this.currentPage;
     const old = this.wrappers.get(oldPage);
-    if (!scroller || !old || this.destroyed) return;
+    if (!scroller || !old || this.destroyed || drag?.cancelled) return;
     const generation = this.generation;
     const controller = this.pageTurnController = new AbortController();
     const width = scroller.clientWidth;
@@ -666,10 +669,19 @@ export class PdfEngine implements ReaderEngine {
       scroller.appendChild(incoming);
       await this.renderPage(page);
       if (controller.signal.aborted || generation !== this.generation) return;
-      completed = await animatePageOffset(scroller.ownerDocument.defaultView!, 0, -direction * width, offset => {
+      const paint = (offset: number) => {
         old.style.transform = `translate3d(${offset}px,0,0)`;
         incoming!.style.transform = `translate3d(${direction * width + offset}px,0,0)`;
-      }, controller.signal);
+      };
+      if (drag) {
+        const unsubscribe = drag.subscribe(distance => paint(-direction * distance));
+        const commit = await drag.completion;
+        unsubscribe();
+        if (!commit || controller.signal.aborted || generation !== this.generation) return;
+        this.flushVocabulary();
+      }
+      completed = await animatePageOffset(scroller.ownerDocument.defaultView!, drag ? -direction * drag.distance : 0,
+        -direction * width, paint, controller.signal, drag ? 0 : undefined);
       if (!completed || generation !== this.generation) return;
       this.dropPage(oldPage);
       this.wrappers.delete(oldPage);
@@ -729,8 +741,25 @@ export class PdfEngine implements ReaderEngine {
     this.resizePoint = null;
     this.hooks.onManualNavigation?.();
   }
-  private enqueueNavigation(action: () => Promise<void>): Promise<void> {
-    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); });
+  private startPageDrag(drag: PageDrag): void {
+    this.manualNavigation();
+    this.pageDrag = drag;
+    for (const layer of this.wordLayers.values()) layer.setPaused(true);
+    void this.enqueueNavigation(async () => {
+      const page = this.currentPage + drag.direction;
+      if (page < 1 || page > this.doc.numPages) { drag.cancel(); return; }
+      await this.turnPage(page, drag.direction, drag);
+    }, drag).catch(error => this.hooks.onError?.(error instanceof Error ? error : new Error(String(error)))).finally(() => {
+      drag.cancel();
+      if (this.pageDrag === drag) this.pageDrag = null;
+      for (const layer of this.wordLayers.values()) layer.setPaused(false);
+    });
+  }
+  private enqueueNavigation(action: () => Promise<void>, drag?: PageDrag): Promise<void> {
+    if (!drag) this.pageDrag?.cancel();
+    ++this.pendingNavigation;
+    const next = this.navigation.then(async () => { if (!this.destroyed) await action(); })
+      .finally(() => { --this.pendingNavigation; });
     this.navigation = next.catch(() => undefined);
     return next;
   }
@@ -780,6 +809,8 @@ export class PdfEngine implements ReaderEngine {
     for (const layer of this.wordLayers.values()) layer.destroy(); this.wordLayers.clear();
     if (this.destroyed) return;
     this.destroyed = true;
+    this.pageDrag?.cancel();
+    this.dragCleanup?.(); this.dragCleanup = null;
     this.pageTurnController?.abort();
     this.generation++;
     this.observer?.disconnect();

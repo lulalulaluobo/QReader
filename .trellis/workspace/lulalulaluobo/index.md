@@ -4,7 +4,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 21
+- **Total Sessions**: 22
 - **Last Active**: 2026-10-08
 <!-- @@@/auto:current-status -->
 
@@ -13,7 +13,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~292 | Active |
+| `journal-1.md` | ~301 | Active |
 <!-- @@@/auto:active-documents -->
 
 ## 会话记录
@@ -21,6 +21,7 @@
 <!-- @@@auto:session-history -->
 | 序号 | 日期 | 标题 | 提交 | 分支 |
 |---|------|-------|---------|--------|
+| 22 | 2026-10-08 | 手机跟手拖页、半页停留与快速吸附，发布 1.2.7 | 待发布回执 | `main` |
 | 21 | 2026-10-08 | 连续翻页与快速开书，发布 1.2.6 并对照竞品 | `f99e8bb1a598e6a0b1a73b81599fdadef059566d` | `main` |
 | 20 | 2026-10-06 | 下一朗读页优先恢复跟随，发布 1.2.5 | `43aff8b980b4d3c51bd6618fe501053778f3d362` | `main` |
 | 19 | 2026-10-06 | 修复翻页跳动并分离朗读与阅读，发布 1.2.4 | `7f513cf8cf38f40dfa230e685c6dc23e666b086f` | `main` |
