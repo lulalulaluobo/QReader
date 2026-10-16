@@ -74,6 +74,15 @@ export class VocabularyStore {
       saved.push({ ...record }); return true;
     });
   }
+  unkeep(record: SavedVocabularyWord): Promise<void> {
+    return this.change(file => {
+      const saved = file.saved ?? [];
+      const next = saved.filter(item => !(item.word === record.word && item.quote === record.quote && item.cfi === record.cfi && item.pdfPage === record.pdfPage));
+      if (next.length === saved.length) return false;
+      file.saved = next;
+      return true;
+    });
+  }
   private async readDisk(): Promise<{ value: VocabularyFile; raw: string | null }> {
     if (!await this.fs.exists(this.path)) return { value: { version: 1, words: [] }, raw: null };
     const raw = await this.fs.read(this.path);

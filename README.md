@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.4.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.4.0) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.4.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.4.1) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -23,9 +23,17 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.4.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.4.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 收藏与美式音标（1.4.1）
+
+“保留原句”改为收藏按钮，位于词头右侧、喇叭左侧；点击收藏当前单词、释义、原句和定位，再点取消收藏，重新打开时恢复收藏状态。旧原句记录继续保留，在“本书生词 → 收藏”中查看和导出。
+
+中文查词和英文解释都在单词下方显示“美 /音标/”。英文模式独立查询有道获取美式音标，不阻塞 AI 解释；词典没有美式音标时不使用英式音标冒充。
+
+构建、翻译和阅读工具测试通过，浏览器模拟验证收藏/取消/重新打开及 320–1440px 七档宽度。本机 Obsidian 实时查询确认返回美式音标；未连接手机进行真机验收。
 
 ### 英文阅读辅助与手机界面（1.4.0）
 
@@ -153,9 +161,17 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.4.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.4.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Favorites and US phonetics (1.4.1)
+
+The former Keep source passage action is now a favorite toggle, immediately to the left of the speaker. It saves the word, explanation, source passage and location; click again to remove it. Reopening restores the saved state. Existing saved passages remain available under Book vocabulary → Favorites and in Markdown exports.
+
+Both Chinese lookup and English explanation modes display US phonetics beneath the word. English mode fetches dictionary metadata independently of AI, so a dictionary failure cannot interrupt the explanation. British-only phonetics are never labeled as American.
+
+Build, translation and reader-tool checks pass. Browser fixtures cover toggling, reopening and seven widths from 320px to 1440px; a live lookup in desktop Obsidian confirmed US phonetics. No physical phone was connected.
 
 ### English reading assistance and mobile layout (1.4.0)
 

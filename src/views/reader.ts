@@ -29,6 +29,7 @@ import { explainEnglish } from "../translation/english";
 import { translateSentence } from "../translation/sentence";
 import { contextualMeaning, contextQuote } from "../translation/context";
 import { vocabularyMarkdown } from "../core/vocabulary-export";
+import type { SavedVocabularyWord } from "../core/vocabulary";
 import type { TranslationResult } from "../translation/youdao";
 import { SpeechPlayer, BING_VOICES } from "../reader/speech";
 import type { SpeechState } from "../reader/speech";
@@ -486,6 +487,25 @@ export class ReaderView extends ItemView {
     body.appendChild(status); sheet.appendChild(body);
     this.root.addClass("qr-lookup-open");
     const sheetHeader = sheet.querySelector<HTMLElement>(".qr-reading-sheet-header")!;
+    const heading = el("div", "qr-translation-heading");
+    const wordTitle = sheetHeader.querySelector("h2")!;
+    wordTitle.replaceWith(heading); heading.appendChild(wordTitle);
+    const phonetic = el("div", "qr-translation-phonetic"); phonetic.hidden = true;
+    phonetic.setAttribute("aria-label", this.plugin.t("美式音标")); heading.appendChild(phonetic);
+    const renderPronunciation = (result: TranslationResult): void => {
+      phonetic.setText(result.phonetic ? this.plugin.t("美 /{0}/", result.phonetic) : "");
+      phonetic.hidden = !result.phonetic;
+      if (!result.audioUrl || sheetHeader.querySelector(".qr-translation-audio")) return;
+      const play = el("button", "qr-icon-btn qr-translation-audio");
+      play.setAttribute("aria-label", this.plugin.t("播放发音")); play.title = this.plugin.t("播放发音"); setIcon(play, "volume-2");
+      play.onclick = () => {
+        if (!current()) return;
+        this.translationAudio?.pause();
+        const audio = new Audio(result.audioUrl); this.translationAudio = audio;
+        void audio.play().catch(() => { if (current()) new Notice(this.plugin.t("发音播放失败，请刷新翻译后重试")); });
+      };
+      sheetHeader.insertBefore(play, sheetHeader.lastElementChild);
+    };
     const tools = el("div", "qr-definition-tools");
     const sourceQuote = el("blockquote", "qr-definition-quote"); sourceQuote.hidden = true;
     body.insertBefore(sourceQuote, label);
@@ -516,12 +536,12 @@ export class ReaderView extends ItemView {
       tools.appendChild(button);
     };
     const appendContextActions = (result: TranslationResult): void => {
-      if (!word || !selection || !store || removed) return;
+      if (!word || !selection || !store) return;
       const quote = async () => {
         const context = await sourceEngine.getSelectionContext(selection);
         return contextQuote(selection.text, context.before, context.after);
       };
-      const actions = el("div", "qr-search-controls"), meaning = el("button", "qr-btn", this.plugin.t("上下文词义")), keep = el("button", "qr-btn", this.plugin.t("保留原句"));
+      const actions = el("div", "qr-search-controls"), meaning = el("button", "qr-btn", this.plugin.t("上下文词义"));
       const explanation = el("p", "qr-context-meaning"); explanation.setAttribute("aria-live", "polite");
       meaning.onclick = async () => {
         if (!current() || removed) return;
@@ -535,18 +555,35 @@ export class ReaderView extends ItemView {
         } catch (error) { if (current() && !controller.signal.aborted) explanation.setText(this.plugin.errorText(error)); }
         finally { if (current()) meaning.disabled = false; }
       };
-      keep.onclick = async () => {
-        keep.disabled = true;
-        try {
-          const passage = await quote(); if (!current() || removed) return;
-          await store.keep({ word, translation: result.translation, quote: passage, cfi: selection.cfi,
-            pdfPage: selection.pdfPage, chapterId: selection.chapterId, savedAt: new Date().toISOString() });
-          if (current()) keep.setText(this.plugin.t("已保留原句"));
-        } catch (error) { if (current()) { keep.disabled = false; new Notice(this.plugin.errorText(error)); } }
+      const favorite = el("button", "qr-icon-btn qr-translation-favorite");
+      favorite.disabled = true;
+      const updateFavorite = (saved: boolean): void => {
+        favorite.setAttribute("aria-label", this.plugin.t(saved ? "取消收藏" : "收藏"));
+        favorite.title = this.plugin.t(saved ? "已收藏" : "收藏");
+        favorite.setAttribute("aria-pressed", String(saved));
+        setIcon(favorite, "bookmark");
       };
-      if (!english) actions.appendChild(meaning);
-      keep.addClass("qr-keep-quote");
-      actions.appendChild(keep); body.append(actions, explanation);
+      updateFavorite(false);
+      sheetHeader.insertBefore(favorite, sheetHeader.querySelector(".qr-translation-audio") ?? sheetHeader.lastElementChild);
+      let record: SavedVocabularyWord | undefined;
+      void quote().then(passage => {
+        if (!current() || !favorite.isConnected) return;
+        record = { word, translation: result.translation, quote: passage, cfi: selection.cfi,
+          pdfPage: selection.pdfPage, chapterId: selection.chapterId, savedAt: new Date().toISOString() };
+        updateFavorite(store.saved.some(item => item.word === word && item.quote === passage && item.cfi === selection.cfi && item.pdfPage === selection.pdfPage));
+        favorite.disabled = false;
+      }).catch(() => { favorite.remove(); });
+      favorite.onclick = async () => {
+        if (!record || !current()) return;
+        favorite.disabled = true;
+        const saved = store.saved.some(item => item.word === word && item.quote === record!.quote && item.cfi === record!.cfi && item.pdfPage === record!.pdfPage);
+        try {
+          if (saved) await store.unkeep(record); else await store.keep(record);
+          if (current() && favorite.isConnected) updateFavorite(!saved);
+        } catch (error) { if (current()) new Notice(this.plugin.t("收藏失败：{0}", this.plugin.errorText(error))); }
+        finally { if (current()) favorite.disabled = false; }
+      };
+      if (!english) { actions.appendChild(meaning); body.append(actions, explanation); }
     };
     const request = async (refresh = false, simpler = false): Promise<void> => {
       if (!current() || removing) return;
@@ -555,9 +592,15 @@ export class ReaderView extends ItemView {
       const controller = this.wordContextAbort = new AbortController();
       const latest = (): boolean => current() && id === requestId && !controller.signal.aborted;
       status.setText(this.plugin.t(english ? "正在解读……" : "正在翻译……"));
-      sheetHeader.querySelector(".qr-translation-audio")?.remove();
+      sheetHeader.querySelector(".qr-translation-favorite")?.remove();
       tools.empty(); tools.remove();
       body.querySelectorAll("button,.qr-translation-phonetic,.qr-search-controls,.qr-context-meaning,.qr-translation-fallback,.qr-definition-actions").forEach((element) => element.remove());
+      // Dictionary metadata is independent of AI: it must not delay or break the English explanation.
+      if (word && english) {
+        void this.plugin.translation.lookup(text).then(result => {
+          if (latest()) renderPronunciation(result);
+        }).catch(() => { /* No invented IPA when the dictionary is unavailable. */ });
+      }
       const appendEnglishActions = (allowSimpler: boolean): void => {
           const actions = el("div", "qr-definition-actions");
           const simple = el("button", "qr-btn", this.plugin.t("更简单"));
@@ -601,18 +644,7 @@ export class ReaderView extends ItemView {
             : await translateSentence(getAiConfig(this.plugin.settings.ai), text, this.plugin.settings.language);
         if (!latest()) return;
         status.setText(result.translation);
-        if (result.phonetic) body.prepend(el("div", "qr-translation-phonetic", `/${result.phonetic}/`));
-        if (result.audioUrl) {
-          const play = el("button", "qr-icon-btn qr-translation-audio");
-          play.setAttribute("aria-label", this.plugin.t("播放发音")); play.title = this.plugin.t("播放发音"); setIcon(play, "volume-2");
-          play.onclick = () => {
-            if (!current()) return;
-            this.translationAudio?.pause();
-            const audio = new Audio(result.audioUrl); this.translationAudio = audio;
-            void audio.play().catch(() => { if (current()) new Notice(this.plugin.t("发音播放失败，请刷新翻译后重试")); });
-          };
-          sheetHeader.insertBefore(play, sheetHeader.lastElementChild);
-        }
+        if (!english) renderPronunciation(result);
         const retry = el("button", "qr-icon-btn qr-translation-refresh");
         retry.setAttribute("aria-label", this.plugin.t("刷新翻译")); retry.title = this.plugin.t("刷新翻译"); setIcon(retry, "refresh-cw");
         retry.onclick = () => { if (word) this.plugin.translation.clear(); void request(true); }; tools.appendChild(retry);
@@ -890,10 +922,10 @@ export class ReaderView extends ItemView {
       } catch (error) { if (box.isConnected) new Notice(this.plugin.errorText(error)); }
       finally { exportButton.disabled = false; }
     };
-    body.append(exportButton, el("p", "qr-reading-help", this.plugin.t("动态生词仍会自动淡化；主动保留的原句不会随出现次数删除。导出创建新文件，不覆盖已有笔记。")));
+    body.append(exportButton, el("p", "qr-reading-help", this.plugin.t("动态生词仍会自动淡化；收藏不会随出现次数删除。导出创建新文件，不覆盖已有笔记。")));
     body.appendChild(el("h3", undefined, this.plugin.t("动态生词")));
     for (const word of store.words) body.appendChild(el("p", undefined, `${word.word} — ${word.translation}`));
-    body.appendChild(el("h3", undefined, this.plugin.t("保留原句")));
+    body.appendChild(el("h3", undefined, this.plugin.t("收藏")));
     for (const word of store.saved) {
       const row = el("button", "qr-search-result"); row.append(el("strong", undefined, `${word.word} — ${word.translation}`), el("span", undefined, word.quote));
       row.onclick = () => {

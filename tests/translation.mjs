@@ -10,6 +10,9 @@ for(const value of ['two words','sustain.','你好','42','a b c'])assert.equal(m
 assert.equal(m.safeAudioUrl('javascript:alert(1)'), '');assert.equal(m.safeAudioUrl('https://evil.com/x'), '');
 const dictionary={ec:{word:[{usphone:'səˈsteɪn',trs:[{tr:[{l:{i:['v. 维持；支撑']}}]},{tr:[{l:{i:['n. 延音']}}]}]}]},simple:{word:[{ukphone:'səˈsteɪn'}]}};
 assert.deepEqual(m.parseTranslation(dictionary,'sustain'),{query:'sustain',translation:'v. 维持；支撑\nn. 延音',phonetic:'səˈsteɪn',audioUrl:'https://dict.youdao.com/dictvoice?audio=sustain&type=2'});
+// A British-only entry must never be labeled as American pronunciation.
+assert.equal(m.parseTranslation({...dictionary,ec:{word:[{...dictionary.ec.word[0],usphone:undefined}]},simple:{word:[{ukphone:'UK-only'}]}},'sustain').phonetic,'');
+assert.equal(m.parseTranslation({...dictionary,simple:{word:[{usphone:' /US-IPA/ '}]}},'sustain').phonetic,'US-IPA');
 for(const field of ['web-translation','web_translation'])assert.equal(m.parseTranslation({web_trans:{[field]:[{trans:[{value:'维持'},{value:'维持'},{value:'支撑'}]}]}},'sustain').translation,'维持\n支撑');
 assert.equal(m.parseTranslation({ec:{word:[{trs:[{tr:[{l:{i:[null,'维持',4]}}]}]}]}},'sustain').phonetic,'');
 for(const raw of [null,[],{}, {simple:{word:[{usphone:'x'}]}},{ec:{word:[{trs:[null,{tr:[null,{l:{i:'bad'}}]}]}]}}])assert.throws(()=>m.parseTranslation(raw,'sustain'),/有道/);

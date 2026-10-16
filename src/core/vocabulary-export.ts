@@ -3,7 +3,7 @@ function plain(text: string): string { return text.replace(/&/g, "&amp;").replac
 export function vocabularyMarkdown(title: string, words: readonly VocabularyWord[], saved: readonly SavedVocabularyWord[]): string {
   const lines = [`# ${plain(title)}`, "", "## Vocabulary / 生词", ""];
   for (const word of words) lines.push(`- **${word.word}** — ${plain(word.translation).replace(/\n/g, " ")}`);
-  lines.push("", "## Saved passages / 保留原句", "");
+  lines.push("", "## Favorites / 收藏", "");
   for (const word of saved) {
     lines.push(`### ${word.word}`, "", plain(word.translation), "", ...plain(word.quote).split("\n").map(line => `> ${line}`), "");
     if (word.cfi) lines.push(`CFI: \`${word.cfi.replace(/`/g, "") }\``, "");

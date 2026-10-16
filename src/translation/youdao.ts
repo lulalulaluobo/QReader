@@ -68,7 +68,7 @@ export function parseTranslation(raw: unknown, query: string): TranslationResult
   }
   const translation = [...new Set(definitions)].join("\n").replace(/\\n/g, "\n");
   if (!translation) throw new Error("有道没有找到这个单词的释义");
-  const phonetic = [simple.usphone, ec.usphone, simple.ukphone, ec.ukphone].find((value): value is string => typeof value === "string" && !!value.trim()) ?? "";
+  const phonetic = [simple.usphone, ec.usphone].find((value): value is string => typeof value === "string" && !!value.trim())?.trim().replace(/^[/\[]|[/\]]$/g, "") ?? "";
   return { query, translation, phonetic, audioUrl: `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(query)}&type=2` };
 }
 export type TranslationTransport = (url: string) => Promise<{ status: number; text: string }>;

@@ -1854,3 +1854,12 @@ body.is-mobile.qr-reading-active .mobile-toolbar {
 @media (prefers-reduced-motion: reduce) {
   .qr-reader-header, .qr-reader-bottom, .qr-mask { transition: none; }
 }
+
+/* Word identity and pronunciation stay together; favorite precedes the speaker. */
+.qr-translation-heading { flex: 1; min-width: 0; }
+.qr-translation-heading .qr-translation-phonetic { margin: 4px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.qr-translation-phonetic[hidden] { display: none; }
+.qr-translation-sheet .qr-reading-sheet-header { align-items: flex-start; gap: 4px; }
+.qr-translation-sheet .qr-translation-favorite { color: var(--qr-muted); margin: 0; flex-shrink: 0; }
+.qr-translation-sheet .qr-translation-favorite[aria-pressed="true"] { color: var(--qr-accent); }
+.qr-translation-favorite[aria-pressed="true"] svg { fill: currentColor; }

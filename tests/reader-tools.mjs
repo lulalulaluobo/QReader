@@ -58,6 +58,14 @@ assert.equal(vocabulary.words.length, 0); assert.equal(vocabulary.saved.length, 
 await vocabulary.remove('sustain'); assert.equal(vocabulary.saved.length, 1);
 const reload = new m.VocabularyStore(fs, 'vocabulary.json'); await reload.load(); assert.deepEqual(reload.saved, vocabulary.saved);
 assert.match(m.vocabularyMarkdown('<Book>', [], reload.saved), /&lt;Book>/); assert.match(m.vocabularyMarkdown('Book', [], reload.saved), /They sustain/);
+const otherQuote = { ...quote, quote: 'We sustain another effort.', cfi: 'epubcfi(/6/4!/4/2/1:0)', pdfPage: undefined, chapterId: undefined };
+await reload.keep(otherQuote);
+await reload.unkeep(quote);
+assert.deepEqual(reload.saved, [otherQuote], 'unfavoriting removes only the selected source occurrence');
+await reload.unkeep(quote); assert.equal(reload.saved.length, 1, 'unfavoriting is idempotent');
+const afterFavoriteReload = new m.VocabularyStore(fs, 'vocabulary.json'); await afterFavoriteReload.load();
+assert.deepEqual(afterFavoriteReload.saved, [otherQuote], 'favorite removal persists across reloads');
+await reload.keep(quote); assert.equal(reload.saved.length, 2, 'an unfavorited passage can be saved again');
 const controller = new AbortController(); let sent;
 globalThis.qrRequest = options => { sent = JSON.parse(options.body); return new Promise(() => {}); };
 const pending = m.contextualMeaning({ baseUrl: 'https://fixture.invalid', apiKey: 'fixture', model: 'fixture' }, 'sustain', quote.quote, 'Book', 'en', controller.signal);
