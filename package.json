@@ -1,6 +1,6 @@
 {
   "name": "qreader",
-  "version": "1.4.1",
+  "version": "1.5.0",
   "description": "Six-format immersive reader for Obsidian with on-demand explanations and local notes",
   "main": "main.js",
   "scripts": {
@@ -14,7 +14,8 @@
     "test:reader": "node tests/reader-performance.mjs",
     "test:tools": "node tests/reader-tools.mjs",
     "qa:reader": "node scripts/reader-ui-qa.mjs",
-    "qa:settings": "node scripts/settings-ui-qa.mjs"
+    "qa:settings": "node scripts/settings-ui-qa.mjs",
+    "test:vocabulary": "node tests/shared-vocabulary.mjs"
   },
   "keywords": [],
   "author": "",

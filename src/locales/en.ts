@@ -1,5 +1,12 @@
 /** Chinese source messages are stable keys; numbered placeholders preserve user text. */
 export const EN = {
+  "生词与收藏": "Vocabulary and favorites",
+  "共享生词": "Shared vocabulary",
+  "本书收藏": "This book’s favorites",
+  "已从共享生词表移除": "Removed from shared vocabulary",
+  "生词与熟悉程度跨书共享，收藏原句仅属于本书。移除生词会对所有书生效，收藏不受影响。": "Vocabulary and familiarity are shared across books; saved passages belong to this book. Removing a word applies to all books and keeps favorites.",
+  "查询记录与熟悉程度跨书共享；收藏原句和阅读位置按书保存。": "Lookups and familiarity are shared across books; favorites and reading positions stay with each book.",
+
   "英文解释使用插件设置中配置的 AI 服务。": "English explanations use the AI service configured in plugin settings.",
   "阅读辅助": "Reading assistance",
   "英文解释": "English explanation",

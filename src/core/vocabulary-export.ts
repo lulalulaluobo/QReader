@@ -1,9 +1,9 @@
 import type { SavedVocabularyWord, VocabularyWord } from "./vocabulary";
 function plain(text: string): string { return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/[\\`*_\[\]#]/g, "\\$&"); }
 export function vocabularyMarkdown(title: string, words: readonly VocabularyWord[], saved: readonly SavedVocabularyWord[]): string {
-  const lines = [`# ${plain(title)}`, "", "## Vocabulary / 生词", ""];
+  const lines = [`# ${plain(title)}`, "", "## Shared vocabulary / 共享生词", ""];
   for (const word of words) lines.push(`- **${word.word}** — ${plain(word.translation).replace(/\n/g, " ")}`);
-  lines.push("", "## Favorites / 收藏", "");
+  lines.push("", "## This book’s favorites / 本书收藏", "");
   for (const word of saved) {
     lines.push(`### ${word.word}`, "", plain(word.translation), "", ...plain(word.quote).split("\n").map(line => `> ${line}`), "");
     if (word.cfi) lines.push(`CFI: \`${word.cfi.replace(/`/g, "") }\``, "");

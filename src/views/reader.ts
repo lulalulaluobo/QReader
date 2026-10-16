@@ -22,7 +22,7 @@ import { chapterNotes } from "../core/chapter-notes";
 import { explainSelection } from "../ai/tasks";
 import { HIGHLIGHT_COLORS, READING_PALETTES } from "../settings";
 import { getAiConfig } from "../ai/providers";
-import { VocabularyStore } from "../core/vocabulary";
+import { ReadingVocabularyStore } from "../core/reading-vocabulary";
 import { VaultFs } from "../core/fs";
 import { singleWord } from "../translation/youdao";
 import { explainEnglish } from "../translation/english";
@@ -79,7 +79,7 @@ export class ReaderView extends ItemView {
   private confirmingNoteId: string | null = null;
   private cancelHighlightPress: (() => void) | null = null;
   private stateRequest = 0;
-  private vocabulary: VocabularyStore | null = null;
+  private vocabulary: ReadingVocabularyStore | null = null;
   private unsubVocabulary: (() => void) | null = null;
   private vocabularyJobs = new Set<Promise<void>>();
   private translationAudio: HTMLAudioElement | null = null;
@@ -365,9 +365,10 @@ export class ReaderView extends ItemView {
     // load. Generation guards prevent a late result from attaching to a new book.
     const vocabularyReady = (async () => {
       if (entry.reading.book.format === "cbz") return;
-      const vocabulary = new VocabularyStore(new VaultFs(this.app.vault.adapter), `${entry.dir}/vocabulary.json`);
+      const vocabulary = new ReadingVocabularyStore(new VaultFs(this.app.vault.adapter),
+        `${this.app.vault.configDir}/plugins/${this.plugin.manifest.id}/vocabulary.json`, entry.id, `${entry.dir}/vocabulary.json`);
       try {
-        await vocabulary.load();
+        await vocabulary.load(this.plugin.library.all().filter(isHealthyBook).map(book => ({ bookId: book.id, path: `${book.dir}/vocabulary.json` })));
         if (generation !== this.generation) return;
         this.vocabulary = vocabulary;
         this.unsubVocabulary = vocabulary.subscribe(() => this.updateVocabulary());
@@ -528,7 +529,7 @@ export class ReaderView extends ItemView {
         try {
           await store.remove(word);
           removed = true;
-          if (current()) { button.remove(); new Notice(this.plugin.t("已从本书生词表移除")); }
+          if (current()) { button.remove(); new Notice(this.plugin.t("已从共享生词表移除")); }
         } catch (error) {
           if (current()) { button.disabled = false; new Notice(this.plugin.t("生词删除失败：{0}", this.plugin.errorText(error))); }
         } finally { removing = false; }
@@ -909,7 +910,7 @@ export class ReaderView extends ItemView {
   private openVocabulary(): void {
     const store = this.vocabulary, entry = this.entry, engine = this.engine;
     if (!store || !entry || !engine) return;
-    const box = this.createReadingSheet(this.plugin.t("本书生词")), body = el("div", "qr-reading-sheet-body"); box.appendChild(body);
+    const box = this.createReadingSheet(this.plugin.t("生词与收藏")), body = el("div", "qr-reading-sheet-body"); box.appendChild(body);
     const exportButton = el("button", "qr-btn", this.plugin.t("导出 Markdown"));
     exportButton.onclick = async () => {
       exportButton.disabled = true;
@@ -922,10 +923,10 @@ export class ReaderView extends ItemView {
       } catch (error) { if (box.isConnected) new Notice(this.plugin.errorText(error)); }
       finally { exportButton.disabled = false; }
     };
-    body.append(exportButton, el("p", "qr-reading-help", this.plugin.t("动态生词仍会自动淡化；收藏不会随出现次数删除。导出创建新文件，不覆盖已有笔记。")));
-    body.appendChild(el("h3", undefined, this.plugin.t("动态生词")));
+    body.append(exportButton, el("p", "qr-reading-help", this.plugin.t("生词与熟悉程度跨书共享，收藏原句仅属于本书。移除生词会对所有书生效，收藏不受影响。")));
+    body.appendChild(el("h3", undefined, this.plugin.t("共享生词")));
     for (const word of store.words) body.appendChild(el("p", undefined, `${word.word} — ${word.translation}`));
-    body.appendChild(el("h3", undefined, this.plugin.t("收藏")));
+    body.appendChild(el("h3", undefined, this.plugin.t("本书收藏")));
     for (const word of store.saved) {
       const row = el("button", "qr-search-result"); row.append(el("strong", undefined, `${word.word} — ${word.translation}`), el("span", undefined, word.quote));
       row.onclick = () => {
@@ -1035,7 +1036,7 @@ export class ReaderView extends ItemView {
     menu.addItem(item => item.setTitle(this.plugin.t("上一章")).setIcon("chevron-left").onClick(() => void this.stepChapter(-1)));
     menu.addItem(item => item.setTitle(this.plugin.t("下一章")).setIcon("chevron-right").onClick(() => void this.stepChapter(1)));
     menu.addSeparator();
-    if (this.vocabulary) menu.addItem(item => item.setTitle(this.plugin.t("本书生词")).setIcon("languages").onClick(() => this.openVocabulary()));
+    if (this.vocabulary) menu.addItem(item => item.setTitle(this.plugin.t("生词与收藏")).setIcon("languages").onClick(() => this.openVocabulary()));
     menu.addItem(item => item.setTitle(this.plugin.t("书内搜索")).setIcon("search").onClick(() => this.openSearch()));
     if (this.engine instanceof PdfEngine) menu.addItem(item => item.setTitle(this.plugin.t("PDF 缩放")).setIcon("zoom-in").onClick(() => this.openPdfZoom()));
     menu.addItem((item) =>

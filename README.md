@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.4.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.4.1) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.5.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.5.0) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -15,7 +15,7 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 - 导入字体、宽屏文字双页、有界本地转换/索引缓存；设置分为六个分类页。
 - 阅读页听书，从当前位置逐句朗读、临时标示原文并自动跟随翻页；支持暂停、停止、语速和声音选择。
 - 选文菜单为单行图标：复制、翻译、颜色圆圈、批注、更多。AI 解读和关闭位于更多菜单；短按色圈保存高亮，长按选色，正文高亮没有外边框。
-- 长按选中英文词查释义，单击继续阅读；每本书独立保存当前生词，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
+- 长按选中英文词查释义，单击继续阅读；同一 Vault 内跨书共享生词与熟悉程度，后续出现逐渐淡化，默认连续 5 次未查询后删除，也可在翻译卡手动移除。
 - 选段后主动调用 AI 解读，结合前后文解释；只有明确存入笔记才保存。
 - 每本书持续汇总为一份 Markdown 笔记，包含摘抄、个人批注、日期和原文定位；整书想法可直接在文档中自由书写。
 - 原生编辑器里的手工修改会保留，批注更新同时修改同一处时，两份内容都留下供回看。
@@ -23,9 +23,21 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.4.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.5.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 跨书共享生词（1.5.0）
+
+生词及熟悉程度在同一 Vault 的所有书籍间共享：A 书查询后，在 B 书再次出现仍会高亮；未查询的有效遇见次数跨书累计，达到阈值后所有书中都取消高亮。在任意书里重新查询会重置共享淡化进度，手动移除也对所有书生效。收藏原句、书中定位与阅读进度继续按书保存。
+
+入口改为 **··· → 生词与收藏**，面板分别显示共享生词和本书收藏；导出包含共享生词及当前书的收藏原句。查询仍使用当前书上下文，不会把其他书的语境解释直接套用过来。
+
+首次打开书籍时，自动合并当前阅读库已有的旧生词记录，保留原文件与收藏。迁移对每本书只执行一次；同词的查询/遇见次数合并，熟悉度采用较保守的记录，避免提前取消高亮。段落按书籍区分，防止跨书重复或漏计。读取损坏或写入失败时停止并报错，不覆盖原数据。
+
+共享记录位于 `.obsidian/plugins/qreader/vocabulary.json`（自定义配置目录时使用对应目录）；每本书的 `vocabulary.json` 继续保存本书收藏及旧版迁移源。设备间共享还需由你的同步工具同步此共享文件；本功能不跨 Vault 同步。
+
+新增 `npm run test:vocabulary` 验证跨书继承、熟悉度累计/重置、取消高亮、收藏隔离、迁移幂等与写入回滚。
 
 ### 收藏与美式音标（1.4.1）
 
@@ -153,7 +165,7 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 - Imported fonts, wide-screen text spreads, bounded derivative/index caches and six settings pages.
 - Listening in the reader, starting at the current sentence with temporary source highlights and automatic page following; pause, stop, speed and voice controls.
 - A single row of selection icons: copy, translate, color circle, annotation and more. AI explanation and close are in More. Tap the circle to save a highlight; hold it to choose a color. Highlights have no outline.
-- Hold and select an English word to look it up; a single tap keeps reading. Vocabulary is saved per book and fades on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
+- Hold and select an English word to look it up; a single tap keeps reading. Vocabulary and familiarity are shared across books in the same Vault and fade on later appearances; words are removed after 5 missed lookups by default, or manually from the translation card.
 - Request a contextual AI explanation for a selected passage. Save it to notes only when you choose to.
 - Each book has one continuously updated Markdown document with excerpts, personal notes, dates and source links. Write book-level thoughts directly in it.
 - Native Markdown edits are preserved. When both the document and reader change the same passage, both versions remain available.
@@ -161,9 +173,21 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.4.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.5.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Shared vocabulary across books (1.5.0)
+
+Words and familiarity are shared across books in the same Vault. A word looked up in book A remains highlighted in book B until the shared exposure threshold is reached. Looking it up in any book resets the shared fading progress; manual removal applies everywhere. Favorite passages, source locations and reading progress remain book-specific.
+
+Open **··· → Vocabulary and favorites** to see shared vocabulary and this book’s favorites. Export includes both. Explanations still use the current passage rather than reusing another book’s contextual definition.
+
+Opening a book automatically merges legacy vocabulary from the current library once per book, retaining the original files and favorites. Lookup/exposure counts are combined and conflicting familiarity uses the more conservative state. Paragraph deduplication includes book identity. Invalid data or failed writes stop migration without overwriting source files.
+
+Shared state is stored in `.obsidian/plugins/qreader/vocabulary.json` (or your custom configuration directory). Book-local `vocabulary.json` files retain favorites and legacy source records. Your sync tool must include the shared file for cross-device use; this does not share state between Vaults.
+
+Run `npm run test:vocabulary` for cross-book propagation, familiarity, reset/removal, favorite isolation, idempotent migration and rollback checks.
 
 ### Favorites and US phonetics (1.4.1)
 

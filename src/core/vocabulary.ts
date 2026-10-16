@@ -9,7 +9,7 @@ export interface VocabularyWord extends TranslationResult {
   seenParagraphs: string[];
 }
 export interface SavedVocabularyWord { word: string; translation: string; quote: string; chapterId?: string; cfi?: string; pdfPage?: number; savedAt: string }
-export interface VocabularyFile { version: 1; words: VocabularyWord[]; saved?: SavedVocabularyWord[] }
+export interface VocabularyFile { version: 1; words: VocabularyWord[]; saved?: SavedVocabularyWord[]; migratedBooks?: string[] }
 export interface WordExposure { word: string; paragraphId: string; lookupCount: number }
 const queues = new WeakMap<object, Map<string, Promise<void>>>();
 const subscriptions = new WeakMap<object, Map<string, Set<(file: VocabularyFile) => void>>>();
@@ -25,7 +25,7 @@ export function validateVocabulary(raw: unknown): VocabularyFile {
     const entry = item;
     if (typeof entry.word !== "string" || singleWord(entry.word) !== entry.word || keys.has(entry.word) || typeof entry.translation !== "string" || !entry.translation.trim()) throw new Error("vocabulary.json 单词记录无效");
     const counts = [entry.lookupCount, entry.exposureCount, entry.noLookupCount];
-    if (!counts.every((value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0) || (entry.lookupCount as number) < 1 || !Array.isArray(entry.seenParagraphs) || !entry.seenParagraphs.every((value) => typeof value === "string" && value.length <= 200)) throw new Error("vocabulary.json 单词记录无效");
+    if (!counts.every((value) => typeof value === "number" && Number.isSafeInteger(value) && value >= 0) || (entry.lookupCount as number) < 1 || !Array.isArray(entry.seenParagraphs) || !entry.seenParagraphs.every((value) => typeof value === "string" && value.length <= 2048)) throw new Error("vocabulary.json 单词记录无效");
     if ((entry.exposureCount as number) < (entry.noLookupCount as number)) throw new Error("vocabulary.json 单词记录无效");
     const paragraphIds: unknown[] = entry.seenParagraphs;
     keys.add(entry.word);
@@ -44,7 +44,12 @@ export function validateVocabulary(raw: unknown): VocabularyFile {
         cfi: item.cfi as string | undefined, pdfPage: item.pdfPage as number | undefined, chapterId: item.chapterId as string | undefined };
     });
   }
-  return { version: 1, words, ...(saved ? { saved } : {}) };
+  let migratedBooks: string[] | undefined;
+  if ("migratedBooks" in raw && raw.migratedBooks !== undefined) {
+    if (!Array.isArray(raw.migratedBooks) || !raw.migratedBooks.every(id => typeof id === "string" && id.length > 0 && id.length <= 1000)) throw new Error("生词迁移记录无效");
+    migratedBooks = [...new Set(raw.migratedBooks as string[])];
+  }
+  return { version: 1, words, ...(saved ? { saved } : {}), ...(migratedBooks ? { migratedBooks } : {}) };
 }
 
 /** Dynamic words fade normally; only explicit saves retain a quoted source. */
@@ -122,6 +127,41 @@ export class VocabularyStore {
       this.publish(next);
     });
   }
+  /** Import each legacy book only once; the ledger and words commit together. Source files stay intact. */
+  async migrateLegacy(sources: readonly { bookId: string; path: string }[]): Promise<void> {
+    await this.load();
+    const snapshot = this.current;
+    const migrated = new Set(snapshot.migratedBooks ?? []);
+    const pending: Array<{ bookId: string; words: VocabularyWord[] }> = [];
+    for (const source of sources) {
+      if (source.path === this.path || migrated.has(source.bookId)) continue;
+      migrated.add(source.bookId);
+      if (!await this.fs.exists(source.path)) continue;
+      const legacy = new VocabularyStore(this.fs, source.path);
+      await legacy.load();
+      pending.push({ bookId: source.bookId, words: [...legacy.words] });
+    }
+    if (!pending.length) return;
+    await this.change(file => {
+      const imported = file.migratedBooks ??= [];
+      let changed = false;
+      for (const source of pending) {
+        if (imported.includes(source.bookId)) continue;
+        for (const word of source.words) {
+          const previous = file.words.find(item => item.word === word.word);
+          const seen = word.seenParagraphs.map(id => scopeVocabularyParagraph(source.bookId, id));
+          if (previous) {
+            previous.lookupCount = Math.min(Number.MAX_SAFE_INTEGER, previous.lookupCount + word.lookupCount);
+            previous.exposureCount = Math.min(Number.MAX_SAFE_INTEGER, previous.exposureCount + word.exposureCount);
+            previous.noLookupCount = Math.min(previous.noLookupCount, word.noLookupCount);
+            previous.seenParagraphs = [...new Set([...previous.seenParagraphs, ...seen])];
+          } else file.words.push({ ...word, seenParagraphs: seen });
+        }
+        imported.push(source.bookId); changed = true;
+      }
+      return changed;
+    });
+  }
   lookup(result: TranslationResult, paragraphId: string | undefined, autoAdd: boolean): Promise<void> {
     const word = singleWord(result.query);
     if (!word) return Promise.resolve();
@@ -159,4 +199,9 @@ export class VocabularyStore {
       return changed;
     });
   }
+}
+
+/** JSON framing prevents book/paragraph identifiers from colliding. */
+export function scopeVocabularyParagraph(bookId: string, paragraphId: string): string {
+  return JSON.stringify([bookId, paragraphId]);
 }

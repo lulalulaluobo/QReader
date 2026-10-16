@@ -241,7 +241,8 @@ export class QReaderSettingTab extends PluginSettingTab {
     new Setting(containerEl).setName(this.plugin.t("解释难度")).setDesc(this.plugin.t("英文解释需要在上方配置 AI 服务。"))
       .addDropdown(dropdown => dropdown.addOptions({ basic: this.plugin.t("基础"), standard: this.plugin.t("适中") })
         .setValue(s.translation.difficulty).onChange(async value => { s.translation.difficulty = value === "standard" ? "standard" : "basic"; await saveTranslation(); }));
-    containerEl.createEl("h3", { text: this.plugin.t("动态生词") });
+    containerEl.createEl("h3", { text: this.plugin.t("共享生词") });
+    containerEl.createEl("p", { text: this.plugin.t("查询记录与熟悉程度跨书共享；收藏原句和阅读位置按书保存。"), cls: "qr-reading-help" });
     new Setting(containerEl).setName(this.plugin.t("查询后自动加入生词表")).addToggle((toggle) =>
       toggle.setValue(s.translation.autoAdd).onChange(async (value) => { s.translation.autoAdd = value; await saveTranslation(); }));
     new Setting(containerEl).setName(this.plugin.t("后续出现自动高亮")).addToggle((toggle) =>

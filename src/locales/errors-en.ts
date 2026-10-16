@@ -1,5 +1,6 @@
 /** Known QReader errors; external errors and quoted book/user text remain intact. */
 export const ERROR_EN = {
+  "生词迁移记录无效": "Invalid vocabulary migration records.",
   "请记录一点想法，长度不超过十万字": "Write a thought of at most 100,000 characters.",
   "书籍想法已不存在，请重新打开": "This book thought no longer exists. Please reopen.",
   "思考线数据格式无效": "Invalid thought thread data.",
