@@ -229,13 +229,18 @@ export class QReaderSettingTab extends PluginSettingTab {
     this.renderAi = renderAi;
     renderAi();
 
-    containerEl.createEl("h3", { text: this.plugin.t("翻译") });
-    new Setting(containerEl).setName(this.plugin.t("翻译服务")).setDesc(this.plugin.t("有道单词查询，无需密钥；主动查词时获取中文释义、音标和发音。"));
-    new Setting(containerEl).setName(this.plugin.t("整句翻译")).setDesc(this.plugin.t("选句后点击 AI 翻译，使用已配置的 AI 服务译为中文，不加入生词表。"));
+    containerEl.createEl("h3", { text: this.plugin.t("阅读辅助") });
     const saveTranslation = async (): Promise<void> => {
       try { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("translation"); }
       catch { new Notice(this.plugin.t("翻译设置保存失败，请重试")); }
     };
+    new Setting(containerEl).setName(this.plugin.t("阅读辅助"))
+      .setDesc(this.plugin.t("结合原文，用简单英文解释；中文模式使用有道查词，整句使用 AI。"))
+      .addDropdown(dropdown => dropdown.addOptions({ english: this.plugin.t("英文解释"), chinese: this.plugin.t("中文翻译") })
+        .setValue(s.translation.mode).onChange(async value => { s.translation.mode = value === "english" ? "english" : "chinese"; await saveTranslation(); }));
+    new Setting(containerEl).setName(this.plugin.t("解释难度")).setDesc(this.plugin.t("英文解释需要在上方配置 AI 服务。"))
+      .addDropdown(dropdown => dropdown.addOptions({ basic: this.plugin.t("基础"), standard: this.plugin.t("适中") })
+        .setValue(s.translation.difficulty).onChange(async value => { s.translation.difficulty = value === "standard" ? "standard" : "basic"; await saveTranslation(); }));
     containerEl.createEl("h3", { text: this.plugin.t("动态生词") });
     new Setting(containerEl).setName(this.plugin.t("查询后自动加入生词表")).addToggle((toggle) =>
       toggle.setValue(s.translation.autoAdd).onChange(async (value) => { s.translation.autoAdd = value; await saveTranslation(); }));

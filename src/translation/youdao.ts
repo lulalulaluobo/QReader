@@ -1,6 +1,8 @@
 import { requestUrl } from "obsidian";
 
 export interface TranslationSettings {
+  mode: "english" | "chinese";
+  difficulty: "basic" | "standard";
   autoAdd: boolean;
   highlight: boolean;
   deletionThreshold: number;
@@ -12,11 +14,14 @@ export interface TranslationResult {
   audioUrl: string;
 }
 export const DEFAULT_TRANSLATION_SETTINGS: TranslationSettings = {
+  mode: "chinese", difficulty: "basic",
   autoAdd: true, highlight: true, deletionThreshold: 5,
 };
 export function loadTranslationSettings(raw: unknown): TranslationSettings {
   const value = object(raw) ? raw : {};
   return {
+    mode: value.mode === "english" ? "english" : "chinese",
+    difficulty: value.difficulty === "standard" ? "standard" : "basic",
     autoAdd: value.autoAdd !== false,
     highlight: value.highlight !== false,
     deletionThreshold: typeof value.deletionThreshold === "number" && Number.isInteger(value.deletionThreshold)

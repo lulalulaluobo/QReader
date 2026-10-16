@@ -25,6 +25,7 @@ import { getAiConfig } from "../ai/providers";
 import { VocabularyStore } from "../core/vocabulary";
 import { VaultFs } from "../core/fs";
 import { singleWord } from "../translation/youdao";
+import { explainEnglish } from "../translation/english";
 import { translateSentence } from "../translation/sentence";
 import { contextualMeaning, contextQuote } from "../translation/context";
 import { vocabularyMarkdown } from "../core/vocabulary-export";
@@ -61,7 +62,7 @@ export class ReaderView extends ItemView {
   private engine: ReaderEngine | null = null;
   private mode: ReadMode = "paginated";
   private currentChapterId: string | null = null;
-  private chromeHidden = true;
+  private chromeHidden = false;
   private tocNodes: TocNode[] | null = null;
   private lastProgressSave = 0;
   private draft: AnnotDraft | null = null;
@@ -248,10 +249,9 @@ export class ReaderView extends ItemView {
     setIcon(moreBtn, "more-horizontal");
     moreBtn.setAttribute("aria-label", this.plugin.t("更多阅读操作"));
     moreBtn.onclick = (e) => this.openMoreMenu(e);
-    const search = el("button", "qr-icon-btn"); setIcon(search, "search"); search.setAttribute("aria-label", this.plugin.t("书内搜索")); search.onclick = () => this.openSearch();
     const backTo = el("button", "qr-icon-btn"); setIcon(backTo, "undo-2"); backTo.setAttribute("aria-label", this.plugin.t("返回刚才的位置"));
     backTo.hidden = !this.returnPoints.length; backTo.onclick = () => void this.returnToReading(); this.returnButton = backTo;
-    actions.append(search, backTo, moreBtn);
+    actions.append(backTo, moreBtn);
     top.append(back, title, actions);
 
     const host = refreshControls ? this.contentHost : el("div", "qr-reader-content");
@@ -260,12 +260,6 @@ export class ReaderView extends ItemView {
     host.setAttribute("aria-label", this.plugin.t("阅读正文；轻点中央或按 Escape 显示操作栏"));
 
     const bottom = el("div", "qr-reader-bottom");
-    const chapters = el("div", "qr-reader-chapter-actions");
-    const prevCh = el("button", "qr-btn", this.plugin.t("上一章"));
-    prevCh.onclick = () => void this.stepChapter(-1);
-    const nextCh = el("button", "qr-btn", this.plugin.t("下一章"));
-    nextCh.onclick = () => void this.stepChapter(1);
-    chapters.append(prevCh, nextCh);
     this.progressEl = el("span", "qr-progress");
     this.progressBar = document.createElement("progress");
     this.progressBar.max = 1;
@@ -281,11 +275,9 @@ export class ReaderView extends ItemView {
       button.onclick = action;
       return button;
     };
-    dock.append(tocBtn, control(this.plugin.t("笔记"), "notebook-pen", () => this.openNotes()),
-      control(this.plugin.t("字号"), "type", () => this.openReaderSettings()),
-      control(this.plugin.t("背景"), "palette", () => this.openReaderSettings("theme")),
-      control(this.plugin.t("听书"), "headphones", () => this.openSpeechPlayer()));
-    bottom.append(meter, chapters, dock);
+    dock.append(tocBtn, control(this.plugin.t("字号"), "type", () => this.openReaderSettings()),
+      control(this.plugin.t("笔记"), "bookmark", () => this.openNotes()));
+    bottom.append(meter, dock);
     const header = el("div", "qr-reader-header");
     header.append(top);
     if (refreshControls) root.append(header, bottom);
@@ -358,7 +350,7 @@ export class ReaderView extends ItemView {
     this.draft = null;
     this.annotationSaving = false;
     this.markTarget = null;
-    this.chromeHidden = true;
+    this.chromeHidden = false;
     this.mode = this.plugin.settings.reading.defaultMode;
     this.currentChapterId = entry.reading.progress.chapterId ?? null;
     this.tocNodes = null;
@@ -472,28 +464,39 @@ export class ReaderView extends ItemView {
   }
   private openTranslation(text: string, paragraphId?: string, selection?: EngineSelection): void {
     if (!this.entry || !this.engine || this.contentHost.inert || this.draft || this.annotationSaving) return;
+    const english = this.plugin.settings.translation.mode === "english";
     const word = singleWord(text);
     if (word) this.engine.noteVocabularyLookup(word, paragraphId);
     const generation = this.generation;
     const store = this.vocabulary;
     const sourceEngine = this.engine, sourceEntry = this.entry;
-    const sheet = this.createReadingSheet(word ? text : this.plugin.t("AI 翻译"), "qr-translation-sheet");
+    const sheet = this.createReadingSheet(word ? text : this.plugin.t(english ? "英文解释" : "AI 翻译"), "qr-translation-sheet");
     const session = this.panelSession;
     const current = (): boolean => this.opened && generation === this.generation && session === this.panelSession && sheet.isConnected;
     let removed = false;
     let removing = false;
     let requestId = 0;
     const body = el("div", "qr-reading-sheet-body qr-translation-body");
-    if (!word) body.appendChild(el("p", "qr-settings-status", this.plugin.t("使用当前 AI 服务译为中文，不加入生词表。")));
-    const status = el("div", "qr-translation-result", this.plugin.t("正在翻译……"));
+    if (!word && !english) body.appendChild(el("p", "qr-settings-status", this.plugin.t("使用当前 AI 服务译为中文，不加入生词表。")));
+    sheet.classList.toggle("qr-english-sheet", english);
+    const label = el("div", "qr-definition-label", this.plugin.t(english ? "英文解释" : "中文翻译"));
+    body.appendChild(label);
+    const status = el("div", "qr-translation-result", this.plugin.t(english ? "正在解读……" : "正在翻译……"));
     status.setAttribute("aria-live", "polite");
     body.appendChild(status); sheet.appendChild(body);
+    this.root.addClass("qr-lookup-open");
+    const sheetHeader = sheet.querySelector<HTMLElement>(".qr-reading-sheet-header")!;
+    const tools = el("div", "qr-definition-tools");
+    const sourceQuote = el("blockquote", "qr-definition-quote"); sourceQuote.hidden = true;
+    body.insertBefore(sourceQuote, label);
+    const finishTools = (): void => { if (tools.childElementCount) body.appendChild(tools); };
+
     const appendSelectionAction = (): void => {
       if (!selection) return;
       const more = el("button", "qr-icon-btn");
       more.setAttribute("aria-label", this.plugin.t("选文操作")); more.title = this.plugin.t("选文操作"); setIcon(more, "more-horizontal");
       more.onclick = () => { if (current()) { this.closePanels(); this.openSelectionMenu(selection); } };
-      body.appendChild(more);
+      tools.appendChild(more);
     };
     const appendDeleteAction = (): void => {
       if (!word || !store || removed || !store.words.some((record) => record.word === word)) return;
@@ -505,13 +508,12 @@ export class ReaderView extends ItemView {
         try {
           await store.remove(word);
           removed = true;
-          this.wordContextAbort?.abort();
           if (current()) { button.remove(); new Notice(this.plugin.t("已从本书生词表移除")); }
         } catch (error) {
           if (current()) { button.disabled = false; new Notice(this.plugin.t("生词删除失败：{0}", this.plugin.errorText(error))); }
         } finally { removing = false; }
       };
-      body.appendChild(button);
+      tools.appendChild(button);
     };
     const appendContextActions = (result: TranslationResult): void => {
       if (!word || !selection || !store || removed) return;
@@ -542,18 +544,59 @@ export class ReaderView extends ItemView {
           if (current()) keep.setText(this.plugin.t("已保留原句"));
         } catch (error) { if (current()) { keep.disabled = false; new Notice(this.plugin.errorText(error)); } }
       };
-      actions.append(meaning, keep); body.append(actions, explanation);
+      if (!english) actions.appendChild(meaning);
+      keep.addClass("qr-keep-quote");
+      actions.appendChild(keep); body.append(actions, explanation);
     };
-    const request = async (refresh = false): Promise<void> => {
+    const request = async (refresh = false, simpler = false): Promise<void> => {
       if (!current() || removing) return;
       const id = ++requestId;
       this.wordContextAbort?.abort();
-      const latest = (): boolean => current() && id === requestId;
-      status.setText(this.plugin.t("正在翻译……"));
-      body.querySelectorAll("button,.qr-translation-phonetic,.qr-search-controls,.qr-context-meaning").forEach((element) => element.remove());
+      const controller = this.wordContextAbort = new AbortController();
+      const latest = (): boolean => current() && id === requestId && !controller.signal.aborted;
+      status.setText(this.plugin.t(english ? "正在解读……" : "正在翻译……"));
+      sheetHeader.querySelector(".qr-translation-audio")?.remove();
+      tools.empty(); tools.remove();
+      body.querySelectorAll("button,.qr-translation-phonetic,.qr-search-controls,.qr-context-meaning,.qr-translation-fallback,.qr-definition-actions").forEach((element) => element.remove());
+      const appendEnglishActions = (allowSimpler: boolean): void => {
+          const actions = el("div", "qr-definition-actions");
+          const simple = el("button", "qr-btn", this.plugin.t("更简单"));
+          simple.onclick = () => void request(true, true);
+          const chinese = el("button", "qr-btn", this.plugin.t("查看中文"));
+          const fallback = el("div", "qr-translation-fallback");
+          fallback.hidden = true; fallback.setAttribute("aria-live", "polite");
+          chinese.setAttribute("aria-expanded", "false");
+          let loaded = false;
+          chinese.onclick = async () => {
+            if (!latest()) return;
+            fallback.hidden = !fallback.hidden;
+            chinese.setAttribute("aria-expanded", String(!fallback.hidden));
+            if (fallback.hidden || loaded) return;
+            chinese.disabled = true;
+            fallback.setText(this.plugin.t("正在翻译……"));
+            try {
+              const translated = word ? await this.plugin.translation.lookup(text)
+                : await translateSentence(getAiConfig(this.plugin.settings.ai), text, this.plugin.settings.language);
+              if (latest()) { fallback.setText(translated.translation); loaded = true; }
+            } catch (error) { if (latest()) fallback.setText(this.plugin.errorText(error)); }
+            finally { if (latest()) chinese.disabled = false; }
+          };
+          if (allowSimpler) actions.appendChild(simple);
+          actions.appendChild(chinese); body.append(actions, fallback);
+      };
       try {
-        const cached = !refresh && word ? store?.words.find((record) => record.word === word) : undefined;
-        const result = cached ? { query: text, translation: cached.translation, phonetic: cached.phonetic, audioUrl: `https://dict.youdao.com/dictvoice?audio=${encodeURIComponent(cached.word)}&type=2` }
+        let passage = "";
+        if (selection) {
+          try {
+            const context = await sourceEngine.getSelectionContext(selection);
+            passage = contextQuote(selection.text, context.before, context.after);
+          } catch { /* A general definition remains useful when context is unavailable. */ }
+        }
+        if (!latest()) return;
+        sourceQuote.setText(passage); sourceQuote.hidden = !passage;
+        if (english) label.setText(this.plugin.t(passage ? "当前语境" : "通用释义（未获取到原文）"));
+        const result = english
+          ? await explainEnglish(getAiConfig(this.plugin.settings.ai), text, passage, this.plugin.settings.translation.difficulty, simpler, controller.signal)
           : word ? await this.plugin.translation.lookup(text)
             : await translateSentence(getAiConfig(this.plugin.settings.ai), text, this.plugin.settings.language);
         if (!latest()) return;
@@ -568,24 +611,27 @@ export class ReaderView extends ItemView {
             const audio = new Audio(result.audioUrl); this.translationAudio = audio;
             void audio.play().catch(() => { if (current()) new Notice(this.plugin.t("发音播放失败，请刷新翻译后重试")); });
           };
-          body.appendChild(play);
+          sheetHeader.insertBefore(play, sheetHeader.lastElementChild);
         }
         const retry = el("button", "qr-icon-btn qr-translation-refresh");
         retry.setAttribute("aria-label", this.plugin.t("刷新翻译")); retry.title = this.plugin.t("刷新翻译"); setIcon(retry, "refresh-cw");
-        retry.onclick = () => { if (word) this.plugin.translation.clear(); void request(true); }; body.appendChild(retry);
+        retry.onclick = () => { if (word) this.plugin.translation.clear(); void request(true); }; tools.appendChild(retry);
+        if (english) appendEnglishActions(true);
         appendSelectionAction();
-        if (word && store && !removed) {
+        if (word && store && !removed && !refresh) {
           try { await store.lookup(result, paragraphId, this.plugin.settings.translation.autoAdd); }
           catch (error) { if (latest()) new Notice(this.plugin.t("生词保存失败：{0}", this.plugin.errorText(error))); }
         }
-        if (latest()) { appendDeleteAction(); appendContextActions(result); }
+        if (latest()) { appendDeleteAction(); appendContextActions(result); finishTools(); }
       } catch (error) {
         if (!latest()) return;
         status.setText(this.plugin.errorText(error));
+        if (english) appendEnglishActions(false);
         const retry = el("button", "qr-icon-btn"); retry.setAttribute("aria-label", this.plugin.t("重试翻译")); setIcon(retry, "refresh-cw");
-        retry.onclick = () => void request(); body.appendChild(retry);
+        retry.onclick = () => void request(); tools.appendChild(retry);
         appendSelectionAction();
         appendDeleteAction();
+        finishTools();
       }
     };
     void request();
@@ -951,6 +997,12 @@ export class ReaderView extends ItemView {
 
   private openMoreMenu(e: MouseEvent): void {
     const menu = new Menu();
+    menu.addItem(item => item.setTitle(this.plugin.t("阅读辅助")).setIcon("languages").onClick(() => this.openReadingAssistance()));
+    menu.addItem(item => item.setTitle(this.plugin.t("背景")).setIcon("palette").onClick(() => this.openReaderSettings("theme")));
+    menu.addItem(item => item.setTitle(this.plugin.t("听书")).setIcon("headphones").onClick(() => this.openSpeechPlayer()));
+    menu.addItem(item => item.setTitle(this.plugin.t("上一章")).setIcon("chevron-left").onClick(() => void this.stepChapter(-1)));
+    menu.addItem(item => item.setTitle(this.plugin.t("下一章")).setIcon("chevron-right").onClick(() => void this.stepChapter(1)));
+    menu.addSeparator();
     if (this.vocabulary) menu.addItem(item => item.setTitle(this.plugin.t("本书生词")).setIcon("languages").onClick(() => this.openVocabulary()));
     menu.addItem(item => item.setTitle(this.plugin.t("书内搜索")).setIcon("search").onClick(() => this.openSearch()));
     if (this.engine instanceof PdfEngine) menu.addItem(item => item.setTitle(this.plugin.t("PDF 缩放")).setIcon("zoom-in").onClick(() => this.openPdfZoom()));
@@ -973,6 +1025,42 @@ export class ReaderView extends ItemView {
     menu.addSeparator();
     menu.addItem((item) => item.setTitle(this.plugin.t("阅读设置")).setIcon("sliders-horizontal").onClick(() => this.openReaderSettings()));
     menu.showAtMouseEvent(e);
+  }
+
+  private openReadingAssistance(): void {
+    const sheet = this.createReadingSheet(this.plugin.t("阅读辅助"));
+    const body = el("div", "qr-reading-sheet-body qr-assistance-settings");
+    const modeLabel = el("label", "qr-reading-help", this.plugin.t("阅读辅助"));
+    const mode = el("select", "qr-select");
+    for (const [value, title] of [["english", "英文解释"], ["chinese", "中文翻译"]] as const) {
+      const option = el("option", undefined, this.plugin.t(title)); option.value = value; mode.appendChild(option);
+    }
+    mode.value = this.plugin.settings.translation.mode;
+    mode.setAttribute("aria-label", this.plugin.t("阅读辅助"));
+    const difficultyLabel = el("label", "qr-reading-help", this.plugin.t("解释难度"));
+    const difficulty = el("select", "qr-select");
+    for (const [value, title] of [["basic", "基础"], ["standard", "适中"]] as const) {
+      const option = el("option", undefined, this.plugin.t(title)); option.value = value; difficulty.appendChild(option);
+    }
+    difficulty.value = this.plugin.settings.translation.difficulty;
+    difficulty.setAttribute("aria-label", this.plugin.t("解释难度"));
+    difficulty.disabled = mode.value !== "english";
+    const save = async (): Promise<void> => {
+      const previous = { ...this.plugin.settings.translation };
+      this.plugin.settings.translation.mode = mode.value === "english" ? "english" : "chinese";
+      this.plugin.settings.translation.difficulty = difficulty.value === "standard" ? "standard" : "basic";
+      mode.disabled = difficulty.disabled = true;
+      try { await this.plugin.saveSettings(); this.plugin.notifySettingsChanged("translation"); }
+      catch {
+        Object.assign(this.plugin.settings.translation, previous);
+        mode.value = previous.mode; difficulty.value = previous.difficulty;
+        new Notice(this.plugin.t("翻译设置保存失败，请重试"));
+      } finally { mode.disabled = false; difficulty.disabled = mode.value !== "english"; }
+    };
+    mode.onchange = difficulty.onchange = () => void save();
+    modeLabel.appendChild(mode); difficultyLabel.appendChild(difficulty);
+    body.append(modeLabel, difficultyLabel, el("p", "qr-reading-help", this.plugin.t("英文解释使用插件设置中配置的 AI 服务。")));
+    sheet.appendChild(body);
   }
 
   private openReaderSettings(section: "type" | "theme" = "type"): void {
@@ -1264,6 +1352,14 @@ export class ReaderView extends ItemView {
     sheet.setAttribute("role", "dialog");
     sheet.setAttribute("aria-modal", "true");
     sheet.setAttribute("aria-label", title);
+    if (extraClass.includes("qr-translation-sheet")) {
+      const handle = el("div", "qr-sheet-handle"); handle.setAttribute("aria-hidden", "true");
+      let startY: number | null = null;
+      handle.onpointerdown = event => { startY = event.clientY; handle.setPointerCapture(event.pointerId); };
+      handle.onpointerup = event => { if (startY !== null && event.clientY - startY > 45) this.closePanels(); startY = null; };
+      handle.onpointercancel = () => { startY = null; };
+      sheet.appendChild(handle);
+    }
     const header = el("div", "qr-reading-sheet-header");
     const close = el("button", "qr-icon-btn");
     close.setAttribute("aria-label", this.plugin.t("关闭{0}", title));
@@ -1536,7 +1632,7 @@ export class ReaderView extends ItemView {
     const selection = this.markSelection(target);
     if (selection) {
       addAction(this.plugin.t("复制"), "copy", () => void this.copySelection(selection, target));
-      addAction(this.plugin.t(singleWord(selection.text) ? "查词" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId, selection));
+      addAction(this.plugin.t(singleWord(selection.text) ? "查词" : this.plugin.settings.translation.mode === "english" ? "英文解释" : "AI 翻译"), "languages", () => this.openTranslation(selection.text, selection.paragraphId, selection));
       const play = addAction(this.plugin.t("从这里朗读"), "play", () => this.playSpeech(selection));
       play.dataset.action = "speech-selection";
     }
@@ -2138,6 +2234,7 @@ export class ReaderView extends ItemView {
     this.confirmingNoteId = null;
     this.closeMarkMenu(false);
     this.tocPanel.removeClass("qr-open");
+    this.root.removeClass("qr-lookup-open");
     this.root.querySelector(".qr-mask")?.removeClass("qr-show");
     this.contentHost.inert = false;
     this.header.inert = this.bottomBar.inert = this.chromeHidden;

@@ -1,5 +1,19 @@
 /** Chinese source messages are stable keys; numbered placeholders preserve user text. */
 export const EN = {
+  "英文解释使用插件设置中配置的 AI 服务。": "English explanations use the AI service configured in plugin settings.",
+  "阅读辅助": "Reading assistance",
+  "英文解释": "English explanation",
+  "中文翻译": "Chinese translation",
+  "结合原文，用简单英文解释；中文模式使用有道查词，整句使用 AI。": "Explain in simple English using the passage. Chinese mode uses Youdao for words and AI for passages.",
+  "解释难度": "Explanation level",
+  "基础": "Basic",
+  "适中": "Standard",
+  "英文解释需要在上方配置 AI 服务。": "English explanations require the AI service configured above.",
+  "更简单": "Simpler",
+  "查看中文": "Show Chinese",
+  "当前语境": "In this passage",
+  "通用释义（未获取到原文）": "General meaning (passage unavailable)",
+
   "密钥读取失败，请检查 Obsidian SecretStorage": "Could not read keys. Check Obsidian SecretStorage.",
   "密钥存储校验失败，原配置已保留": "Key storage verification failed. Original settings were kept.",
   "AI 请求已取消": "AI request cancelled",

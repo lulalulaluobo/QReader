@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.3.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.3.1) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.4.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.4.0) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -23,9 +23,17 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.3.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.4.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 英文阅读辅助与手机界面（1.4.0）
+
+阅读页右上角 **··· → 阅读辅助**，可选择英文解释或中文翻译，并设置基础/适中难度。英文模式使用已配置的 AI，结合原句解释单词的当前词义；选句则改写为更简单的英文。支持“更简单”和按需展开“查看中文”，中文单词查询使用有道，整句中文翻译使用 AI。升级保留中文模式，英文模式需先配置 AI 服务。
+
+手机底部精简为目录、字号、笔记；搜索、听书、背景和章节跳转放入更多菜单。查词面板显示原句摘录，发音位于词头旁，支持下滑关闭；宽屏显示右侧浮层。进入书籍时显示阅读控件，轻点正文仍可切换沉浸模式。
+
+构建、翻译、生词及阅读工具测试通过，浏览器模拟检查覆盖小屏、深色模式和桌面布局。未连接手机，尚未完成 Android/iOS 真机验收；模拟翻译测试不代表真实模型输出质量。升级同时替换三个插件文件并重载，保留 `data.json` 和阅读库。
 
 ### 设置布局修复（1.3.1）
 
@@ -35,7 +43,7 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 阅读工具与设置分页（1.3.0）
 
-阅读页顶部的搜索按钮或 Ctrl/Cmd+F 可搜索全文，结果分批显示、可取消，最多显示 500 处；点击结果高亮原文，可切换上一处/下一处或返回刚才的位置。目录、章节、批注和主动保留的原句跳转也可返回。搜索不做 OCR。
+阅读页更多菜单中的书内搜索或 Ctrl/Cmd+F 可搜索全文，结果分批显示、可取消，最多显示 500 处；点击结果高亮原文，可切换上一处/下一处或返回刚才的位置。目录、章节、批注和主动保留的原句跳转也可返回。搜索不做 OCR。
 
 PDF 的缩放入口支持 50%–300%、适合宽度和整页，放大后可平移，切换时保持页码与页内位置。阅读设置可导入不超过 10MB 的 TTF/OTF/WOFF/WOFF2；宽屏双页适用于 EPUB、MOBI、AZW3、FB2，可用宽度不足 900px 时仍显示单页。PDF 和 CBZ 保留物理单页。
 
@@ -145,9 +153,17 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.3.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.4.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### English reading assistance and mobile layout (1.4.0)
+
+Choose **··· → Reading assistance** in the reader to switch between English explanations and Chinese translation, with Basic/Standard explanation levels. English mode uses your configured AI service to explain a word in its source context or simplify a passage. Use **Simpler** or expand **Show Chinese** when needed. Chinese word definitions use Youdao; Chinese passage translations use AI. Upgrades retain Chinese mode until you choose English and configure AI.
+
+The bottom toolbar now contains Contents, Font size and Notes. Search, listening, background and chapter navigation are in More. Word sheets show the source sentence, pronunciation beside the word and a swipe-down handle; wide containers use a right-side sheet. Reading controls are initially visible and can still be hidden by tapping the text.
+
+Build and translation, vocabulary and reader-tool checks pass. Browser fixtures cover narrow screens, dark mode and desktop layouts. No Android/iOS device was connected; mocked responses do not validate live AI output quality. Replace all three plugin files and reload, retaining settings and books.
 
 ### Settings layout fix (1.3.1)
 
@@ -157,7 +173,7 @@ Run `npm run qa:settings -- --isolated-vault /absolute/test-vault --output tmp/s
 
 ### Reading tools and settings pages (1.3.0)
 
-Search inside a book with the top search button or Ctrl/Cmd+F. Results arrive in batches, can be cancelled and are limited to 500. Select a result to highlight it, move to adjacent matches or return to your earlier reading point. Return also works after chapter, annotation and saved-passage jumps. Search does not perform OCR.
+Search inside a book from More or with Ctrl/Cmd+F. Results arrive in batches, can be cancelled and are limited to 500. Select a result to highlight it, move to adjacent matches or return to your earlier reading point. Return also works after chapter, annotation and saved-passage jumps. Search does not perform OCR.
 
 PDF supports 50%–300% zoom, panning, fit width and fit page while preserving location. Import TTF/OTF/WOFF/WOFF2 fonts up to 10MB. Optional two-page spreads apply to reflowable EPUB/MOBI/AZW3/FB2 at widths of at least 900px; PDF and CBZ retain physical single pages.
 

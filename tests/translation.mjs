@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import {build} from 'esbuild';
-const bundle = await build({stdin:{contents:`export * from './src/translation/youdao'; export * from './src/translation/sentence'; export * from './src/core/vocabulary'; export * from './src/ai/providers'; export * from './src/ai/client';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'obsidian-test',setup(b){b.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const requestUrl = async (options) => globalThis.qrRequest(options);',loader:'js'}));}}]});
+const bundle = await build({stdin:{contents:`export * from './src/translation/youdao'; export * from './src/translation/sentence'; export * from './src/translation/english'; export * from './src/core/vocabulary'; export * from './src/ai/providers'; export * from './src/ai/client';`,resolveDir:process.cwd()},bundle:true,write:false,format:'esm',platform:'node',plugins:[{name:'obsidian-test',setup(b){b.onResolve({filter:/^obsidian$/},()=>({path:'obsidian',namespace:'test'}));b.onLoad({filter:/.*/,namespace:'test'},()=>({contents:'export const requestUrl = async (options) => globalThis.qrRequest(options);',loader:'js'}));}}]});
 const m = await import('data:text/javascript;base64,'+Buffer.from(bundle.outputFiles[0].text).toString('base64'));
 assert.equal(m.loadTranslationSettings(undefined).deletionThreshold,5);
-assert.deepEqual(m.loadTranslationSettings({appKey:'old',appSecret:'old',autoAdd:false,highlight:false,deletionThreshold:9}),{autoAdd:false,highlight:false,deletionThreshold:9});
+assert.deepEqual(m.loadTranslationSettings({appKey:'old',appSecret:'old',autoAdd:false,highlight:false,deletionThreshold:9}),{mode:"chinese",difficulty:"basic",autoAdd:false,highlight:false,deletionThreshold:9});
 for(const value of [null,[],{deletionThreshold:'3'},{deletionThreshold:2.5}])assert.equal(m.loadTranslationSettings(value).deletionThreshold,5);
 for(const value of ['sustain','SUSTAIN',"can't",'long-term'])assert.ok(m.singleWord(value));
 for(const value of ['two words','sustain.','你好','42','a b c'])assert.equal(m.singleWord(value),null);
@@ -77,3 +77,23 @@ for(const language of ['en','zh-CN']){
 await assert.rejects(m.translateSentence({baseUrl:'https://example.com/v1',model:'chosen',apiKey:''},'A sentence.','en'),/未配置 API Key/);
 await assert.rejects(m.translateSentence({},'x'.repeat(5001),'en'),/5000/);
 console.log(JSON.stringify({pass:'Keyless Youdao GET/parser/audio/cache/errors, legacy key removal, default 5, per-book concurrency/rollback/dedup/reset/deletion/manual removal and fresh lookup, explicit bilingual AI sentences, AI models/URLs'}));
+
+assert.equal(m.loadTranslationSettings({mode:'english',difficulty:'standard'}).mode,'english');
+assert.equal(m.loadTranslationSettings({mode:'invalid',difficulty:'invalid'}).difficulty,'basic');
+const cfg={baseUrl:'https://example.com/v1',model:'chosen',apiKey:'dummy'};
+await m.explainEnglish(cfg,'integrity','the integrity of the spine','basic');
+let payload=JSON.parse(sent.body);
+assert.match(payload.messages[0].content,/A2/);
+assert.match(payload.messages[0].content,/only the selected word/);
+assert.equal(JSON.parse(payload.messages[1].content).passage,'the integrity of the spine');
+await m.explainEnglish(cfg,'integrity','a person of integrity','standard',true);
+payload=JSON.parse(sent.body);
+assert.match(payload.messages[0].content,/A1–A2/);
+assert.equal(JSON.parse(payload.messages[1].content).passage,'a person of integrity');
+const sentence=await m.explainEnglish(cfg,'It may help.','','standard');
+assert.equal(sentence.audioUrl,'');assert.match(JSON.parse(sent.body).messages[0].content,/uncertainty/);
+const aborted=new AbortController();aborted.abort();
+await assert.rejects(m.explainEnglish(cfg,'word','','basic',false,aborted.signal));
+await assert.rejects(m.explainEnglish({...cfg,apiKey:''},'word','','basic'),/未配置 API Key/);
+await assert.rejects(m.explainEnglish(cfg,'x'.repeat(5001),'','basic'),/5000/);
+console.log('English assistance: settings migration, context isolation, simplification, sentence preservation and cancellation passed');
