@@ -23,3 +23,20 @@
 - 更新版本后重新构建通过，产出的 `main.js`、`styles.css` 与六格式原生验收所用文件逐字节一致。
 - `dist/1.5.1/` 包含独立的三个安装附件及 `QReader-1.5.1.zip`。ZIP 仅含 `qreader/main.js`、`qreader/manifest.json`、`qreader/styles.css`，解压字节与本地构建一致。
 - 发布后使用现有 `tmp/verify-release.mjs 1.5.1` 核验正式 latest 状态、四附件公开下载、SHA-256/GitHub digest、ZIP 内容及远程 main/标签所指提交。
+
+## 后续调整：单击翻页方向
+
+用户反馈左手单手持握时右侧难以触及，要求默认左侧下一页、右侧上一页，并允许改为相反设置。
+
+- 增加 `reading.tapNextSide`，缺失或非法值默认 `left`，已保存的 `right` 保留。QReader 设置的阅读分类及书内字号与排版均提供方向选项，修改后立即更新 EPUB/PDF 引擎并持久保存；只改变单击方向，不改变滑动手势。
+- `npm run build`、`test:reader`、`test:tools`、`test:speech` 和 `git diff --check` 通过。
+- 独立 Obsidian 六格式桌面触摸模拟通过默认左侧下一页、切换反向立即生效、保存后重新加载及重开书籍、中央工具栏、滑动方向与滚动模式检查；PDF 缩放保护仍通过。
+- 验证旧配置及非法值回退、左右方向保存/加载；中英文 × 320/375/414px × 全局/书内设置共 12 组检查通过。书内下拉使用“左侧下一页 / 右侧下一页”短标签，复用已有控件宽度。
+- 本机验收脚本：`tmp/release-112-smoke/reader-edge-tap-test.mjs`、`tap-settings-layout-test.mjs`。仍为桌面模拟，未进行手机真机测试。
+
+## 1.5.2 发布准备
+
+- 用户再次明确要求推送 GitHub 和更新 Release；版本文件统一为 1.5.2，中英文 README 及发布说明补充默认左侧下一页和两个设置入口。
+- 版本更新后重新构建通过，JS/CSS 与六格式方向设置及 12 组窄屏设置验收所用文件逐字节一致。
+- 四个附件位于 `dist/1.5.2/`；ZIP 仅含三个安装文件，版本、独立附件和解压字节一致。
+- 发布后沿用 `tmp/verify-release.mjs 1.5.2` 检查正式 latest、公开下载、SHA-256/GitHub digest、ZIP 内容和远程 main/标签对应提交。

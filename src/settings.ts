@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: QReaderSettings = {
     pageMargin: 24,
     fontFamily: "original",
     paragraphIndent: false,
+    tapNextSide: "left",
     spread: "single",
     theme: "auto",
     defaultMode: "paginated",

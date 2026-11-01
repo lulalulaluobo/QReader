@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.5.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.5.1) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.5.2](https://github.com/lulalulaluobo/QReader/releases/tag/1.5.2) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -23,9 +23,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.5.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.5.2.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 单击翻页方向（1.5.2）
+
+默认改为 **左侧下一页、右侧上一页**，方便左手单手持握。可在 **设置 → QReader → 阅读 → 单击翻页方向** 切换为右侧下一页，书内 **字号与排版** 面板也提供同一选项。修改立即生效并保存，重新打开书籍后仍保留；此设置只改变单击方向，滑动方向保持原样。升级时，没有该设置的旧配置默认采用左侧下一页。
+
+构建、阅读器/工具/朗读回归测试通过；独立 Obsidian 六格式桌面触摸模拟验证默认方向、即时切换、保存与重开，中英文窄屏设置共 12 组检查通过。未进行手机真机验收。
 
 ### 左右单击翻页（1.5.1）
 
@@ -179,9 +185,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.5.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.5.2.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Choose the tap direction (1.5.2)
+
+The default is now **left: next page, right: previous page**, making reading with your left hand easier. Choose the opposite direction under **Settings → QReader → Reading → Tap navigation**, or in the reader's **Font and layout** panel. Changes take effect immediately and remain saved after reopening a book. Swipe direction stays the same. Older configurations without this setting default to advancing on the left.
+
+Build, reader, tools and speech checks passed. Desktop touch emulation in an isolated Obsidian vault covered default direction, live changes, saving and reopening across all six formats, plus 12 Chinese/English narrow-screen settings checks. Physical phones were not tested.
 
 ### Tap the edges to turn pages (1.5.1)
 

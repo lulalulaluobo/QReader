@@ -363,6 +363,18 @@ export class QReaderSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         })
     });
+    new Setting(containerEl).setName(this.plugin.t("单击翻页方向"))
+      .setDesc(this.plugin.t("默认左侧下一页，适合左手持握；滑动方向保持不变。"))
+      .addDropdown(dropdown => {
+        dropdown.selectEl.setAttribute("aria-label", this.plugin.t("单击翻页方向"));
+        return dropdown.addOptions({ left: this.plugin.t("左侧下一页，右侧上一页"), right: this.plugin.t("右侧下一页，左侧上一页") })
+          .setValue(s.reading.tapNextSide)
+          .onChange(async value => {
+            s.reading.tapNextSide = value === "right" ? "right" : "left";
+            await this.plugin.saveSettings();
+            this.plugin.notifySettingsChanged();
+          });
+      });
     new Setting(containerEl).setName(this.plugin.t("宽屏双页"))
       .setDesc(this.plugin.t("可重排书籍正文宽度达到 900px 时显示两页；手机自动显示单页。"))
       .addToggle(toggle => toggle.setValue(s.reading.spread === "double").onChange(async value => {

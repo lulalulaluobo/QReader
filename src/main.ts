@@ -187,6 +187,7 @@ export class QReaderPlugin extends Plugin {
         fontLabel: typeof reading.fontLabel === "string" ? reading.fontLabel : undefined,
         spread: reading.spread === "double" ? "double" : "single",
         paragraphIndent: reading.paragraphIndent === true,
+        tapNextSide: reading.tapNextSide === "right" ? "right" : "left",
         theme: reading.theme === "dark" || reading.theme === "light" || reading.theme === "sepia" || reading.theme === "sage"
           ? reading.theme : "auto",
         defaultMode: reading.defaultMode === "scrolled" ? "scrolled" : "paginated",

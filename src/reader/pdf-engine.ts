@@ -42,6 +42,7 @@ export class PdfEngine implements ReaderEngine {
   private marks = new Map<string, AnnotationRecord>();
   private observer: IntersectionObserver | null = null;
   private mode: ReadMode;
+  private tapNextSide: ReadingLayout["tapNextSide"];
   private currentPage: number;
   private currentPageFraction: number;
   private destroyed = false;
@@ -79,9 +80,10 @@ export class PdfEngine implements ReaderEngine {
     start: { pdfPage?: number | null; fraction?: number | null },
     private hooks: EngineHooks,
     annotations: AnnotationRecord[],
-    opts: { mode: ReadMode }
+    opts: { mode: ReadMode; tapNextSide: ReadingLayout["tapNextSide"] }
   ) {
     this.mode = opts.mode;
+    this.tapNextSide = opts.tapNextSide;
     this.currentPage = Math.max(1, Math.min(start.pdfPage ?? 1, doc.numPages));
     this.currentPageFraction = Math.max(0, Math.min(start.fraction ?? 0, 1));
     for (const annotation of annotations) this.marks.set(annotation.id, { ...annotation });
@@ -641,7 +643,7 @@ export class PdfEngine implements ReaderEngine {
         || (this.scroller?.ownerDocument.defaultView?.visualViewport?.scale ?? 1) > 1) return;
       event.preventDefault();
       event.stopPropagation();
-      this.navigate(x >= 2 / 3);
+      this.navigate(this.tapNextSide === "right" ? x >= 2 / 3 : x <= 1 / 3);
       return;
     }
     if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
@@ -847,7 +849,8 @@ export class PdfEngine implements ReaderEngine {
       await this.rebuild();
     });
   }
-  async applyLayout(_layout: ReadingLayout, theme: ReadingColors): Promise<void> {
+  async applyLayout(layout: ReadingLayout, theme: ReadingColors): Promise<void> {
+    this.tapNextSide = layout.tapNextSide;
     // PDF 保留原始文字和图表，只调整页面外的背景。
     if (this.scroller) this.scroller.style.background = theme.background;
   }

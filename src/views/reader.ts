@@ -457,7 +457,7 @@ export class ReaderView extends ItemView {
     return new PdfEngine(doc, chapters, {
       pdfPage: progress.pdfPage ?? 1,
       fraction: progress.pdfPageFraction ?? 0,
-    }, hooks, entry.reading.annotations, { mode: this.mode });
+    }, hooks, entry.reading.annotations, { mode: this.mode, tapNextSide: layout.tapNextSide });
   }
 
   private updateVocabulary(): void {
@@ -1161,6 +1161,12 @@ export class ReaderView extends ItemView {
           this.mode = mode;
           s.defaultMode = mode;
           await this.persistProgress(true);
+          await this.saveReadingSettings();
+        }));
+      body.appendChild(this.selectRow(this.plugin.t("单击翻页方向"),
+        { left: this.plugin.t("左侧下一页"), right: this.plugin.t("右侧下一页") },
+        s.tapNextSide, async value => {
+          s.tapNextSide = value === "right" ? "right" : "left";
           await this.saveReadingSettings();
         }));
       if (this.engine?.reflowable) body.appendChild(this.selectRow(this.plugin.t("页面布局"), { single: this.plugin.t("单页"), double: this.plugin.t("宽屏双页") },

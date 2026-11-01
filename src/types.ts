@@ -184,6 +184,7 @@ export interface ReadingLayout {
   pageMargin: number; // px
   fontFamily: ReadingFont;
   paragraphIndent: boolean;
+  tapNextSide: "left" | "right";
   spread?: "single" | "double";
   fontCss?: string; // runtime-only imported font rule
 }

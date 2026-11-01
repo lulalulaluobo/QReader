@@ -441,7 +441,7 @@ export class EpubEngine implements ReaderEngine {
           || (this.container?.ownerDocument.defaultView?.visualViewport?.scale ?? 1) > 1) return;
         event.preventDefault();
         event.stopPropagation();
-        this.navigate(x >= 2 / 3);
+        this.navigate(this.layout.tapNextSide === "right" ? x >= 2 / 3 : x <= 1 / 3);
         return;
       }
       if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
