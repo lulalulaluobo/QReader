@@ -401,6 +401,7 @@ export class EpubEngine implements ReaderEngine {
     });
     this.gestures.set(doc, { index: contents.sectionIndex, cleanup });
     doc.addEventListener("click", (event) => {
+      if (event.defaultPrevented || event.button !== 0) return;
       const target = event.target as Element | null;
       const element = target?.nodeType === Node.ELEMENT_NODE ? target : null;
       const link = element?.closest("a");
@@ -415,6 +416,7 @@ export class EpubEngine implements ReaderEngine {
         return;
       }
       if (swiped || element?.closest(`.${HL_CLASS}`)) { swiped = false; return; }
+      if (element?.closest("button,input,textarea,select,summary,[contenteditable]:not([contenteditable=false])")) return;
       const selection = contents.window.getSelection();
       if (selection && !selection.isCollapsed) return;
       const surface = this.container?.getBoundingClientRect();
@@ -434,6 +436,14 @@ export class EpubEngine implements ReaderEngine {
       }
       const x = (hostX - surface.left) / surface.width;
       const y = (hostY - surface.top) / surface.height;
+      if (this.mode === "paginated" && x >= 0 && x <= 1 && y >= 0 && y <= 1 && (x <= 1 / 3 || x >= 2 / 3)) {
+        if (this.destroyed || this.restoring || this.pendingNavigation
+          || (this.container?.ownerDocument.defaultView?.visualViewport?.scale ?? 1) > 1) return;
+        event.preventDefault();
+        event.stopPropagation();
+        this.navigate(x >= 2 / 3);
+        return;
+      }
       if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
       else this.hooks.onSurfaceClick();
     }, true);

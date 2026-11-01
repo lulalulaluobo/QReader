@@ -617,7 +617,10 @@ export class PdfEngine implements ReaderEngine {
   }
 
   private handleClick(event: MouseEvent): void {
+    if (event.defaultPrevented || event.button !== 0) return;
     if (this.swiped) { this.swiped = false; return; }
+    const target = event.target as Element | null;
+    if (target?.nodeType === Node.ELEMENT_NODE && target.closest("a,button,input,textarea,select,summary,[contenteditable]:not([contenteditable=false])")) return;
     const selection = window.getSelection();
     if (selection && !selection.isCollapsed) return;
     for (const wrapper of this.wrappers.values()) {
@@ -633,6 +636,14 @@ export class PdfEngine implements ReaderEngine {
     if (!rect) return;
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
+    if (this.mode === "paginated" && x >= 0 && x <= 1 && y >= 0 && y <= 1 && (x <= 1 / 3 || x >= 2 / 3)) {
+      if (this.destroyed || this.rebuilding || this.pendingNavigation || this.zoomMode === "custom"
+        || (this.scroller?.ownerDocument.defaultView?.visualViewport?.scale ?? 1) > 1) return;
+      event.preventDefault();
+      event.stopPropagation();
+      this.navigate(x >= 2 / 3);
+      return;
+    }
     if (x > 1 / 3 && x < 2 / 3 && y > 0.25 && y < 0.75) this.hooks.onZoneTap();
     else this.hooks.onSurfaceClick();
   }

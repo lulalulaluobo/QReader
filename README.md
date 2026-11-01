@@ -2,7 +2,7 @@
 
 An Obsidian reader for focused reading, on-demand explanations and local annotations. / 在 Obsidian 中专注阅读，遇到困难时查词或解读，随手记录自己的理解。
 
-[Download / 下载 1.5.0](https://github.com/lulalulaluobo/QReader/releases/tag/1.5.0) · [中文说明](#中文说明) · [English](#english)
+[Download / 下载 1.5.1](https://github.com/lulalulaluobo/QReader/releases/tag/1.5.1) · [中文说明](#中文说明) · [English](#english)
 
 ## 中文说明
 
@@ -23,9 +23,15 @@ An Obsidian reader for focused reading, on-demand explanations and local annotat
 
 ### 安装
 
-需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.5.0.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
+需要 Obsidian 1.5.0 或以上。下载 Release 的 `QReader-1.5.1.zip`，解压后将 `qreader/` 放入 Vault 的 `.obsidian/plugins/`，目录中应包含 `main.js`、`manifest.json`、`styles.css`。重启或刷新 Obsidian，在社区插件中启用 QReader。
 
 也可通过 BRAT 添加仓库 `lulalulaluobo/QReader`，安装最新正式版本。升级时替换以上三个文件，保留 `data.json`、书籍目录和阅读记录。
+
+### 左右单击翻页（1.5.1）
+
+分页模式下，单击阅读区域左侧三分之一翻到上一页，右侧三分之一翻到下一页，沿用现有翻页动效；原有滑动翻页与中央显示/隐藏工具栏保留。选中文字、点击批注、链接和表单控件优先处理原有操作，滑动后的点击不会重复翻页。滚动模式、浏览器放大和 PDF 自定义缩放时不启用边缘单击翻页。
+
+构建和回归测试通过，独立 Obsidian 的六格式桌面触摸模拟验证了左右单击、中央工具栏、滑动不重复翻页和滚动模式，另检查 PDF 放大后不误翻页；未进行手机真机验收。
 
 ### 跨书共享生词（1.5.0）
 
@@ -173,9 +179,15 @@ CBZ 和扫描 PDF 没有可查询的文本；普通 PDF 依赖原文件的文字
 
 ### Installation
 
-Requires Obsidian 1.5.0 or later. Download `QReader-1.5.0.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
+Requires Obsidian 1.5.0 or later. Download `QReader-1.5.1.zip` from the Release, then copy its `qreader/` folder into your Vault's `.obsidian/plugins/`. The plugin folder must contain `main.js`, `manifest.json` and `styles.css`. Restart or reload Obsidian and enable QReader under Community plugins.
 
 Alternatively, add `lulalulaluobo/QReader` through BRAT to install the latest stable release. When updating manually, replace only those three files and retain `data.json`, your books and reading records.
+
+### Tap the edges to turn pages (1.5.1)
+
+In paginated mode, tap the left third of the reading area for the previous page or the right third for the next page. Existing page animations, swipe gestures and the central toolbar toggle remain available. Text selections, annotations, links and form controls keep their existing actions; a click after a swipe does not turn another page. Edge taps are disabled in scrolling mode, during browser magnification and at custom PDF zoom levels.
+
+Build and regression checks passed. Desktop touch emulation in an isolated Obsidian vault covered all six formats, edge taps, the central toolbar, swipes without duplicate turns, scrolling mode and the PDF zoom guard. This does not constitute testing on a physical phone.
 
 ### Shared vocabulary across books (1.5.0)
 
